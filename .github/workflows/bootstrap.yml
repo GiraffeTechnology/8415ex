@@ -1,0 +1,94 @@
+name: Bootstrap checks
+on:
+  push:
+    branches: [main, bootstrap/commit-bound-ci, fix/zos-bucket-identity-20261013]
+  pull_request:
+    branches: [main, bootstrap/commit-bound-ci]
+permissions:
+  contents: read
+concurrency:
+  group: bootstrap-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  bootstrap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact event commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare explicit output paths and source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -c 'import sys; assert sys.version_info >= (3, 10)'
+          root="$(mktemp -d "$RUNNER_TEMP/8415ex.XXXXXX")"
+          mkdir "$root/tests" "$root/failure" "$root/success" "$root/evidence"
+          echo "BOOTSTRAP_ROOT=$root" >> "$GITHUB_ENV"
+          echo "BOOTSTRAP_TEST_ROOT=$root/tests" >> "$GITHUB_ENV"
+          echo "PYTHONDONTWRITEBYTECODE=1" >> "$GITHUB_ENV"
+          echo "SOURCE_TREE=$(git rev-parse HEAD^{tree})" >> "$GITHUB_ENV"
+          echo "CONFIG_SHA256=$(sha256sum .github/workflows/bootstrap.yml | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          git rev-parse HEAD > "$root/evidence/commit.txt"
+          git rev-parse HEAD^{tree} > "$root/evidence/tree.txt"
+          python3 --version > "$root/evidence/python.txt"
+      - name: Run standard-library tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s ci/tests -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/unit-tests.log"
+      - name: Verify deliberate failure and successful smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          common=(--repository GiraffeTechnology/8415ex --commit-sha "$GITHUB_SHA" --tree-sha "$SOURCE_TREE" --config-sha256 "$CONFIG_SHA256")
+          set +e
+          python3 -B -m ci.smoke "${common[@]}" --run-id "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-failure" --output-dir "$BOOTSTRAP_ROOT/failure" --mode failure > "$BOOTSTRAP_ROOT/evidence/smoke-failure.log" 2>&1
+          code=$?
+          set -e
+          echo "$code" > "$BOOTSTRAP_ROOT/evidence/smoke-failure.exit"
+          test "$code" -eq 1
+          python3 -B -m ci.smoke "${common[@]}" --run-id "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-success" --output-dir "$BOOTSTRAP_ROOT/success" --mode success > "$BOOTSTRAP_ROOT/evidence/smoke-success.log" 2>&1
+          echo 0 > "$BOOTSTRAP_ROOT/evidence/smoke-success.exit"
+          python3 -B - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path(os.environ["BOOTSTRAP_ROOT"])
+          for mode in ("failure", "success"):
+              directory = root / mode
+              value = json.loads((directory / "smoke-manifest.json").read_text())
+              assert value["outcome"] == mode
+              assert value["identity"]["commit_sha"] == os.environ["GITHUB_SHA"]
+              assert value["identity"]["tree_sha"] == os.environ["SOURCE_TREE"]
+              assert value["identity"]["config_sha256"] == os.environ["CONFIG_SHA256"]
+              assert value["identity"]["run_id"] == os.environ["GITHUB_RUN_ID"] + "-" + os.environ["GITHUB_RUN_ATTEMPT"] + "-" + mode
+              if mode == "failure":
+                  assert value["artifacts"] == []
+                  assert not (directory / "smoke.txt").exists()
+              else:
+                  assert len(value["artifacts"]) == 1
+                  artifact = value["artifacts"][0]
+                  assert artifact["path"] == "smoke.txt"
+                  data = (directory / artifact["path"]).read_bytes()
+                  assert len(data) == artifact["size_bytes"]
+                  assert hashlib.sha256(data).hexdigest() == artifact["sha256"]
+          PY
+      - name: Package exact source commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive --format=zip HEAD -o "$BOOTSTRAP_ROOT/evidence/source.zip"
+          sha256sum "$BOOTSTRAP_ROOT/evidence/source.zip" > "$BOOTSTRAP_ROOT/evidence/source.sha256"
+          cp "$BOOTSTRAP_ROOT/failure/smoke-manifest.json" "$BOOTSTRAP_ROOT/evidence/failure-manifest.json"
+          cp "$BOOTSTRAP_ROOT/success/smoke-manifest.json" "$BOOTSTRAP_ROOT/evidence/success-manifest.json"
+          cp "$BOOTSTRAP_ROOT/success/smoke.txt" "$BOOTSTRAP_ROOT/evidence/smoke.txt"
+      - name: Retain run evidence
+        if: always() && env.BOOTSTRAP_ROOT != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: bootstrap-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.BOOTSTRAP_ROOT }}/evidence
+          if-no-files-found: error
+          retention-days: 7
