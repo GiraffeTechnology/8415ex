@@ -56,7 +56,7 @@ def validate_object(reference):
         set(reference) == {"bucket", "key", "object_id", "sha256"},
         "object reference fields are incomplete or unknown",
     )
-    _require(reference["bucket"] == "Giraffe", "unexpected storage bucket")
+    _require(reference["bucket"] == "giraffe", "unexpected storage bucket")
     key = _text(reference["key"], "object key")
     _require(
         not key.startswith("/") and all(part not in {"", ".", ".."} for part in key.split("/")),
