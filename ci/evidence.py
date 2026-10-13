@@ -84,13 +84,19 @@ def _utc_timestamp(value, name):
     return timestamp
 
 
-def validate_result(result, *, expected_identity, current_run_id):
+def validate_result(result, *, expected_identity, current_run_id, expected_prefix):
     """Validate terminal evidence against an independently trusted current run.
 
     Callers must enforce freshness atomically when publishing. This pure function
     cannot authenticate an executor, inspect storage backing, or prevent a race.
     """
     validate_identity(expected_identity)
+    prefix = _text(expected_prefix, "expected project prefix")
+    prefix = prefix[:-1] if prefix.endswith("/") else prefix
+    _require(
+        not prefix.startswith("/") and all(part not in {"", ".", ".."} for part in prefix.split("/")),
+        "expected project prefix must be canonical and nonempty",
+    )
     _require(isinstance(result, dict), "result must be an object")
     _require(
         set(result) == {
@@ -114,6 +120,8 @@ def validate_result(result, *, expected_identity, current_run_id):
     _require(finished >= started, "finished_at precedes started_at")
     validate_object(result["source_object"])
     validate_object(result["log_object"])
+    for reference in (result["source_object"], result["log_object"]):
+        _require(reference["key"].startswith(prefix + "/"), "object is outside the expected project prefix")
 
     stages = result["stages"]
     _require(isinstance(stages, dict) and set(stages) == set(REQUIRED_STAGES),
@@ -138,6 +146,7 @@ def validate_result(result, *, expected_identity, current_run_id):
     _require(isinstance(artifacts, list), "artifacts must be a list")
     for artifact in artifacts:
         validate_object(artifact)
+        _require(artifact["key"].startswith(prefix + "/"), "artifact is outside the expected project prefix")
     if outcome == "success":
         _require(all(state == "passed" for state in outcomes),
                  "success requires every required stage to pass")
