@@ -4,7 +4,7 @@
 
 The current repository contains a dependency-free CI bootstrap. It does not yet contain the exchange application. Python 3.10 or newer is required only for these bootstrap checks; the application stack is not selected here.
 
-Run the checks from the repository root after setting APPROVED_TEST_ROOT to an existing, canonical directory on approved execution storage:
+Run the checks from the repository root after setting APPROVED_TEST_ROOT to an existing, canonical directory explicitly selected for the tests:
 
 ```sh
 BOOTSTRAP_TEST_ROOT="$APPROVED_TEST_ROOT" python3 -B -m unittest discover -s ci/tests -v

@@ -4,7 +4,7 @@ This bootstrap uses Python 3.10+ and its standard library. It does not select th
 
 ## Fixed checks
 
-Run from an exact, independently verified repository commit in the approved isolated workspace. The controller must first establish the actual non-system-disk backing of every writable path, including the test root, output directory, temporary storage and runtime caches. This fixture does not verify mounts or grant permission to use a host.
+Run from an exact, independently verified repository commit in the existing workspace. The owner removed CLI and execution-environment prerequisites on 13 October 2026. Local coding and tests do not require a remote CLI, a specific host, ZOS availability, POSIX mounts, or non-system-disk backing. Record the actual executor honestly. Storage persistence and production acceptance remain separate outcomes. This fixture does not verify mounts or grant infrastructure permissions.
 
 The controller supplies an existing canonical `APPROVED_TEST_ROOT`. The tests fail if `BOOTSTRAP_TEST_ROOT` is missing; they never silently choose the system temporary directory. Python bytecode writes are disabled.
 
@@ -12,7 +12,7 @@ The controller supplies an existing canonical `APPROVED_TEST_ROOT`. The tests fa
 BOOTSTRAP_TEST_ROOT="$APPROVED_TEST_ROOT" python3 -B -m unittest discover -s ci/tests -v
 ```
 
-The controller creates a fresh empty canonical `APPROVED_OUTPUT_DIR` on that same approved storage before each smoke invocation, and supplies the identities below from trusted state:
+The controller creates a fresh empty canonical `APPROVED_OUTPUT_DIR` in the explicit selected workspace before each smoke invocation, and supplies the identities below from trusted state:
 
 ```sh
 python3 -B -m ci.smoke \
@@ -38,7 +38,7 @@ The smoke command writes only inside its explicit output directory:
 
 ## Result contract
 
-`ci.evidence.validate_result` validates a terminal result against an independently supplied `expected_identity` and `current_run_id`. Its required fields are:
+`ci.evidence.validate_result` validates a terminal result against an independently supplied `expected_identity`, `current_run_id`, and `expected_prefix`. Its required fields are:
 
 - `schema_version`: integer 1.
 - `check_name`: `8415ex/bootstrap`.
@@ -49,7 +49,7 @@ The smoke command writes only inside its explicit output directory:
 - `stages`: exactly `unit-tests` and `smoke`, each recording an `outcome` and `exit_code`.
 - `artifacts`: a list of private persisted object references; success requires at least one.
 
-Every object reference contains exactly `bucket` (`Giraffe`), canonical relative `key`, nonempty `object_id`, and lowercase `sha256`. The operations owner must supply the actual endpoint and authorized project prefix. No endpoint, prefix, credential or storage mount is configured here. The controller must enforce that prefix and independently verify object identity, private access and downloaded bytes. `verify_sha256` checks bytes already obtained through an authorized route.
+Every object reference contains exactly `bucket` (`giraffe`), canonical relative `key`, nonempty `object_id`, and lowercase `sha256`. Bucket names are case-sensitive: the verified bucket is `giraffe`; `Giraffe` is not accepted. The operations owner must supply the actual endpoint and authorized project prefix. No endpoint, prefix, credential or storage mount is configured here. The controller must pass its independently authorized project prefix as the required `expected_prefix` argument. The validator rejects source, log and artifact keys outside that exact directory prefix, including similarly named sibling prefixes. A single trailing slash is accepted; empty, absolute or traversal prefixes are rejected. The controller must still independently verify object identity, private access and downloaded bytes; prefix validation does not establish bucket permissions. `verify_sha256` checks bytes already obtained through an authorized route.
 
 Stage outcomes are `passed` (exit 0), `failed` (nonzero integer exit), or `timeout`, `cancelled`, `not_run` (null exit). A success result requires both required stages to pass. Each negative terminal result requires corresponding negative stage evidence. Pending is a controller lifecycle state and cannot be accepted as terminal evidence. Missing stages, obsolete attempts, mismatched identities and incomplete artifacts cannot pass.
 
@@ -65,7 +65,7 @@ The freshness check is a pure comparison, not an atomic publication mechanism. T
 
 Do not call the CI foundation complete until the actual approved route demonstrates:
 1. Exact GitHub source SHA/tree bound to a verified private source object.
-2. Non-root, isolated execution with approved storage and before/after disk-write evidence.
+2. Recorded execution identity and explicit writable paths, with local synthetic results distinguished from infrastructure and production acceptance.
 3. A deliberate failed run and a succeeding run, with truthful same-SHA GitHub feedback.
 4. Rejection of stale, mismatched, interrupted, timed-out and cancelled results.
 5. Persisted logs, manifests and matching source/artifact checksums.
