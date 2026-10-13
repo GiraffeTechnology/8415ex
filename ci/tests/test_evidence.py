@@ -19,7 +19,7 @@ def identity():
 
 def object_ref(key):
     return {
-        "bucket": "Giraffe",
+        "bucket": "giraffe",
         "key": "synthetic-test-only/" + key,
         "object_id": "synthetic-version-1",
         "sha256": "d" * 64,
@@ -150,6 +150,19 @@ class EvidenceTests(unittest.TestCase):
                     value[field].update(mutation)
                     with self.assertRaises(EvidenceError):
                         self.validate(value)
+
+    def test_bucket_name_matches_verified_case_sensitive_identity(self):
+        self.validate(result())
+        for field in ("source_object", "log_object"):
+            with self.subTest(field=field):
+                value = result()
+                value[field]["bucket"] = "Giraffe"
+                with self.assertRaises(EvidenceError):
+                    self.validate(value)
+        value = result()
+        value["artifacts"][0]["bucket"] = "Giraffe"
+        with self.assertRaises(EvidenceError):
+            self.validate(value)
 
     def test_unknown_schema_or_fields_are_rejected(self):
         for mutation in ({"schema_version": 2}, {"schema_version": True},
