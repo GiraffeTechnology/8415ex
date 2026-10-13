@@ -49,7 +49,7 @@ The smoke command writes only inside its explicit output directory:
 - `stages`: exactly `unit-tests` and `smoke`, each recording an `outcome` and `exit_code`.
 - `artifacts`: a list of private persisted object references; success requires at least one.
 
-Every object reference contains exactly `bucket` (`Giraffe`), canonical relative `key`, nonempty `object_id`, and lowercase `sha256`. The operations owner must supply the actual endpoint and authorized project prefix. No endpoint, prefix, credential or storage mount is configured here. The controller must enforce that prefix and independently verify object identity, private access and downloaded bytes. `verify_sha256` checks bytes already obtained through an authorized route.
+Every object reference contains exactly `bucket` (`giraffe`), canonical relative `key`, nonempty `object_id`, and lowercase `sha256`. Bucket names are case-sensitive: the verified bucket is `giraffe`; `Giraffe` is not accepted. The operations owner must supply the actual endpoint and authorized project prefix. No endpoint, prefix, credential or storage mount is configured here. The controller must enforce that prefix and independently verify object identity, private access and downloaded bytes. `verify_sha256` checks bytes already obtained through an authorized route.
 
 Stage outcomes are `passed` (exit 0), `failed` (nonzero integer exit), or `timeout`, `cancelled`, `not_run` (null exit). A success result requires both required stages to pass. Each negative terminal result requires corresponding negative stage evidence. Pending is a controller lifecycle state and cannot be accepted as terminal evidence. Missing stages, obsolete attempts, mismatched identities and incomplete artifacts cannot pass.
 
