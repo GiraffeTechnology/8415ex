@@ -4,7 +4,7 @@ This bootstrap uses Python 3.10+ and its standard library. It does not select th
 
 ## Fixed checks
 
-Run from an exact, independently verified repository commit in the approved isolated workspace. The controller must first establish the actual non-system-disk backing of every writable path, including the test root, output directory, temporary storage and runtime caches. This fixture does not verify mounts or grant permission to use a host.
+Run from an exact, independently verified repository commit in the existing workspace. The owner removed CLI and execution-environment prerequisites on 13 October 2026. Local coding and tests do not require a remote CLI, a specific host, ZOS availability, POSIX mounts, or non-system-disk backing. Record the actual executor honestly. Storage persistence and production acceptance remain separate outcomes. This fixture does not verify mounts or grant infrastructure permissions.
 
 The controller supplies an existing canonical `APPROVED_TEST_ROOT`. The tests fail if `BOOTSTRAP_TEST_ROOT` is missing; they never silently choose the system temporary directory. Python bytecode writes are disabled.
 
@@ -12,7 +12,7 @@ The controller supplies an existing canonical `APPROVED_TEST_ROOT`. The tests fa
 BOOTSTRAP_TEST_ROOT="$APPROVED_TEST_ROOT" python3 -B -m unittest discover -s ci/tests -v
 ```
 
-The controller creates a fresh empty canonical `APPROVED_OUTPUT_DIR` on that same approved storage before each smoke invocation, and supplies the identities below from trusted state:
+The controller creates a fresh empty canonical `APPROVED_OUTPUT_DIR` in the explicit selected workspace before each smoke invocation, and supplies the identities below from trusted state:
 
 ```sh
 python3 -B -m ci.smoke \
@@ -65,7 +65,7 @@ The freshness check is a pure comparison, not an atomic publication mechanism. T
 
 Do not call the CI foundation complete until the actual approved route demonstrates:
 1. Exact GitHub source SHA/tree bound to a verified private source object.
-2. Non-root, isolated execution with approved storage and before/after disk-write evidence.
+2. Recorded execution identity and explicit writable paths, with local synthetic results distinguished from infrastructure and production acceptance.
 3. A deliberate failed run and a succeeding run, with truthful same-SHA GitHub feedback.
 4. Rejection of stale, mismatched, interrupted, timed-out and cancelled results.
 5. Persisted logs, manifests and matching source/artifact checksums.
