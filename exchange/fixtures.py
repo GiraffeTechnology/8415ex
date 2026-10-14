@@ -195,7 +195,8 @@ def release_authority(exchange, leg_index, authority_id, receipt_id="rcpt-8415-0
                   journal_reference=f"journal:{leg.transfer_id}",
                   binding=segment_binding(receipt_record.asset, receipt_id, leg_index,
                                           leg.transfer_id, escrow.payer, escrow.payee,
-                                          escrow.principal, escrow.quote_asset),
+                                          escrow.principal, escrow.quote_asset,
+                                          f"journal:{leg.transfer_id}"),
                   observed_at=now)
     fields.update(overrides)
     return ReleaseAuthority(**fields)
