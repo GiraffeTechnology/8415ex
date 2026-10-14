@@ -56,6 +56,48 @@ class Matrix(unittest.TestCase):
             counted[row["localOutcome"]] = counted.get(row["localOutcome"], 0) + 1
         self.assertEqual(self.built["localOutcomeCounts"], dict(sorted(counted.items())))
 
+    def test_a_scenario_that_raised_marks_every_case_it_serves(self):
+        """Assertions that passed before the exception are not acceptance."""
+        broken = {"scenarios": [{
+            "scenarioId": "DEMO-X", "cases": ["T-17", "T-19"], "passed": False,
+            "error": "RuntimeError: the scenario stopped half way",
+            "counts": {"passed": 2, "failed": 0, "blocked": 0, "not-run": 0},
+            "expectations": [{"name": "an early check", "cases": ["T-17"],
+                              "outcome": "passed"}]}]}
+        built = matrix.build({"commit": "a" * 40}, {"runId": "local-test"}, broken, None)
+        rows = {row["case"]: row for row in built["rows"]}
+        self.assertEqual(rows["T-17"]["localOutcome"], "error")
+        self.assertEqual(rows["T-19"]["localOutcome"], "error")
+        self.assertEqual(rows["T-17"]["scenarioAssertionCounts"]["passed"], 1)
+        self.assertIn("the scenario stopped half way",
+                      rows["T-17"]["scenarioProblems"][0]["error"])
+        self.assertFalse(built["allCasesSound"])
+        self.assertIn("T-17", built["unsoundCases"])
+
+    def test_a_scenario_that_did_not_pass_marks_its_cases_failed(self):
+        report = {"scenarios": [{
+            "scenarioId": "DEMO-Y", "cases": ["T-11"], "passed": False, "error": None,
+            "counts": {"passed": 1, "failed": 0, "blocked": 1, "not-run": 0},
+            "expectations": [{"name": "an early check", "cases": ["T-11"],
+                              "outcome": "passed"}]}]}
+        rows = {row["case"]: row
+                for row in matrix.build({}, {}, report, None)["rows"]}
+        self.assertEqual(rows["T-11"]["localOutcome"], "failed")
+
+    def test_a_blocked_assertion_is_not_passed_even_beside_passing_ones(self):
+        report = {"scenarios": [{
+            "scenarioId": "DEMO-Z", "cases": ["T-12"], "passed": False, "error": None,
+            "counts": {"passed": 1, "failed": 0, "blocked": 1, "not-run": 0},
+            "expectations": [{"name": "ok", "cases": ["T-12"], "outcome": "passed"},
+                             {"name": "blocked", "cases": ["T-12"], "outcome": "blocked"}]}]}
+        rows = {row["case"]: row
+                for row in matrix.build({}, {}, report, None)["rows"]}
+        self.assertIn(rows["T-12"]["localOutcome"], ("failed", "blocked"))
+
+    def test_a_clean_run_reports_every_case_sound(self):
+        self.assertTrue(self.built["allCasesSound"])
+        self.assertEqual(self.built["unsoundCases"], [])
+
     def test_no_row_claims_a_local_run_is_real_acceptance(self):
         self.assertIn("never marked passed", self.built["note"])
         for row in self.built["rows"]:

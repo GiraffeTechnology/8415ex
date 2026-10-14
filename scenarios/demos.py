@@ -40,6 +40,10 @@ PRICES = {"AB": F.PRICE_AB, "BC": F.PRICE_BC, "CD": F.PRICE_CD}
 #: refusal of a double charge. They are not an approved fee mechanism.
 GAS = {"trade": 21_000, "refund": 23_000, "shared-return": 48_000}
 
+#: Gas is counted in gas units. It is never the quote asset, so a gas figure and a
+#: principal are never added to or subtracted from one another.
+GAS_UNIT = "gas-units"
+
 
 def _accounts():
     return {"A": F.A, "B": F.B, "C": F.C, "D": F.D}
@@ -324,13 +328,36 @@ def demo_03(recorder):
                     {0: (F.B, True), 1: (F.C, True), 2: (F.D, True)},
                     {entry["legIndex"]: (entry["originalBuyer"], entry["refundedToOriginalBuyer"])
                      for entry in report["funds"]})
-    recorder.expect("the net shows the explicit fixture fee per segment", ("T-19",),
-                    {0: str(PRICES["AB"] - GAS["trade"]), 1: str(PRICES["BC"] - GAS["trade"]),
-                     2: str(PRICES["CD"] - GAS["trade"])},
-                    {entry["legIndex"]: entry["netToOriginalBuyer"] for entry in report["funds"]})
-    recorder.expect("each leg's gas is borne by that leg's buyer", ("T-19", "T-21"),
-                    {0: F.B, 1: F.C, 2: F.D},
-                    {entry["legIndex"]: entry["gasBorneBy"] for entry in report["funds"]})
+    # Principal and gas are two different obligations in two different units.
+    # The refund returns the whole principal in the quote asset; the gas figure
+    # is a fixture count of gas units borne by that leg's buyer. Subtracting one
+    # from the other would state a net in no unit at all, and whether a fee is
+    # deducted from a refund at all is open decision D-04.
+    funds = _segment_funds(exchange)
+    recorder.expect("each refund returns the whole principal in the quote asset", ("T-19",),
+                    {0: (str(PRICES["AB"]), F.QUOTE_ASSET, True),
+                     1: (str(PRICES["BC"]), F.QUOTE_ASSET, True),
+                     2: (str(PRICES["CD"]), F.QUOTE_ASSET, True)},
+                    {segment["legIndex"]: (segment["netToPayer"], segment["quoteAsset"],
+                                           segment["netToPayer"] == segment["principal"])
+                     for segment in exchange.reconciliation(RECEIPT)["segments"]})
+    recorder.expect("gas is recorded on its own, in gas units, by bearer", ("T-19", "T-21"),
+                    {0: (str(GAS["trade"]), "gas-units", F.B),
+                     1: (str(GAS["trade"]), "gas-units", F.C),
+                     2: (str(GAS["trade"]), "gas-units", F.D)},
+                    {index: (funds[index]["gasTotal"], GAS_UNIT, funds[index]["gasBorneBy"])
+                     for index in (0, 1, 2)})
+    recorder.expect("no quoted principal is reduced by a gas figure", ("T-19", "T-21"),
+                    {0: str(PRICES["AB"]), 1: str(PRICES["BC"]), 2: str(PRICES["CD"])},
+                    {index: funds[index]["principal"] for index in (0, 1, 2)})
+    recorder.not_run("actual fee deduction from a refunded principal", ("T-19", "T-21"),
+                     "D-04 is open: whether a real fee is deducted from a refund, in which "
+                     "asset, and who bears it, is not decided, so no deduction is modelled "
+                     "and no net across the two units is asserted here")
+    recorder.note("the legacy rollback report also carries netToOriginalBuyer, a figure "
+                  "derived by subtracting a gas-unit count from a quote-asset principal. It "
+                  f"is observed as {[entry['netToOriginalBuyer'] for entry in report['funds']]} "
+                  "and is not read here as the amount returned to any buyer.")
     recorder.expect("the rollback is complete only with every step evidenced", ("T-17",),
                     {"state": "complete", "complete": True, "outstanding": 0},
                     {"state": report["state"], "complete": report["complete"],

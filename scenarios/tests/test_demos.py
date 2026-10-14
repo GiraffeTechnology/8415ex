@@ -1,7 +1,8 @@
 """The six scenarios must run, pass, and record what the requirements ask for."""
 import unittest
 
-from scenarios.demos import DEMOS, MAIN_PATHS
+from exchange import fixtures as F
+from scenarios.demos import DEMOS, GAS, GAS_UNIT, MAIN_PATHS, PRICES
 from scenarios.harness import run_all
 
 
@@ -103,6 +104,46 @@ class ScenarioContent(unittest.TestCase):
         self.assertIn("returns to the origin", names)
         self.assertIn("own unreleased funds", names)
         self.assertIn("charged in full twice", names)
+
+    def test_demo_03_keeps_principal_and_gas_in_their_own_units(self):
+        """A gas-unit count is never subtracted from a quote-asset principal."""
+        scenario = self.by_id["DEMO-03"]
+        by_name = {e["name"]: e for e in scenario["expectations"]}
+        whole = next(e for name, e in by_name.items() if "whole principal" in name)
+        self.assertEqual(whole["outcome"], "passed")
+        for leg, (principal, asset, equal) in whole["observed"].items():
+            with self.subTest(leg=leg):
+                self.assertEqual(asset, F.QUOTE_ASSET)
+                self.assertTrue(equal, "the refund returns the whole principal")
+        separate = next(e for name, e in by_name.items() if "in gas units, by bearer" in name)
+        self.assertEqual(separate["outcome"], "passed")
+        for leg, (amount, unit, bearer) in separate["observed"].items():
+            with self.subTest(leg=leg):
+                self.assertEqual(unit, GAS_UNIT)
+                self.assertNotEqual(unit, F.QUOTE_ASSET)
+                self.assertEqual(amount, str(GAS["trade"]))
+                self.assertIn(bearer, (F.B, F.C, F.D))
+
+    def test_demo_03_quotes_no_principal_reduced_by_a_gas_figure(self):
+        scenario = self.by_id["DEMO-03"]
+        quoted = next(e for e in scenario["expectations"]
+                      if "reduced by a gas figure" in e["name"])
+        self.assertEqual(quoted["outcome"], "passed")
+        self.assertEqual(set(quoted["observed"].values()),
+                         {str(PRICES["AB"]), str(PRICES["BC"]), str(PRICES["CD"])})
+        for value in quoted["observed"].values():
+            for price in (PRICES["AB"], PRICES["BC"], PRICES["CD"]):
+                self.assertNotEqual(value, str(price - GAS["trade"]),
+                                    "a net across two units is not an amount")
+
+    def test_demo_03_leaves_the_fee_deduction_policy_unexecuted(self):
+        scenario = self.by_id["DEMO-03"]
+        owed = [e for e in scenario["expectations"]
+                if e["outcome"] == "not-run" and "fee deduction" in e["name"]]
+        self.assertEqual(len(owed), 1)
+        self.assertIn("D-04", owed[0]["detail"])
+        self.assertEqual(owed[0]["observed"], "NOT_RUN")
+        self.assertTrue(any("netToOriginalBuyer" in note for note in scenario["notes"]))
 
     def test_demo_04_protects_the_finalized_prefix(self):
         names = self._names("DEMO-04")

@@ -139,25 +139,47 @@ def build(source_identity, run_identity, scenario_report=None, path_report=None)
     each row carries the recorded local outcome for its scenarios.
     """
     scenario_cases = _scenario_cases()
-    recorded = {}
+    recorded, problems = {}, {}
     for report in (scenario_report, path_report):
         for scenario in (report or {}).get("scenarios", []):
+            touched = set(scenario.get("cases", ()))
             for expectation in scenario["expectations"]:
+                touched.update(expectation["cases"])
                 for case in expectation["cases"]:
                     bucket = recorded.setdefault(case, {"passed": 0, "failed": 0,
                                                         "blocked": 0, "not-run": 0})
                     bucket[expectation["outcome"]] += 1
+            # A scenario that raised, or that did not pass as a whole, reaches
+            # every case it serves. Assertions that happened to pass before the
+            # exception are not an acceptance result for those cases: the
+            # scenario did not complete, so the case is not passed.
+            status = None
+            if scenario.get("error"):
+                status = "error"
+            elif scenario.get("passed") is False:
+                status = "failed"
+            if status is not None:
+                for case in sorted(touched):
+                    problems.setdefault(case, []).append(
+                        {"scenarioId": scenario.get("scenarioId"), "status": status,
+                         "error": scenario.get("error"),
+                         "counts": scenario.get("counts")})
 
     rows = []
     for case in sorted(CASE_REQUIREMENTS, key=lambda name: int(name.split("-")[1])):
         implementation, unit_cover = CASE_IMPLEMENTATION[case]
         counts = recorded.get(case)
-        if case in REMAINING_EVIDENCE:
-            local = "not-run"
+        raised = problems.get(case, [])
+        if any(entry["status"] == "error" for entry in raised):
+            local = "error"
+        elif raised:
+            local = "failed"
         elif counts and counts["failed"]:
             local = "failed"
         elif counts and counts["blocked"]:
             local = "blocked"
+        elif case in REMAINING_EVIDENCE:
+            local = "not-run"
         elif counts and counts["passed"]:
             local = "passed"
         else:
@@ -171,19 +193,26 @@ def build(source_identity, run_identity, scenario_report=None, path_report=None)
             "scenarios": scenario_cases.get(case, []),
             "scenarioAssertionCounts": counts or {},
             "localOutcome": local,
+            "scenarioProblems": raised,
             "partiallyLocal": PARTIAL_LOCAL.get(case),
             "remainingRealEvidence": REMAINING_EVIDENCE.get(case),
         })
+    unsound = [row["case"] for row in rows if row["localOutcome"] in ("error", "failed",
+                                                                     "blocked")]
     return {
-        "schema": "8415ex-acceptance-matrix/1",
+        "schema": "8415ex-acceptance-matrix/2",
         "sourceIdentity": source_identity,
         "runIdentity": run_identity,
         "rows": rows,
         "paths": list(REGISTRATION_PATHS),
         "mainPathPerScenario": dict(sorted(MAIN_PATHS.items())),
         "localOutcomeCounts": _tally(rows),
+        "unsoundCases": unsound,
+        "allCasesSound": unsound == [],
         "note": ("a local outcome is evidence about the model only; the cases with remaining "
-                 "real evidence are Stage 5 obligations and are never marked passed here"),
+                 "real evidence are Stage 5 obligations and are never marked passed here. A "
+                 "scenario that raised or did not pass marks every case it serves, whatever "
+                 "its individual assertions recorded first"),
     }
 
 

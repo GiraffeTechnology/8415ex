@@ -19,7 +19,8 @@ separate from it.
 | `validation.py` | configuration and evidence validators |
 | `manifest.py` | source and package manifest |
 | `handoff.py` | the execution checklist with NOT_RUN evidence slots |
-| `observations.py` | the secret scan (T-39) and measured observations (T-40) |
+| `observations.py` | tracked-file enumeration, the secret scan (T-39) and measured observations (T-40) |
+| `execution.py` | real command records: what ran, how it ended, or NOT_RUN |
 | `cli.py` | one reproducible entry point |
 | `STORYBOARD.md` | the factual storyboard and presentation outline |
 
@@ -28,8 +29,15 @@ separate from it.
 Linux, Python 3.10 or newer, standard library only.
 
 ```sh
-# the whole local delivery; exit 0 only when every expectation passed
+# the whole local delivery; exit 0 only when every expectation passed over a
+# confirmed, clean source tree with a complete file inventory
 PYTHONDONTWRITEBYTECODE=1 python3 -B -m scenarios.cli run-all
+
+# both outputs of one single execution, under one run id
+python3 -B -m scenarios.cli run-all --json-out run.json --text-out run.txt
+
+# also really execute the two unit suites and record their true status
+python3 -B -m scenarios.cli run-all --execute-suites
 
 # individual parts
 python3 -B -m scenarios.cli scenarios
@@ -57,8 +65,56 @@ failure in the report instead of raising out of the run. An outcome is one of
 - `not-run` is a real Stage 5 obligation this local run is not entitled to
   discharge. It is reported and never counted as a pass.
 
+A scenario that raises does not leave the assertions it managed to record
+standing as acceptance: the matrix marks every case that scenario serves, and
+`allCasesSound` is false. Partial progress before an exception is progress, not
+a result.
+
 The report carries a deterministic digest over everything except wall-clock
 fields, so two runs of the same source over the same fixtures compare equal.
+
+## Command records
+
+A command record comes from an execution that happened, or it says it did not
+happen. There is no third shape and no pre-filled success:
+
+- the run's own record is written only after the final exit code is known;
+- the two unit suites are `not-run`, with no exit code and no timing, unless
+  `--execute-suites` is given, in which case their real status, UTC timing, exit
+  code and stdout/stderr digests are recorded;
+- `failed`, `error`, `timeout` and `signalled` stay distinct, so "the suite
+  failed" is never confused with "the suite never started";
+- `--execute-suites` inside a suite this run started records `not-run` rather
+  than re-entering the run.
+
+## Source binding
+
+The run is bound to the tree it actually executed from. The reported root must
+be that tree, the worktree must be clean, and the file inventory must cover
+every enumerated path. A failed Git call, a root that is not this repository, an
+empty enumeration, a tracked path missing from the worktree and an unreadable
+file are each reported as an error; none of them is read as clean, empty or
+consistent, and each one blocks a local pass.
+
+Enumeration is NUL-delimited (`git ls-files -z`), so a path containing spaces
+survives intact. The scan reports its own coverage — enumerated, scanned,
+skipped with reasons, unreadable — and is clean only when enumeration succeeded,
+at least one file was read, nothing was unreadable and no pattern matched. There
+is no exemption for the scanner's own source.
+
+## One run, one identity
+
+A run id is unique per execution. `--json-out` and `--text-out` write both
+renderings of the same single execution under that one id. Two invocations are
+two runs, and their observations are never presented as one.
+
+## Units
+
+Principal and gas are separate obligations in separate units: a principal is an
+amount in the quote asset, gas is a count of gas units borne by a named party.
+They are recorded side by side and never subtracted from one another. Whether a
+real fee is deducted from a refunded principal, in which asset and by whom, is
+open decision D-04 and is reported `NOT_RUN`.
 
 ## Route coverage
 
