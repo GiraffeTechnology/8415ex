@@ -735,10 +735,41 @@ class Exchange:
                 and authority.transfer_id == leg.transfer_id, "EX_RELEASE_BINDING_REFUSED",
                 "the authority names a different receipt, leg or transfer")
         expected = segment_binding(receipt.asset, receipt_id, leg_index, leg.transfer_id,
-                                   escrow.payer, escrow.payee, escrow.principal, escrow.quote_asset)
+                                   escrow.payer, escrow.payee, escrow.principal, escrow.quote_asset,
+                                   authority.journal_reference)
         require(authority.binding == expected, "EX_RELEASE_BINDING_REFUSED",
                 "the authority's segment binding does not match this segment's facts")
         return escrow
+
+    def _attempt_payment(self, escrow, payment_key, intent):
+        # Persist the attempt before crossing the adapter boundary. A raised
+        # error or invalid response cannot make an attempted action look new.
+        self._update_escrow(escrow.escrow_id, payment_key=payment_key,
+                            payment_intent=intent, payment_status="unknown")
+        if intent == "release":
+            self._replace_leg(escrow.receipt_id, escrow.leg_index,
+                              funding_status="release-outcome-unknown")
+        self._record(escrow.receipt_id, "payment-attempt-started", {
+            "escrowId": escrow.escrow_id, "paymentKey": payment_key,
+            "intent": intent, "paymentStatus": "unknown"})
+        payer, payee = ((escrow.payer, escrow.payee) if intent == "release"
+                        else (escrow.payee, escrow.payer))
+        return self.payments.pay(payment_key, payer, payee, escrow.quote_asset, escrow.principal)
+
+    def _check_payment_record(self, record, escrow, payment_key, intent):
+        require(intent in ("release", "refund"), "EX_PAYMENT_INTENT_CONFLICT",
+                "a payment result needs its original operation intent")
+        payer, payee = ((escrow.payer, escrow.payee) if intent == "release"
+                        else (escrow.payee, escrow.payer))
+        require(isinstance(record, dict)
+                and record.get("paymentKey") == payment_key
+                and record.get("payer") == payer and record.get("payee") == payee
+                and record.get("quoteAsset") == escrow.quote_asset
+                and record.get("principal") == escrow.principal,
+                "EX_PAYMENT_SUBSTITUTION_REFUSED", "payment evidence does not match this operation")
+        require(record.get("status") in ("settled", "failed", "unknown"),
+                "EX_PAYMENT_REFUSED", "unknown payment status")
+        return record
 
     def release_segment(self, receipt_id, leg_index, authority, now=None):
         """Release one segment's own money to that segment's own payee.
@@ -760,11 +791,16 @@ class Exchange:
         # Ask what already happened before sending anything. An unknown first
         # attempt is resolved by enquiry, never by a second payment.
         known = self.payments.lookup(payment_key)
-        require(known is not None or escrow.payment_status != "unknown",
-                "EX_PAYMENT_OUTCOME_UNRESOLVED", "an unknown payment needs an observed outcome")
+        if known is not None:
+            self._check_payment_record(known, escrow, payment_key, "release")
+        require(known is not None or escrow.payment_status is None,
+                "EX_PAYMENT_OUTCOME_UNRESOLVED", "an attempted payment needs an observed outcome")
+        if known is not None and known["status"] == "failed":
+            require(known.get("effect") == "not-applied" and known.get("retryable") is True,
+                    "EX_PAYMENT_OUTCOME_UNRESOLVED", "retry needs a confirmed no-effect failure")
         record = known if known is not None and known["status"] in ("settled", "unknown") \
-            else self.payments.pay(payment_key, escrow.payer, escrow.payee,
-                                   escrow.quote_asset, escrow.principal)
+            else self._attempt_payment(escrow, payment_key, "release")
+        self._check_payment_record(record, escrow, payment_key, "release")
         status = record["status"]
         if status == "settled":
             escrow = self._update_escrow(escrow.escrow_id, status="released", settled_at=now,
@@ -835,8 +871,9 @@ class Exchange:
                                 "paymentStatus": escrow.payment_status,
                                 "action": ("unknown outcome; keep the original operation pending"
                                            if escrow.payment_status == "unknown" else
-                                           "no payment record; retry only the original operation")})
+                                           "no payment record; restore evidence before retrying the original operation")})
                 continue
+            self._check_payment_record(record, escrow, escrow.payment_key, escrow.payment_intent)
             if record["status"] == "settled":
                 refund = escrow.payment_intent == "refund"
                 escrow = self._update_escrow(
@@ -1127,11 +1164,16 @@ class Exchange:
         # The refund goes to this leg's own original buyer, for this leg's own
         # unreleased principal. Nothing is netted against another segment.
         known = self.payments.lookup(step.key)
-        require(known is not None or escrow.payment_status != "unknown",
-                "EX_PAYMENT_OUTCOME_UNRESOLVED", "an unknown refund needs an observed outcome")
+        if known is not None:
+            self._check_payment_record(known, escrow, step.key, "refund")
+        require(known is not None or escrow.payment_status is None,
+                "EX_PAYMENT_OUTCOME_UNRESOLVED", "an attempted refund needs an observed outcome")
+        if known is not None and known["status"] == "failed":
+            require(known.get("effect") == "not-applied" and known.get("retryable") is True,
+                    "EX_PAYMENT_OUTCOME_UNRESOLVED", "retry needs a confirmed no-effect failure")
         record = known if known is not None and known["status"] in ("settled", "unknown") \
-            else self.payments.pay(step.key, escrow.payee, escrow.payer,
-                                   escrow.quote_asset, escrow.principal)
+            else self._attempt_payment(escrow, step.key, "refund")
+        self._check_payment_record(record, escrow, step.key, "refund")
         if record["status"] == "settled":
             self._update_escrow(escrow.escrow_id, status="refunded", refunded_at=now,
                                 payment_key=step.key, payment_status="settled",
