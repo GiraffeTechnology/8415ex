@@ -19,10 +19,16 @@ from .ids import address, amount, digest, identifier, instant
 from .model import WHOLE_RECEIPT_UNITS, Asset, AuthorizationReference, TradeIntent, WarehouseReceipt
 from .registration import (DISPOSITIONS, RegistrationEvidence, RegistrationRequest,
                            default_registrars)
+from .settlement import (EscrowPosition, ReleaseAuthority, SimulatedPaymentAdapter,
+                         segment_binding)
 
 EXECUTION_STATUSES = ("executed",)
 REGISTRATION_STATUSES = ("not-submitted", "pending", "confirmed", "rejected")
-FUNDING_STATUSES = ("not-modelled",)
+FUNDING_STATUSES = ("not-modelled", "locked", "released", "refunded",
+                    "release-failed", "release-outcome-unknown")
+
+#: Rollback capability. A released segment loses it and never regains it.
+ROLLBACK_STATUSES = ("none", "available", "detached", "in-progress", "returned")
 
 
 @dataclass(frozen=True)
@@ -51,6 +57,7 @@ class Transfer:
         identifier(self.transfer_id, "EX_TRANSFER_REFUSED")
         require(self.registration_status in REGISTRATION_STATUSES, "EX_TRANSFER_REFUSED", self.registration_status)
         require(self.funding_status in FUNDING_STATUSES, "EX_TRANSFER_REFUSED", self.funding_status)
+        require(self.rollback_status in ROLLBACK_STATUSES, "EX_TRANSFER_REFUSED", self.rollback_status)
         require(self.seller != self.buyer, "EX_TRANSFER_REFUSED", "a leg must move the receipt between parties")
 
 
@@ -83,9 +90,24 @@ class Exchange:
     its own.
     """
 
-    def __init__(self, clock):
+    def __init__(self, clock, payment_adapter=None, release_sources=(), funding_required=False):
+        """``funding_required`` turns on the Stage 2 rule that a leg only forms
+        once its own buyer's money is in escrow. Stage 1 leaves it off and
+        records funding as not modelled rather than implying a payment.
+
+        ``release_sources`` is the set of sources whose evidence may release a
+        segment. It is supplied by the caller from verified configuration; this
+        layer never widens it and has no default member.
+        """
         require(callable(clock), "EX_CLOCK_REFUSED", "a clock function is required")
         self._clock = clock
+        self.payments = payment_adapter
+        self.funding_required = bool(funding_required)
+        self._release_sources = frozenset(identifier(s, "EX_RELEASE_SOURCE_REFUSED")
+                                          for s in release_sources)
+        self._escrows = {}
+        self._escrow_by_leg = {}
+        self._gas = {}
         self._receipts = {}
         self._asset_keys = {}
         self._authorizations = {}
@@ -101,6 +123,9 @@ class Exchange:
         self._rejections = {}
         self._events = {}
         self.registrars = default_registrars(clock)
+        if self.funding_required:
+            require(self.payments is not None, "EX_PAYMENT_ADAPTER_REQUIRED",
+                    "funded mode needs a payment adapter")
 
     # ---------------------------------------------------------------- receipts
 
@@ -122,6 +147,8 @@ class Exchange:
         self._requests_by_leg[receipt.receipt_id] = {}
         self._deferred[receipt.receipt_id] = {}
         self._rejections[receipt.receipt_id] = []
+        self._escrow_by_leg[receipt.receipt_id] = {}
+        self._gas[receipt.receipt_id] = {}
         self._events[receipt.receipt_id] = []
         self._record(receipt.receipt_id, "receipt-minted", {
             "receiptId": receipt.receipt_id, "asset": list(receipt.asset.key),
@@ -317,11 +344,15 @@ class Exchange:
         self.receipt(receipt_id)
         return tuple(self._legs[receipt_id])
 
-    def execute_transfer(self, match, transfer_id, now=None):
+    def execute_transfer(self, match, transfer_id, escrow_id=None, now=None):
         """Append one leg, advancing the owner position by exactly one.
 
         Only the current head may be sold. Two attempts from the same head mean
         the second one is refused: a receipt has one valid continuous order.
+
+        In funded mode the buyer's own escrow for this leg must already be
+        locked and must match the agreed terms exactly, so a failed lock leaves
+        no trade and no registration request behind.
         """
         now = self._now(now)
         require(isinstance(match, MatchResult), "EX_TRANSFER_REFUSED", "match type")
@@ -342,13 +373,27 @@ class Exchange:
             require(report["executable"], "EX_TRANSFER_AUTHORIZATION_REFUSED",
                     f"{report['intentId']}: {','.join(report['reasons'])}")
         require(transfer_id not in self._transfer_ids(), "EX_TRANSFER_DUPLICATE_REFUSED", transfer_id)
+        funding_status, rollback_status = "not-modelled", "none"
+        if self.funding_required or escrow_id is not None:
+            require(escrow_id is not None, "EX_SEGMENT_NOT_FUNDED",
+                    "this leg has no escrow position, so no trade is formed")
+            escrow = self.escrow(escrow_id)
+            require(escrow.receipt_id == receipt_id and escrow.leg_index == len(legs),
+                    "EX_SEGMENT_NOT_FUNDED", "the escrow is for another receipt or leg")
+            require(escrow.status == "locked", "EX_SEGMENT_NOT_FUNDED", escrow.status)
+            require(escrow.payer == match.buyer and escrow.payee == match.seller
+                    and escrow.principal == match.price
+                    and escrow.quote_asset == match.quote_asset,
+                    "EX_SEGMENT_FUNDING_MISMATCH",
+                    "the escrow terms are not the agreed terms of this leg")
+            funding_status, rollback_status = "locked", "available"
         leg = Transfer(transfer_id=identifier(transfer_id, "EX_TRANSFER_REFUSED"), receipt_id=receipt_id,
                        leg_index=len(legs), seller=match.seller, buyer=match.buyer,
                        predecessor_transfer_id=legs[-1].transfer_id if legs else None,
                        price=amount(match.price, "EX_TRANSFER_REFUSED"), quote_asset=match.quote_asset,
                        sell_intent_digest=match.sell_intent_digest, buy_intent_digest=match.buy_intent_digest,
                        sell_authorization_id=sell.authorization_id, buy_authorization_id=buy.authorization_id,
-                       executed_at=now)
+                       executed_at=now, funding_status=funding_status, rollback_status=rollback_status)
         legs.append(leg)
         self._used_nonces.add((sell.signer, sell.nonce))
         self._used_nonces.add((buy.signer, buy.nonce))
@@ -356,7 +401,8 @@ class Exchange:
             "transferId": leg.transfer_id, "legIndex": leg.leg_index, "seller": leg.seller,
             "buyer": leg.buyer, "price": str(leg.price), "quoteAsset": leg.quote_asset,
             "matchBasis": match.basis, "ownerIndex": len(legs), "holderIndex": self._holder_index[receipt_id],
-            "registrationStatus": leg.registration_status, "fundingStatus": leg.funding_status})
+            "registrationStatus": leg.registration_status, "fundingStatus": leg.funding_status,
+            "escrowId": escrow_id})
         return leg
 
     def _transfer_ids(self):
@@ -521,6 +567,282 @@ class Exchange:
                                 "observedAt": now, "meaning": "commitment-window-passed"})
         return tuple(overdue)
 
+    # ------------------------------------------------- segmented settlement
+
+    def escrow(self, escrow_id):
+        found = self._escrows.get(identifier(escrow_id, "EX_ESCROW_REFUSED"))
+        require(found is not None, "EX_ESCROW_UNKNOWN", escrow_id)
+        return found
+
+    def escrow_for_leg(self, receipt_id, leg_index):
+        self.receipt(receipt_id)
+        found = self._escrow_by_leg[receipt_id].get(leg_index)
+        require(found is not None, "EX_ESCROW_UNKNOWN", f"leg {leg_index}")
+        return self._escrows[found]
+
+    def lock_escrow(self, match, escrow_id, now=None):
+        """Put this leg's buyer's own money in its own position.
+
+        The position is for the leg this match would create next, and it is
+        funded before that leg exists: no trade and no registration request is
+        formed until the money is here.
+        """
+        now = self._now(now)
+        receipt_id = self._asset_keys.get(match.asset.key)
+        require(receipt_id is not None, "EX_ASSET_UNKNOWN", str(match.asset.key))
+        leg_index = len(self._legs[receipt_id])
+        require(leg_index not in self._escrow_by_leg[receipt_id], "EX_ESCROW_DUPLICATE_REFUSED",
+                f"leg {leg_index} is already funded")
+        require(escrow_id not in self._escrows, "EX_ESCROW_DUPLICATE_REFUSED", escrow_id)
+        position = EscrowPosition(escrow_id=escrow_id, receipt_id=receipt_id, leg_index=leg_index,
+                                  payer=match.buyer, payee=match.seller,
+                                  quote_asset=match.quote_asset, principal=match.price,
+                                  locked_at=now)
+        self._escrows[escrow_id] = position
+        self._escrow_by_leg[receipt_id][leg_index] = escrow_id
+        self._record(receipt_id, "escrow-locked", {
+            "escrowId": escrow_id, "legIndex": leg_index, "payer": position.payer,
+            "payee": position.payee, "principal": str(position.principal),
+            "quoteAsset": position.quote_asset, "status": position.status})
+        return position
+
+    def _update_escrow(self, escrow_id, **changes):
+        self._escrows[escrow_id] = replace(self._escrows[escrow_id], **changes)
+        return self._escrows[escrow_id]
+
+    def segment_release_state(self, receipt_id, leg_index, now=None):
+        """Whether this segment meets its own release condition, and why.
+
+        The condition is positional: owner and holder have both reached this
+        leg's buyer or a later position in the same chain. A later leg still
+        pending never freezes an earlier one that already qualifies.
+        """
+        now = self._now(now)
+        self.receipt(receipt_id)
+        leg = self.leg(receipt_id, leg_index)
+        owner_index, holder_index = self.owner_index(receipt_id), self._holder_index[receipt_id]
+        reasons = []
+        if owner_index < leg_index + 1:
+            reasons.append("EX_OWNER_POSITION_NOT_REACHED")
+        if holder_index < leg_index + 1:
+            reasons.append("EX_HOLDER_POSITION_NOT_REACHED")
+        if leg.registration_status != "confirmed":
+            reasons.append("EX_SEGMENT_REGISTRATION_NOT_CONFIRMED")
+        escrow_id = self._escrow_by_leg[receipt_id].get(leg_index)
+        if escrow_id is None:
+            reasons.append("EX_SEGMENT_NOT_FUNDED")
+        else:
+            escrow = self._escrows[escrow_id]
+            if escrow.status == "released":
+                reasons.append("EX_SEGMENT_ALREADY_RELEASED")
+            elif escrow.status == "refunded":
+                reasons.append("EX_SEGMENT_REFUNDED")
+        return {"receiptId": receipt_id, "legIndex": leg_index, "escrowId": escrow_id,
+                "ownerIndex": owner_index, "holderIndex": holder_index,
+                "eligible": reasons == [], "reasons": tuple(reasons), "observedAt": now}
+
+    def _check_release_authority(self, receipt_id, leg_index, authority):
+        """Bind the evidence to this source, asset, segment and journal, or refuse."""
+        require(isinstance(authority, ReleaseAuthority), "EX_RELEASE_AUTHORITY_REFUSED",
+                "release needs bound authority evidence, not a signature or a settlement id")
+        receipt = self.receipt(receipt_id)
+        leg = self.leg(receipt_id, leg_index)
+        escrow = self.escrow_for_leg(receipt_id, leg_index)
+        require(authority.source in self._release_sources, "EX_RELEASE_SOURCE_REFUSED",
+                f"{authority.source} is not a verified release source")
+        require(authority.asset.key == receipt.asset.key, "EX_RELEASE_BINDING_REFUSED",
+                "the authority names a different asset or network")
+        require(authority.receipt_id == receipt_id and authority.leg_index == leg_index
+                and authority.transfer_id == leg.transfer_id, "EX_RELEASE_BINDING_REFUSED",
+                "the authority names a different receipt, leg or transfer")
+        expected = segment_binding(receipt.asset, receipt_id, leg_index, leg.transfer_id,
+                                   escrow.payer, escrow.payee, escrow.principal, escrow.quote_asset)
+        require(authority.binding == expected, "EX_RELEASE_BINDING_REFUSED",
+                "the authority's segment binding does not match this segment's facts")
+        return escrow
+
+    def release_segment(self, receipt_id, leg_index, authority, now=None):
+        """Release one segment's own money to that segment's own payee.
+
+        Nothing is paid from another leg's position, and the payment is keyed so
+        a retry cannot move money twice. A payment that fails or returns an
+        unknown outcome leaves the position locked and recorded: the segment is
+        not swept into a refund suffix just because its payment is late.
+        """
+        now = self._now(now)
+        state = self.segment_release_state(receipt_id, leg_index, now)
+        require(state["eligible"], "EX_SEGMENT_NOT_RELEASABLE", ",".join(state["reasons"]))
+        escrow = self._check_release_authority(receipt_id, leg_index, authority)
+        require(self.payments is not None, "EX_PAYMENT_ADAPTER_REQUIRED",
+                "releasing needs the optional payment adapter to be configured")
+        payment_key = escrow.payment_key or f"release:{escrow.escrow_id}"
+        # Ask what already happened before sending anything. An unknown first
+        # attempt is resolved by enquiry, never by a second payment.
+        known = self.payments.lookup(payment_key)
+        record = known if known is not None and known["status"] in ("settled", "unknown") \
+            else self.payments.pay(payment_key, escrow.payer, escrow.payee,
+                                   escrow.quote_asset, escrow.principal)
+        status = record["status"]
+        if status == "settled":
+            escrow = self._update_escrow(escrow.escrow_id, status="released", settled_at=now,
+                                         payment_key=payment_key, payment_status=status,
+                                         payment_reference=record["reference"])
+            self._replace_leg(receipt_id, leg_index, funding_status="released",
+                              rollback_status="detached")
+        else:
+            escrow = self._update_escrow(escrow.escrow_id, payment_key=payment_key,
+                                         payment_status=status,
+                                         payment_reference=record.get("reference"))
+            self._replace_leg(receipt_id, leg_index,
+                              funding_status="release-failed" if status == "failed"
+                              else "release-outcome-unknown")
+        self._record(receipt_id, "segment-release-attempt", {
+            "legIndex": leg_index, "escrowId": escrow.escrow_id, "authorityId": authority.authority_id,
+            "source": authority.source, "journalReference": authority.journal_reference,
+            "paymentKey": payment_key, "paymentStatus": status,
+            "principal": str(escrow.principal), "payee": escrow.payee,
+            "escrowStatus": escrow.status, "rollbackStatus": self.leg(receipt_id, leg_index).rollback_status,
+            "registrationConfirmed": True})
+        return {"legIndex": leg_index, "escrowId": escrow.escrow_id, "paymentStatus": status,
+                "escrowStatus": escrow.status, "released": escrow.status == "released",
+                "paymentKey": payment_key, "principal": escrow.principal,
+                "payee": escrow.payee, "observedAt": now}
+
+    def settle_eligible_segments(self, receipt_id, authorities, now=None):
+        """Release every segment that already qualifies, in prefix order.
+
+        ``authorities`` maps a leg index to its own authority evidence. A
+        segment with no evidence is skipped and reported, never released.
+        """
+        now = self._now(now)
+        self.receipt(receipt_id)
+        outcomes = []
+        for leg_index in range(self.owner_index(receipt_id)):
+            state = self.segment_release_state(receipt_id, leg_index, now)
+            if not state["eligible"]:
+                outcomes.append({"legIndex": leg_index, "released": False,
+                                 "reasons": state["reasons"]})
+                continue
+            authority = authorities.get(leg_index)
+            if authority is None:
+                outcomes.append({"legIndex": leg_index, "released": False,
+                                 "reasons": ("EX_RELEASE_AUTHORITY_MISSING",)})
+                continue
+            outcomes.append(self.release_segment(receipt_id, leg_index, authority, now))
+        return tuple(outcomes)
+
+    def resume_payments(self, receipt_id):
+        """Query every unresolved payment before anything is retried.
+
+        A restart must not read ``unknown`` as ``failed``, and it must not send a
+        second payment to repair an unknown first one.
+        """
+        self.receipt(receipt_id)
+        resumed = []
+        for leg_index, escrow_id in sorted(self._escrow_by_leg[receipt_id].items()):
+            escrow = self._escrows[escrow_id]
+            if escrow.payment_key is None or escrow.status == "released":
+                continue
+            record = self.payments.lookup(escrow.payment_key) if self.payments else None
+            if record is None:
+                resumed.append({"legIndex": leg_index, "escrowId": escrow_id,
+                                "paymentStatus": escrow.payment_status,
+                                "action": "no payment record; a fresh attempt is safe"})
+                continue
+            if record["status"] == "settled" and escrow.status != "released":
+                escrow = self._update_escrow(escrow_id, status="released",
+                                             settled_at=record["observedAt"],
+                                             payment_status="settled",
+                                             payment_reference=record["reference"])
+                self._replace_leg(receipt_id, leg_index, funding_status="released",
+                                  rollback_status="detached")
+                resumed.append({"legIndex": leg_index, "escrowId": escrow_id,
+                                "paymentStatus": "settled",
+                                "action": "the enquiry found the payment had settled; recorded, not resent"})
+            else:
+                resumed.append({"legIndex": leg_index, "escrowId": escrow_id,
+                                "paymentStatus": record["status"],
+                                "action": "still unresolved; no second payment is sent"})
+            self._record(receipt_id, "payment-enquiry", {
+                "legIndex": leg_index, "escrowId": escrow_id, "paymentStatus": record["status"],
+                "secondPaymentSent": False})
+        return tuple(resumed)
+
+    def record_gas(self, receipt_id, leg_index, kind, spent, shared_with=(), note=None):
+        """Record actual gas this leg's buyer bore.
+
+        The product rule is settled: each leg's buyer bears that leg's trade,
+        refund and return gas, and a refusal elsewhere does not move that
+        responsibility. How a shared on-chain operation is apportioned, and how
+        a fee is actually deducted, are still open, so this records the shared
+        set and refuses to charge a shared operation to every leg at full
+        amount. No apportionment formula is treated here as approved.
+        """
+        self.receipt(receipt_id)
+        leg = self.leg(receipt_id, leg_index)
+        escrow = self.escrow_for_leg(receipt_id, leg_index)
+        amount(spent, "EX_GAS_REFUSED")
+        identifier(kind, "EX_GAS_REFUSED")
+        shared = tuple(sorted(set(shared_with) | {leg_index}))
+        for other in shared:
+            self.leg(receipt_id, other)
+        entry = {"kind": kind, "legIndex": leg_index, "bearer": escrow.payer,
+                 "amount": spent, "sharedWith": shared,
+                 "sharedOperation": len(shared) > 1,
+                 "apportionment": "undecided" if len(shared) > 1 else "single-leg",
+                 "note": note}
+        if len(shared) > 1:
+            # A shared operation is recorded once against the leg that is paying
+            # for it here. Charging every sharer the full amount is exactly what
+            # the requirement forbids, and the split rule is not ours to invent.
+            already = [e for index in shared for e in self._gas[receipt_id].get(index, ())
+                       if e["kind"] == kind and e["sharedWith"] == shared]
+            require(already == [], "EX_GAS_DOUBLE_CHARGE_REFUSED",
+                    f"the shared {kind} operation for legs {shared} is already recorded once")
+        self._gas[receipt_id].setdefault(leg_index, [])
+        self._gas[receipt_id][leg_index].append(entry)
+        self._update_escrow(escrow.escrow_id,
+                            gas_record=tuple(self._escrows[escrow.escrow_id].gas_record) + (entry,))
+        self._record(receipt_id, "gas-recorded", dict(entry, amount=str(spent)))
+        return entry
+
+    def reconciliation(self, receipt_id, now=None):
+        """Per-segment principal, gas and net, with no figure merged.
+
+        Release and refund are reported as the mutually exclusive outcomes they
+        are, and a segment whose payment has not settled is shown as unsettled
+        rather than as paid.
+        """
+        now = self._now(now)
+        self.receipt(receipt_id)
+        segments = []
+        for leg in self._legs[receipt_id]:
+            escrow_id = self._escrow_by_leg[receipt_id].get(leg.leg_index)
+            escrow = self._escrows.get(escrow_id) if escrow_id else None
+            gas = tuple(self._gas[receipt_id].get(leg.leg_index, ()))
+            gas_total = sum(entry["amount"] for entry in gas)
+            segments.append({
+                "legIndex": leg.leg_index, "transferId": leg.transfer_id,
+                "seller": leg.seller, "buyer": leg.buyer,
+                "principal": str(leg.price), "quoteAsset": leg.quote_asset,
+                "escrowId": escrow_id,
+                "escrowStatus": escrow.status if escrow else "not-funded",
+                "paymentStatus": escrow.payment_status if escrow else None,
+                "released": bool(escrow and escrow.status == "released"),
+                "refunded": bool(escrow and escrow.status == "refunded"),
+                "registrationStatus": leg.registration_status,
+                "fundingStatus": leg.funding_status,
+                "rollbackStatus": leg.rollback_status,
+                "gasEntries": gas,
+                "gasBorneBy": leg.buyer,
+                "gasTotal": str(gas_total),
+                "netToPayee": str(leg.price) if escrow and escrow.status == "released" else "0",
+                "netToPayer": str(leg.price) if escrow and escrow.status == "refunded" else "0",
+            })
+        return {"receiptId": receipt_id, "observedAt": now, "segments": tuple(segments),
+                "gasApportionmentForSharedOperations": "undecided; recorded once, never charged in full to each leg",
+                "releaseAndRefundMutuallyExclusive": True}
+
     # ------------------------------------------------------------- reporting
 
     def receipt_view(self, receipt_id, now=None):
@@ -550,7 +872,7 @@ class Exchange:
             "simulatedRegistration": True,
             "tradeStopAt": receipt.trade_stop_at,
             "tradingOpen": now < receipt.trade_stop_at,
-            "fundingModelled": False,
+            "fundingModelled": self.funding_required or bool(self._escrow_by_leg[receipt_id]),
             "observedAt": now,
             "legs": tuple({"legIndex": leg.leg_index, "transferId": leg.transfer_id,
                            "seller": leg.seller, "buyer": leg.buyer, "price": str(leg.price),

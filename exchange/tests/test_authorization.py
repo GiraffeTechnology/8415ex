@@ -179,8 +179,10 @@ class NoSecondApprovalLayer(unittest.TestCase):
 
         from exchange.ledger import Exchange
         parameters = set(inspect.signature(Exchange.execute_transfer).parameters)
-        self.assertEqual(parameters, {"self", "match", "transfer_id", "now"})
-        for forbidden in ("approval", "platform_approval", "operator_approval", "override"):
+        self.assertEqual(parameters, {"self", "match", "transfer_id", "escrow_id", "now"},
+                         "escrow_id funds the leg; it is not an approval token")
+        for forbidden in ("approval", "platform_approval", "operator_approval", "override",
+                          "operator_sign_off", "manual_confirm"):
             self.assertNotIn(forbidden, parameters)
 
     def test_an_action_beyond_the_grant_is_still_refused_within_the_same_session(self):

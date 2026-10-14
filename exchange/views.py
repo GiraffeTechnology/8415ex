@@ -23,6 +23,17 @@ REGISTRATION_WORDING = {
     "rejected": "registrar refused this hop",
 }
 
+#: Wording for each funding status. An unsettled payment never reads as paid.
+FUNDING_WORDING = {
+    "not-modelled": "not modelled in this stage",
+    "locked": "this leg's buyer funded its own escrow",
+    "released": "released to this leg's seller",
+    "refunded": "refunded to this leg's buyer",
+    "release-failed": "release attempted, payment failed - still held, not refunded",
+    "release-outcome-unknown": "release attempted, payment outcome unknown - being enquired, "
+                              "no second payment sent",
+}
+
 PAGES = ("receipt", "authorization", "timeline", "rollback", "queue", "evidence")
 
 
@@ -61,7 +72,8 @@ def receipt_page(exchange, receipt_id, now=None):
                                   f"not a real registration institution"),
         _row("Trading window", "open" if view["tradingOpen"] else
              "closed - no new trade is accepted for this receipt"),
-        _row("Segmented funding", "not modelled in Stage 1"),
+        _row("Segmented funding", "each leg funds its own escrow; released per segment"
+             if view["fundingModelled"] else "not modelled in this stage"),
         _row("Exit / collection", "not available from this page. "
              + ("the necessary condition owner == holder holds, and it is not sufficient"
                 if readiness["necessaryConditionMet"] else
@@ -120,7 +132,7 @@ def timeline_page(exchange, receipt_id, now=None):
             f"{leg['price']} {leg['quoteAsset']}",
             "trade submitted and observed locally",
             REGISTRATION_WORDING[leg["registrationStatus"]] + " (simulated)",
-            "not modelled in Stage 1", leg["rollbackStatus"])) + "</tr>")
+            FUNDING_WORDING[leg["fundingStatus"]], leg["rollbackStatus"])) + "</tr>")
     if not view["legs"]:
         rows.append("<tr><td colspan='8'>no trade yet; the origin account is "
                     "both owner and holder</td></tr>")
@@ -140,12 +152,32 @@ def rollback_page(exchange, receipt_id, now=None):
                                  f"not hidden"),
         _row("Unresolved suffix", f"{view['outstandingLegs']} legs still open"),
         _row("Legs the registrar refused", ", ".join(str(i) for i in view["rejectedLegs"]) or "none"),
-        _row("Suffix rollback", "not implemented in Stage 1 - Stage 3 scope. "
-                                "No refund, release or recovery is performed or implied here"),
-        _row("Refund and release", "not modelled in Stage 1"),
+        _row("Suffix rollback", "not implemented in this stage - Stage 3 scope. "
+                                "No refund or asset return is performed or implied here"),
     ]
+    if not view["fundingModelled"]:
+        rows.append(_row("Refund and release", "not modelled in this stage"))
+        money = ""
+    else:
+        report = exchange.reconciliation(receipt_id, now)
+        header = ("<tr><th>Leg</th><th>Principal</th><th>Escrow</th><th>Payment</th>"
+                  "<th>Net to seller</th><th>Net to buyer</th><th>Gas borne by buyer</th>"
+                  "<th>Rollback</th></tr>")
+        lines = [header]
+        for segment in report["segments"]:
+            lines.append("<tr>" + "".join(f"<td>{escape(str(cell))}</td>" for cell in (
+                segment["legIndex"], f"{segment['principal']} {segment['quoteAsset']}",
+                segment["escrowStatus"], segment["paymentStatus"] or "no attempt yet",
+                segment["netToPayee"], segment["netToPayer"],
+                f"{segment['gasTotal']} ({segment['gasBorneBy']})",
+                segment["rollbackStatus"])) + "</tr>")
+        money = ("<p>Release and refund are mutually exclusive, and a released segment's "
+                 "rollback capability is gone for good. A shared on-chain operation is "
+                 "recorded once; its apportionment is still undecided and is not assumed "
+                 "here.</p><table>" + "".join(lines) + "</table>")
     return ("<h2>Rollback detail</h2><p>Nothing on this page is zeroed out: a confirmed "
-            "prefix stays visible even when a later hop is open or refused.</p>" + _table(rows))
+            "prefix stays visible even when a later hop is open or refused.</p>"
+            + _table(rows) + money)
 
 
 def queue_page(exchange, receipt_id, now=None):
@@ -232,11 +264,14 @@ def page(exchange, receipt_id, name, authorization_ids=(), run=None, now=None):
     tabs = "".join(
         f"<a class=\"{'on' if other == name else ''}\" href=\"/{other}\">{other}</a>"
         for other in PAGES)
+    funded = exchange.receipt_view(receipt_id, now)["fundingModelled"]
+    banner = ("Local state. Registration is simulated and no transaction is sent. "
+              + ("Payments are simulated through the optional adapter; no real value moves. "
+                 if funded else "No payment is modelled at this stage. ")
+              + "Not a deployment or an acceptance record.")
     return ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-            f"<title>8415ex Stage 1 - {escape(name)}</title><style>{STYLE}</style></head><body>"
-            f"<header><b>8415ex</b> Stage 1 status console</header><nav>{tabs}</nav>"
-            "<div class=\"banner\">Local Stage 1 state. Registration is simulated, no payment "
-            "is modelled, and no transaction is sent. Not a deployment or an acceptance record."
-            "</div>"
+            f"<title>8415ex - {escape(name)}</title><style>{STYLE}</style></head><body>"
+            f"<header><b>8415ex</b> status console</header><nav>{tabs}</nav>"
+            f"<div class=\"banner\">{escape(banner)}</div>"
             f"<main>{body}</main></body></html>")
