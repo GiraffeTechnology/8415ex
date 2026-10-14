@@ -39,6 +39,11 @@ jobs:
         run: |
           set -euo pipefail
           python3 -B -m unittest discover -s ci/tests -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/unit-tests.log"
+      - name: Run Stage 1 domain tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s exchange/tests -t . -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/stage1-tests.log"
       - name: Verify deliberate failure and successful smoke
         shell: bash
         run: |
