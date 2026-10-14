@@ -21,7 +21,7 @@ a rule.
 from dataclasses import dataclass, replace
 
 from .errors import require
-from .ids import address, identifier, instant
+from .ids import address, digest, identifier, instant
 
 #: The exit sequence, in the order the requirements describe it. The exact
 #: confirmation and recovery order inside the hand-over and burn pair is still
@@ -72,6 +72,14 @@ class ExitStep:
             instant(self.completed_at, "EX_EXIT_STEP_REFUSED")
 
 
+def exit_step_key(step, receipt_id, request_id):
+    """Bounded, unambiguous identity even when either identifier contains ':'."""
+    require(step in EXIT_STEPS, "EX_EXIT_STEP_REFUSED", step)
+    identifier(receipt_id, "EX_REDEMPTION_REFUSED")
+    identifier(request_id, "EX_REDEMPTION_REFUSED")
+    return f"{step}:{digest({'receiptId': receipt_id, 'requestId': request_id})}"
+
+
 class SimulatedVoucherDesk:
     """A simulated collection desk for one registration path.
 
@@ -106,7 +114,8 @@ class SimulatedVoucherDesk:
         require(step in EXIT_STEPS, "EX_EXIT_STEP_REFUSED", step)
         existing = self._records.get(key)
         if existing is not None:
-            require(existing["step"] == step and existing["account"] == account,
+            require(existing["step"] == step and existing["account"] == account
+                    and existing["receiptId"] == receipt_id,
                     "EX_VOUCHER_SUBSTITUTION_REFUSED",
                     f"{key} was already used for {existing['step']} by {existing['account']}")
             return dict(existing, repeated=True)
