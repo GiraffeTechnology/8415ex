@@ -20,7 +20,7 @@ from .model import WHOLE_RECEIPT_UNITS, Asset, AuthorizationReference, TradeInte
 from .registration import (DISPOSITIONS, RegistrationEvidence, RegistrationRequest,
                            default_registrars)
 from .exit import (EXIT_STEPS, REQUIRED_OTHER_CHECKS, ExitStep, RedemptionRequest,
-                   SimulatedVoucherDesk)
+                   SimulatedVoucherDesk, exit_step_key)
 from .rollback import (ROLLBACK_STATES, WITHDRAWN_MECHANISMS, GasBudget, RollbackAuthority,
                        RollbackStep, SimulatedAssetControl, rollback_binding)
 from .settlement import (EscrowPosition, ReleaseAuthority, SimulatedPaymentAdapter,
@@ -336,6 +336,26 @@ class Exchange:
                            seller=sell.signer, buyer=buy.signer, asset=sell.asset, price=price,
                            quote_asset=sell.quote_asset, units=sell.units, basis=basis, matched_at=now)
 
+    def _check_match_binding(self, match, now):
+        require(isinstance(match, MatchResult), "EX_TRANSFER_REFUSED", "match type")
+        sell = self._intent_by_digest(match.sell_intent_digest)
+        buy = self._intent_by_digest(match.buy_intent_digest)
+        canonical = self.match_intents(sell.intent_id, buy.intent_id, now)
+        require(all(getattr(match, name) == getattr(canonical, name)
+                    for name in ("seller", "buyer", "asset", "price", "quote_asset", "units")),
+                "EX_MATCH_BINDING_REFUSED", "match terms differ from the signed pairing")
+        return canonical
+
+    def _check_trade_open(self, receipt_id, now):
+        require(now < self.receipt(receipt_id).trade_stop_at, "EX_TRADE_WINDOW_CLOSED",
+                "new trades are refused at or after the stop-trading instant")
+        require(self._returned_to[receipt_id] is None, "EX_TRADE_RETURNED_CHAIN_CLOSED",
+                "this chain has returned; further trading is not defined")
+        require(self._rollbacks[receipt_id] is None, "EX_TRADE_ROLLBACK_OPEN",
+                "a rollback freezes the receipt's trade chain")
+        require(self._exits[receipt_id] is None, "EX_TRADE_EXIT_OPEN",
+                "an exit freezes resale, including while a step is unresolved")
+
     # ------------------------------------------------------------- transfers
 
     def owner_index(self, receipt_id):
@@ -390,13 +410,8 @@ class Exchange:
         require(isinstance(match, MatchResult), "EX_TRANSFER_REFUSED", "match type")
         receipt_id = self._asset_keys.get(match.asset.key)
         require(receipt_id is not None, "EX_ASSET_UNKNOWN", str(match.asset.key))
-        receipt = self._receipts[receipt_id]
-        require(now < receipt.trade_stop_at, "EX_TRADE_WINDOW_CLOSED",
-                "new trades are refused at or after the stop-trading instant")
+        self._check_trade_open(receipt_id, now)
         legs = self._legs[receipt_id]
-        require(self._returned_to[receipt_id] is None, "EX_TRADE_RETURNED_CHAIN_CLOSED",
-                "this receipt was returned by a rollback; re-trading after a return is not "
-                "a defined order in the requirements and is refused rather than guessed")
         require(self.owner_of(receipt_id) == match.seller, "EX_TRADE_HEAD_MOVED",
                 "only the current owner position may transfer the receipt")
         sell = self._intent_by_digest(match.sell_intent_digest)
@@ -407,6 +422,7 @@ class Exchange:
         for report in (self.validate_intent(sell.intent_id, now), self.validate_intent(buy.intent_id, now)):
             require(report["executable"], "EX_TRANSFER_AUTHORIZATION_REFUSED",
                     f"{report['intentId']}: {','.join(report['reasons'])}")
+        match = self._check_match_binding(match, now)
         require(transfer_id not in self._transfer_ids(), "EX_TRANSFER_DUPLICATE_REFUSED", transfer_id)
         funding_status, rollback_status = "not-modelled", "none"
         if self.funding_required or escrow_id is not None:
@@ -535,8 +551,9 @@ class Exchange:
                     "appliedAt": previous["appliedAt"]}
         receipt_id = evidence.receipt_id
         expected = self._holder_index[receipt_id]
-        if self.leg(receipt_id, evidence.leg_index).rollback_status == "returned":
-            # The suffix was already unwound. A late success cannot revive the leg
+        rollback = self._rollbacks[receipt_id]
+        if rollback is not None and evidence.leg_index in rollback["affectedLegs"]:
+            # The suffix is frozen or unwound. A late success cannot revive the leg
             # or release money again; it is kept as conflict evidence.
             outcome = self.record_late_registration_conflict(receipt_id, evidence)
             self._applied_results[evidence.result_id] = {
@@ -545,6 +562,8 @@ class Exchange:
             return {"disposition": "late-conflict", "resultId": evidence.result_id,
                     "legIndex": evidence.leg_index,
                     "holderIndex": self._holder_index[receipt_id], **outcome}
+        require(evidence.leg_index >= expected, "EX_REGISTRATION_ALREADY_CONFIRMED",
+                "a new result cannot rewrite the confirmed prefix")
         if evidence.outcome == "rejected":
             disposition = "rejected"
             self._rejections[receipt_id].append(evidence)
@@ -582,6 +601,9 @@ class Exchange:
         buffered = self._deferred[receipt_id]
         while True:
             nxt = self._holder_index[receipt_id]
+            rollback = self._rollbacks[receipt_id]
+            if rollback is not None and nxt in rollback["affectedLegs"]:
+                return
             evidence = buffered.pop(nxt, None)
             if evidence is None:
                 return
@@ -633,8 +655,12 @@ class Exchange:
         formed until the money is here.
         """
         now = self._now(now)
+        match = self._check_match_binding(match, now)
         receipt_id = self._asset_keys.get(match.asset.key)
         require(receipt_id is not None, "EX_ASSET_UNKNOWN", str(match.asset.key))
+        self._check_trade_open(receipt_id, now)
+        require(self.owner_of(receipt_id) == match.seller, "EX_TRADE_HEAD_MOVED",
+                "only the current owner may fund the next transfer")
         leg_index = len(self._legs[receipt_id])
         require(leg_index not in self._escrow_by_leg[receipt_id], "EX_ESCROW_DUPLICATE_REFUSED",
                 f"leg {leg_index} is already funded")
@@ -671,6 +697,8 @@ class Exchange:
             reasons.append("EX_OWNER_POSITION_NOT_REACHED")
         if holder_index < leg_index + 1:
             reasons.append("EX_HOLDER_POSITION_NOT_REACHED")
+        if leg.rollback_status in ("in-progress", "returned"):
+            reasons.append("EX_SEGMENT_ROLLBACK_OPEN")
         if leg.registration_status != "confirmed":
             reasons.append("EX_SEGMENT_REGISTRATION_NOT_CONFIRMED")
         escrow_id = self._escrow_by_leg[receipt_id].get(leg_index)
@@ -720,10 +748,14 @@ class Exchange:
         escrow = self._check_release_authority(receipt_id, leg_index, authority)
         require(self.payments is not None, "EX_PAYMENT_ADAPTER_REQUIRED",
                 "releasing needs the optional payment adapter to be configured")
+        require(escrow.payment_intent in (None, "release"), "EX_PAYMENT_INTENT_CONFLICT",
+                "a refund operation cannot become a release")
         payment_key = escrow.payment_key or f"release:{escrow.escrow_id}"
         # Ask what already happened before sending anything. An unknown first
         # attempt is resolved by enquiry, never by a second payment.
         known = self.payments.lookup(payment_key)
+        require(known is not None or escrow.payment_status != "unknown",
+                "EX_PAYMENT_OUTCOME_UNRESOLVED", "an unknown payment needs an observed outcome")
         record = known if known is not None and known["status"] in ("settled", "unknown") \
             else self.payments.pay(payment_key, escrow.payer, escrow.payee,
                                    escrow.quote_asset, escrow.principal)
@@ -795,7 +827,9 @@ class Exchange:
             if record is None:
                 resumed.append({"legIndex": leg_index, "escrowId": escrow_id,
                                 "paymentStatus": escrow.payment_status,
-                                "action": "no payment record; a fresh attempt is safe"})
+                                "action": ("unknown outcome; keep the original operation pending"
+                                           if escrow.payment_status == "unknown" else
+                                           "no payment record; retry only the original operation")})
                 continue
             if record["status"] == "settled":
                 refund = escrow.payment_intent == "refund"
@@ -899,15 +933,15 @@ class Exchange:
     def rollback_boundary(self, receipt_id):
         """Where a return stops: the end of the finalized prefix.
 
-        A segment whose money was released is detached for good. The asset goes
-        back to that segment's buyer, not to the origin, and the released
-        payment is not re-collected.
+        Confirmed registration protects the prefix even when its release is
+        pending or unknown. Payment recovery stays independent of the suffix;
+        a late payment never changes a release into a refund.
         """
         receipt = self.receipt(receipt_id)
         legs = self._legs[receipt_id]
         boundary_index, boundary_account = 0, receipt.origin_account
         for leg in legs:
-            if leg.rollback_status == "detached":
+            if leg.registration_status == "confirmed" and leg.leg_index < self._holder_index[receipt_id]:
                 boundary_index, boundary_account = leg.leg_index + 1, leg.buyer
             else:
                 break
@@ -917,11 +951,8 @@ class Exchange:
     def deadline_boundary(self, receipt_id):
         """Where a post-deadline return stops: the last confirmed holder.
 
-        This is a different boundary from a refusal's. A refusal stops at the
-        settled prefix; after the deadline the requirement is that the
-        unfinished segments go back to the last confirmed holder. A release
-        always needs a confirmation first, so this boundary is never inside the
-        settled prefix.
+        Unfinished segments return to the last confirmed holder. Confirmed
+        segments remain protected while any payment recovery is pending.
         """
         receipt = self.receipt(receipt_id)
         index = self._holder_index[receipt_id]
@@ -970,8 +1001,7 @@ class Exchange:
         """Open a rollback over the unresolved suffix and plan its steps.
 
         ``trigger`` selects the boundary the requirements define for that cause:
-        a registrar refusal stops at the settled prefix, while the deadline
-        stops at the last confirmed holder.
+        both causes preserve the confirmed prefix, including pending releases.
 
         Nothing moves here. Each step carries its own idempotency key so an
         interrupted rollback resumes without repeating a refund or a return.
@@ -1006,11 +1036,12 @@ class Exchange:
             if escrow_id is None:
                 continue
             escrow = self._escrows[escrow_id]
-            if escrow.status == "released":
-                continue
+            require(escrow.status != "released" and escrow.payment_intent != "release",
+                    "EX_ROLLBACK_PREFIX_IMMUTABLE", "a release cannot become a refund")
             steps.append(RollbackStep(step_id=f"{authority.authority_id}:refund:{index}",
                                       kind="refund", receipt_id=receipt_id, leg_index=index,
                                       key=f"refund:{escrow_id}"))
+        for index in interval["affectedLegs"]:
             self._replace_leg(receipt_id, index, rollback_status="in-progress")
         steps.append(RollbackStep(step_id=f"{authority.authority_id}:asset-return",
                                   kind="asset-return", receipt_id=receipt_id,
@@ -1081,11 +1112,17 @@ class Exchange:
         escrow = self.escrow_for_leg(receipt_id, step.leg_index)
         if escrow.status == "refunded":
             return replace(step, status="done", detail=(("already", "refunded"),))
-        require(escrow.status != "released", "EX_ROLLBACK_PREFIX_IMMUTABLE",
-                f"leg {step.leg_index} was released and is not refundable")
+        require(escrow.status != "released" and escrow.payment_intent != "release"
+                and self.leg(receipt_id, step.leg_index).registration_status != "confirmed",
+                "EX_ROLLBACK_PREFIX_IMMUTABLE",
+                f"leg {step.leg_index} is protected and is not refundable")
+        require(escrow.payment_key in (None, step.key), "EX_PAYMENT_INTENT_CONFLICT",
+                "recovery must retain the original operation key")
         # The refund goes to this leg's own original buyer, for this leg's own
         # unreleased principal. Nothing is netted against another segment.
         known = self.payments.lookup(step.key)
+        require(known is not None or escrow.payment_status != "unknown",
+                "EX_PAYMENT_OUTCOME_UNRESOLVED", "an unknown refund needs an observed outcome")
         record = known if known is not None and known["status"] in ("settled", "unknown") \
             else self.payments.pay(step.key, escrow.payee, escrow.payer,
                                    escrow.quote_asset, escrow.principal)
@@ -1114,6 +1151,13 @@ class Exchange:
         destination = state["boundaryAccount"]
         current = self.owner_of(receipt_id)
         if current == destination:
+            # Equal addresses can be different occurrences in a circular chain.
+            for index in state["affectedLegs"]:
+                self._replace_leg(receipt_id, index, rollback_status="returned")
+            self._returned_to[receipt_id] = (state["boundaryIndex"], destination)
+            self._record(receipt_id, "asset-returned", {
+                "stepId": step.step_id, "fromAccount": current, "toAccount": destination,
+                "operations": 0, "boundaryIndex": state["boundaryIndex"]})
             return replace(step, status="done", detail=(("already", "at the boundary"),))
         bearer = self.leg(receipt_id, self.recorded_legs(receipt_id) - 1).buyer
         available = self._gas_available(bearer)
@@ -1323,7 +1367,7 @@ class Exchange:
                                     requested_at=now)
         self._exits[receipt_id] = {
             "request": request, "state": "requested",
-            "steps": [ExitStep(name=name, key=f"{name}:{request_id}") for name in EXIT_STEPS],
+            "steps": [ExitStep(name=name, key=exit_step_key(name, receipt_id, request_id)) for name in EXIT_STEPS],
             "verifiedChecks": eligibility["verifiedChecks"], "openedAt": now}
         self._record(receipt_id, "redemption-requested", {
             "requestId": request_id, "requester": requester,
@@ -1344,6 +1388,18 @@ class Exchange:
         now = self._now(now)
         state = self._exits[self.receipt(receipt_id).receipt_id]
         require(state is not None, "EX_REDEMPTION_NOT_OPEN", receipt_id)
+        if state["state"] == "complete":
+            return self.exit_report(receipt_id, now)
+        request = state["request"]
+        require(self.owner_of(receipt_id) == self.holder_of(receipt_id) == request.requester
+                and self.owner_index(receipt_id) == self.holder_index(receipt_id),
+                "EX_REDEMPTION_REFUSED", "the exit's entitled position changed")
+        auth = self.authorization_state(request.authorization_id, now)
+        grant = self.authorization(request.authorization_id)
+        require(not auth["reasons"] and grant.account == request.requester
+                and grant.asset.key == self.receipt(receipt_id).asset.key
+                and "redeem" in grant.allowed_actions,
+                "EX_REDEMPTION_REFUSED", "the exit's authorization no longer applies")
         if through is not None:
             require(through in EXIT_STEPS, "EX_EXIT_STEP_REFUSED", through)
         limit = EXIT_STEPS.index(through) if through is not None else len(EXIT_STEPS) - 1
@@ -1354,6 +1410,11 @@ class Exchange:
             if step.status == "done":
                 continue
             record = self.voucher_desk.lookup(step.key)
+            if record is not None:
+                require(record.get("key") == step.key and record.get("step") == step.name
+                        and record.get("receiptId") == receipt_id
+                        and record.get("account") == state["request"].requester,
+                        "EX_VOUCHER_SUBSTITUTION_REFUSED", "lookup returned another exit's record")
             if record is None or record["status"] == "failed":
                 record = self.voucher_desk.act(step.key, step.name, receipt_id,
                                                state["request"].requester)

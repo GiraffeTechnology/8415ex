@@ -3,7 +3,7 @@ import unittest
 
 from exchange import fixtures as F
 from exchange.errors import DomainError
-from exchange.exit import EXIT_STEPS, REQUIRED_OTHER_CHECKS
+from exchange.exit import EXIT_STEPS, REQUIRED_OTHER_CHECKS, exit_step_key
 from exchange.rollback import rollback_binding
 
 
@@ -204,7 +204,7 @@ class VoucherAndBurn(unittest.TestCase):
         self.assertFalse(report["burned"])
 
     def test_a_failed_step_blocks_and_then_recovers(self):
-        exchange, clock = F.settled_at_b(voucher_outcomes={"burn:rdm-1": "failed"})
+        exchange, clock = F.settled_at_b(voucher_outcomes={exit_step_key("burn", "rcpt-8415-0001", "rdm-1"): "failed"})
         F.redeem_authorization(exchange)
         exchange.request_redemption("rcpt-8415-0001", F.B, "auth-redeem", "rdm-1", F.ALL_CHECKS)
         report = exchange.advance_exit("rcpt-8415-0001")
@@ -216,12 +216,12 @@ class VoucherAndBurn(unittest.TestCase):
         self.assertTrue(report["burned"])
 
     def test_an_unknown_step_outcome_is_resolved_by_enquiry(self):
-        exchange, _ = F.settled_at_b(voucher_outcomes={"voucher-issued:rdm-1": "unknown"})
+        exchange, _ = F.settled_at_b(voucher_outcomes={exit_step_key("voucher-issued", "rcpt-8415-0001", "rdm-1"): "unknown"})
         F.redeem_authorization(exchange)
         exchange.request_redemption("rcpt-8415-0001", F.B, "auth-redeem", "rdm-1", F.ALL_CHECKS)
         report = exchange.advance_exit("rcpt-8415-0001")
         self.assertEqual(report["state"], "blocked")
-        exchange.voucher_desk.resolve_unknown("voucher-issued:rdm-1", "done")
+        exchange.voucher_desk.resolve_unknown(exit_step_key("voucher-issued", "rcpt-8415-0001", "rdm-1"), "done")
         report = exchange.advance_exit("rcpt-8415-0001")
         self.assertTrue(report["complete"])
 
@@ -264,12 +264,12 @@ class NoRepeatedExit(unittest.TestCase):
 
     def test_a_replayed_voucher_key_for_another_step_is_refused(self):
         with self.assertRaises(DomainError) as caught:
-            self.exchange.voucher_desk.act("burn:rdm-1", "voucher-issued", "rcpt-8415-0001", F.B)
+            self.exchange.voucher_desk.act(exit_step_key("burn", "rcpt-8415-0001", "rdm-1"), "voucher-issued", "rcpt-8415-0001", F.B)
         self.assertEqual(caught.exception.code, "EX_VOUCHER_SUBSTITUTION_REFUSED")
 
     def test_a_replayed_voucher_key_for_another_account_is_refused(self):
         with self.assertRaises(DomainError) as caught:
-            self.exchange.voucher_desk.act("burn:rdm-1", "burn", "rcpt-8415-0001", F.C)
+            self.exchange.voucher_desk.act(exit_step_key("burn", "rcpt-8415-0001", "rdm-1"), "burn", "rcpt-8415-0001", F.C)
         self.assertEqual(caught.exception.code, "EX_VOUCHER_SUBSTITUTION_REFUSED")
 
     def test_the_history_stays_readable_after_the_burn(self):
