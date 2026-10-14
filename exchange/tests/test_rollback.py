@@ -281,11 +281,17 @@ class InterruptionAndLateResults(unittest.TestCase):
 
     def test_a_returned_chain_is_not_re_traded_on_a_guess(self):
         exchange, _, _ = refused_at_ab()
+        match, _ = F.funded_hop(exchange, F.A, F.B, 9, "transfer-prepared",
+                               "session-a", "session-b", lock=False)
         exchange.begin_rollback("rcpt-8415-0001", 0, F.rollback_authority(exchange, 0, "rb-1"))
         exchange.advance_rollback("rcpt-8415-0001")
         with self.assertRaises(DomainError) as caught:
-            F.funded_hop(exchange, F.A, F.B, 9, "transfer-again", "session-a", "session-b")
+            exchange.execute_transfer(match, "transfer-prepared")
         self.assertEqual(caught.exception.code, "EX_TRADE_RETURNED_CHAIN_CLOSED")
+        with self.assertRaises(DomainError) as caught:
+            F.funded_hop(exchange, F.A, F.B, 10, "transfer-again", "session-a", "session-b")
+        self.assertEqual(caught.exception.code, "EX_MATCH_UNEXECUTABLE")
+        self.assertIn("EX_TRADE_RETURNED_CHAIN_CLOSED", caught.exception.detail)
 
 
 class RollbackPermission(unittest.TestCase):

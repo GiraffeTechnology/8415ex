@@ -87,14 +87,20 @@ class SimulatedVoucherDesk:
     three separate acts with three separate instants. It is a simulated business
     role; it is not a real warehouse, registrar or custodian.
 
-    ``outcomes`` lets a test drive the first answer for a key. A repeat of a key
-    returns the stored record and does nothing again.
+    ``outcomes`` lets a test drive the next answer for a key. In this simulator,
+    ``failed`` means confirmed not applied and safely retryable. It never means
+    permanent refusal or an uncertain external effect. Real adapters must not
+    map either of those cases to this fixture's retryable failure.
+
+    Unknown and completed acts are never repeated. A confirmed failure can be
+    retried under the same binding and key; every attempt and enquiry is kept.
     """
 
     def __init__(self, clock, path, outcomes=None):
         self._clock = clock
         self.path = path
         self._records = {}
+        self._history = {}
         self._outcomes = dict(outcomes or {})
 
     @property
@@ -108,8 +114,13 @@ class SimulatedVoucherDesk:
     def lookup(self, key):
         return self._records.get(identifier(key, "EX_VOUCHER_REFUSED"))
 
+    def history(self, key):
+        """Snapshots of attempts and resolutions, without exposing mutable state."""
+        identifier(key, "EX_VOUCHER_REFUSED")
+        return tuple(dict(record) for record in self._history.get(key, ()))
+
     def act(self, key, step, receipt_id, account):
-        """Perform one exit act once. A repeat returns the stored record."""
+        """Retry only a confirmed no-effect failure with exactly the same binding."""
         identifier(key, "EX_VOUCHER_REFUSED")
         require(step in EXIT_STEPS, "EX_EXIT_STEP_REFUSED", step)
         existing = self._records.get(key)
@@ -118,15 +129,20 @@ class SimulatedVoucherDesk:
                     and existing["receiptId"] == receipt_id,
                     "EX_VOUCHER_SUBSTITUTION_REFUSED",
                     f"{key} was already used for {existing['step']} by {existing['account']}")
-            return dict(existing, repeated=True)
+            if existing["status"] != "failed":
+                return dict(existing, repeated=True)
+            require(existing.get("effect") == "not-applied" and existing.get("retryable") is True,
+                    "EX_VOUCHER_OUTCOME_UNRESOLVED", "retry needs a confirmed no-effect failure")
         outcome = self._outcomes.pop(key, "done")
         require(outcome in ("done", "failed", "unknown"), "EX_VOUCHER_REFUSED", outcome)
         record = {"key": key, "step": step, "receiptId": receipt_id, "account": account,
                   "status": outcome, "path": self.path, "simulated": True,
-                  "observedAt": self._clock(),
+                  "attempt": existing["attempt"] + 1 if existing else 1,
+                  "effect": {"done": "applied", "failed": "not-applied", "unknown": "unknown"}[outcome],
+                  "retryable": outcome == "failed", "observedAt": self._clock(),
                   "reference": f"sim-{step}:{key}"}
-        if outcome != "failed":
-            self._records[key] = record
+        self._records[key] = record
+        self._history.setdefault(key, []).append(dict(record))
         return dict(record, repeated=False)
 
     def resolve_unknown(self, key, status):
@@ -135,5 +151,8 @@ class SimulatedVoucherDesk:
         require(record is not None, "EX_VOUCHER_UNKNOWN_KEY", key)
         require(record["status"] == "unknown", "EX_VOUCHER_ALREADY_RESOLVED", record["status"])
         require(status in ("done", "failed"), "EX_VOUCHER_REFUSED", status)
-        self._records[key] = dict(record, status=status, resolvedAt=self._clock())
-        return self._records[key]
+        self._records[key] = dict(record, status=status, resolvedAt=self._clock(),
+                                  effect="applied" if status == "done" else "not-applied",
+                                  retryable=status == "failed")
+        self._history.setdefault(key, []).append(dict(self._records[key]))
+        return dict(self._records[key])

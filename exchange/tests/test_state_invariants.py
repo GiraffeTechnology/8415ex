@@ -151,9 +151,10 @@ class RollbackIsolation(unittest.TestCase):
         self.assertEqual((ex.owner_index(R), ex.owner_of(R), ex.recorded_legs(R)), (0, F.A, 2))
         self.assertEqual([leg.rollback_status for leg in ex.legs(R)], ["returned", "returned"])
         ex.asset_control.return_asset.assert_not_called()
-        match = pending_match(ex, suffix="again", nonce=3)
-        with self.assertRaises(DomainError):
-            ex.lock_escrow(match, "escrow-again")
+        with self.assertRaises(DomainError) as caught:
+            pending_match(ex, suffix="again", nonce=3)
+        self.assertEqual(caught.exception.code, "EX_MATCH_UNEXECUTABLE")
+        self.assertIn("EX_TRADE_RETURNED_CHAIN_CLOSED", caught.exception.detail)
 
     def test_unfunded_suffix_marks_every_leg_returned(self):
         for circular in (False, True):

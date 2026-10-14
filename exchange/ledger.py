@@ -271,6 +271,12 @@ class Exchange:
         else:
             if now >= receipt.trade_stop_at:
                 reasons.append("EX_TRADE_WINDOW_CLOSED")
+            if self._returned_to[receipt_id] is not None:
+                reasons.append("EX_TRADE_RETURNED_CHAIN_CLOSED")
+            if self._rollbacks[receipt_id] is not None:
+                reasons.append("EX_TRADE_ROLLBACK_OPEN")
+            if self._exits[receipt_id] is not None:
+                reasons.append("EX_TRADE_EXIT_OPEN")
         if now >= intent.expires_at:
             reasons.append("EX_INTENT_EXPIRED")
         if (intent.signer, intent.nonce) in self._used_nonces:
