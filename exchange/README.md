@@ -16,6 +16,10 @@ per-segment reconciliation.
 segment to its own original buyer, returns the asset to the boundary in one
 control operation, and records each leg's buyer's own gas.
 
+**Stage 4**: the trading deadline and its exact boundary, the post-deadline
+return to the last confirmed holder, exit eligibility, and the stop-resale,
+voucher and burn records as separate non-atomic acts.
+
 Execute according to the private requirements document. That document, the full
 task text and any internal path, endpoint or credential stay out of this
 repository.
@@ -27,9 +31,10 @@ repository.
 - The three registration paths are **simulated business roles**. None of them is
   a real registration institution, and no real institutional cooperation,
   API access or business licence is implied.
-- Deadline handling and redemption are later stages. Where an implemented stage
-  touches them it says they are not implemented rather than showing a zero or an
-  empty success.
+- Stage 5 - deployment, the public test network and the demonstration material -
+  is not implemented here and is not claimed.
+- Handing over a physical voucher and burning a token are not one atomic act.
+  Each exit step records its own completion instant, and the report says so.
 - A rollback never takes the asset into temporary custody, never imposes a
   time-limited redemption or an overdue sale, and never liquidates a position to
   cover a shortfall. A shortfall is a blocked, resumable state.
@@ -81,6 +86,13 @@ repository.
     walk back through the intermediate wallets and does not depend on their gas.
 15. **A rollback is only complete when every step has its own evidence**, and
     each step is keyed so a resumed rollback repeats no refund and no return.
+16. **`owner == holder` is necessary and never sufficient for an exit.** The
+    other checks arrive as verified facts; an unsupplied check counts as not
+    met, never as passed.
+17. **A physical hand-over and an on-chain burn are not atomic.** Each exit step
+    records its own instant, and no step is completed from a neighbour.
+18. **A burn preserves the history**: the asset link, registration order, funds
+    record and collection record all stay readable.
 
 ## Layout
 
@@ -92,6 +104,7 @@ repository.
 | `registration.py` | request/evidence contract and the three simulated adapters |
 | `settlement.py` | escrow positions, release authority, optional payment adapter |
 | `rollback.py` | rollback authority, recoverable steps, simulated asset-return control |
+| `exit.py` | redemption request, exit steps, simulated collection desk |
 | `ledger.py` | the state machine: chain, dual track, registration, reporting |
 | `views.py` | the six status pages and their wording rules |
 | `webui.py` | read-only console over `http.server` |
@@ -155,16 +168,23 @@ tests cover each Stage 1 case; it names no requirement text.
 | T-23 | `test_rollback.InterruptionAndLateResults` | resume without repeating; a late success revives nothing |
 | T-29 | `test_rollback.RollbackPermission` | unverified authority refused; no confiscation, no prefix rewrite |
 | T-30 | `test_rollback.DuplicateAndReorderedEvents` | duplicate and re-ordered observations move nothing twice |
+| T-24 | `test_exit.DeadlineBoundary` | the boundary is exact; in-flight work continues; the suffix returns to the confirmed holder |
+| T-25 | `test_exit.ExitEligibility` | divergence refuses the exit; agreement alone is never sufficient |
+| T-32 | `test_exit.VoucherAndBurn` | stop-resale, voucher and burn recorded separately and recoverably |
+| T-33 | `test_exit.NoRepeatedExit` | repeated request, act, replay and substitution refused; history readable |
 
-Later-stage cases (T-24, T-25, T-32, T-33 and the Stage 5 set) are out of the
-implemented scope and are not claimed here.
+The Stage 5 cases (T-35 to T-38) need a real deployment and a public test
+network, which this package does not perform. T-39 and T-40 are continuous
+requirements rather than a single case.
 
 ## Dependency gaps that do not block Stage 1
 
 The gas apportionment rule for a shared on-chain operation, the actual fee
 deduction mechanism, the recovery detail for a confirmed registration whose
-payment failed, the real asset-return control and the exit ordering are all
-still open in the requirements document. Re-trading a receipt after a rollback
+payment failed, the real asset-return control, the precedence between a registration timeout,
+the trading deadline and an in-flight result, and the exact confirmation and
+recovery order for the voucher hand-over and the burn are all still open in the
+requirements document. Re-trading a receipt after a rollback
 returned it is also not a defined order, so it is refused with
 `EX_TRADE_RETURNED_CHAIN_CLOSED` rather than guessed. The code records the facts and refuses
 where an order is undefined; it does not assume an answer. A shared operation is

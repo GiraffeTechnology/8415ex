@@ -81,6 +81,23 @@ def receipt_page(exchange, receipt_id, now=None):
         _row("Further checks not performed here",
              ", ".join(readiness["furtherChecksNotPerformedHere"])),
     ]
+    exit_state = exchange.exit_report(receipt_id, now)
+    if exit_state["open"]:
+        rows.extend([
+            _row("Exit requested by", f"{exit_state['requester']} "
+                                      f"(request {exit_state['requestId']})"),
+            _row("Verified checks on record", ", ".join(exit_state["verifiedChecks"]) or "none"),
+            _row("Exit progress", ", ".join(
+                f"{entry['step']}: {entry['status']}"
+                + (f" at {entry['completedAt']}" if entry["completedAt"] else "")
+                for entry in exit_state["steps"])),
+            _row("Physical hand-over and on-chain burn", "these are not one atomic act; each "
+                 "step records its own completion instant"),
+            _row("Token burned", "yes - the asset link, registration order, funds and "
+                                 "collection records are retained"
+                 if exit_state["burned"] else "no"),
+            _row("Undefined exit ordering", "; ".join(exit_state["undefinedOrdering"])),
+        ])
     return "<h2>Receipt detail</h2>" + _table(rows)
 
 
@@ -139,8 +156,18 @@ def timeline_page(exchange, receipt_id, now=None):
     note = ("<p>Registration is serial: each hop is recorded one at a time, so the "
             "holder position trails the owner position. A result for a later hop waits "
             "for the gap and is not a refusal.</p>")
+    deadline = exchange.evaluate_deadline(receipt_id, now)
     stop = (f"<p>Trading window: {'open' if view['tradingOpen'] else 'closed'}; "
-            f"stop-trading instant {view['tradeStopAt']}.</p>")
+            f"stop-trading instant {view['tradeStopAt']}. "
+            + ("New trades are refused from that instant; registration, settlement and "
+               "rollback already in flight continue under their own rules. "
+               if deadline["pastDeadline"] else "")
+            + (f"Unfinished segments would return to {deadline['unfinishedSuffixReturnsTo']}, "
+               f"the last confirmed holder. "
+               if deadline["pastDeadline"] and deadline["unfinishedSuffixReturnsTo"] else "")
+            + "</p>"
+            + ("".join(f"<p>Undefined ordering: {escape(entry)}</p>"
+                       for entry in deadline["undefinedOrdering"])))
     return "<h2>Continuous trade timeline</h2>" + note + stop + "<table>" + "".join(rows) + "</table>"
 
 

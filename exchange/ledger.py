@@ -19,6 +19,8 @@ from .ids import address, amount, digest, identifier, instant
 from .model import WHOLE_RECEIPT_UNITS, Asset, AuthorizationReference, TradeIntent, WarehouseReceipt
 from .registration import (DISPOSITIONS, RegistrationEvidence, RegistrationRequest,
                            default_registrars)
+from .exit import (EXIT_STEPS, REQUIRED_OTHER_CHECKS, ExitStep, RedemptionRequest,
+                   SimulatedVoucherDesk)
 from .rollback import (ROLLBACK_STATES, WITHDRAWN_MECHANISMS, GasBudget, RollbackAuthority,
                        RollbackStep, SimulatedAssetControl, rollback_binding)
 from .settlement import (EscrowPosition, ReleaseAuthority, SimulatedPaymentAdapter,
@@ -93,7 +95,8 @@ class Exchange:
     """
 
     def __init__(self, clock, payment_adapter=None, release_sources=(), funding_required=False,
-                 asset_control=None, rollback_sources=(), gas_budgets=None):
+                 asset_control=None, rollback_sources=(), gas_budgets=None,
+                 voucher_desk=None):
         """``funding_required`` turns on the Stage 2 rule that a leg only forms
         once its own buyer's money is in escrow. Stage 1 leaves it off and
         records funding as not modelled rather than implying a payment.
@@ -118,6 +121,8 @@ class Exchange:
         self._gas = {}
         self._rollbacks = {}
         self._returned_to = {}
+        self.voucher_desk = voucher_desk
+        self._exits = {}
         self._receipts = {}
         self._asset_keys = {}
         self._authorizations = {}
@@ -161,6 +166,7 @@ class Exchange:
         self._gas[receipt.receipt_id] = {}
         self._rollbacks[receipt.receipt_id] = None
         self._returned_to[receipt.receipt_id] = None
+        self._exits[receipt.receipt_id] = None
         self._events[receipt.receipt_id] = []
         self._record(receipt.receipt_id, "receipt-minted", {
             "receiptId": receipt.receipt_id, "asset": list(receipt.asset.key),
@@ -908,6 +914,23 @@ class Exchange:
         return {"boundaryIndex": boundary_index, "boundaryAccount": boundary_account,
                 "finalizedPrefixLegs": boundary_index}
 
+    def deadline_boundary(self, receipt_id):
+        """Where a post-deadline return stops: the last confirmed holder.
+
+        This is a different boundary from a refusal's. A refusal stops at the
+        settled prefix; after the deadline the requirement is that the
+        unfinished segments go back to the last confirmed holder. A release
+        always needs a confirmation first, so this boundary is never inside the
+        settled prefix.
+        """
+        receipt = self.receipt(receipt_id)
+        index = self._holder_index[receipt_id]
+        settled = self.rollback_boundary(receipt_id)["boundaryIndex"]
+        require(index >= settled, "EX_ROLLBACK_PREFIX_IMMUTABLE",
+                "the confirmed holder is behind the settled prefix")
+        return {"boundaryIndex": index, "boundaryAccount": self.holder_of(receipt_id),
+                "finalizedPrefixLegs": index}
+
     def rollback_interval(self, receipt_id, refused_leg_index):
         """The legs a refusal at ``refused_leg_index`` may unwind.
 
@@ -942,19 +965,37 @@ class Exchange:
         require(authority.binding == expected, "EX_ROLLBACK_BINDING_REFUSED",
                 "the authority's interval binding does not match this interval")
 
-    def begin_rollback(self, receipt_id, refused_leg_index, authority, now=None):
+    def begin_rollback(self, receipt_id, refused_leg_index, authority, trigger="registrar-refusal",
+                       now=None):
         """Open a rollback over the unresolved suffix and plan its steps.
+
+        ``trigger`` selects the boundary the requirements define for that cause:
+        a registrar refusal stops at the settled prefix, while the deadline
+        stops at the last confirmed holder.
 
         Nothing moves here. Each step carries its own idempotency key so an
         interrupted rollback resumes without repeating a refund or a return.
         """
         now = self._now(now)
+        require(trigger in ("registrar-refusal", "deadline"), "EX_ROLLBACK_TRIGGER_REFUSED", trigger)
         require(self._rollbacks[receipt_id] is None, "EX_ROLLBACK_ALREADY_OPEN",
                 "a rollback is already open for this receipt")
-        leg = self.leg(receipt_id, refused_leg_index)
-        require(leg.registration_status == "rejected", "EX_ROLLBACK_TRIGGER_REFUSED",
-                "a rollback needs a recorded registrar refusal for that leg")
-        interval = self.rollback_interval(receipt_id, refused_leg_index)
+        receipt_record = self.receipt(receipt_id)
+        if trigger == "registrar-refusal":
+            leg = self.leg(receipt_id, refused_leg_index)
+            require(leg.registration_status == "rejected", "EX_ROLLBACK_TRIGGER_REFUSED",
+                    "a rollback needs a recorded registrar refusal for that leg")
+            interval = self.rollback_interval(receipt_id, refused_leg_index)
+        else:
+            require(now >= receipt_record.trade_stop_at, "EX_ROLLBACK_TRIGGER_REFUSED",
+                    "the trading deadline has not passed")
+            boundary = self.deadline_boundary(receipt_id)
+            interval = {"affectedLegs": tuple(range(boundary["boundaryIndex"],
+                                                    self.owner_index(receipt_id))),
+                        **boundary}
+            require(interval["affectedLegs"] != (), "EX_ROLLBACK_TRIGGER_REFUSED",
+                    "owner and the last confirmed holder agree; there is nothing unfinished")
+            refused_leg_index = interval["boundaryIndex"]
         self._check_rollback_authority(receipt_id, refused_leg_index, authority, interval)
         steps = []
         for index in interval["affectedLegs"]:
@@ -977,13 +1018,17 @@ class Exchange:
                                   key=f"return:{receipt_id}:{authority.authority_id}"))
         self._rollbacks[receipt_id] = {
             "authorityId": authority.authority_id, "source": authority.source,
-            "refusedLegIndex": refused_leg_index, "trigger": "registrar refusal for that leg",
+            "refusedLegIndex": refused_leg_index,
+            "trigger": ("registrar refusal for that leg" if trigger == "registrar-refusal"
+                        else "trading deadline passed with the holder behind the owner"),
+            "triggerKind": trigger,
             "boundaryIndex": interval["boundaryIndex"],
             "boundaryAccount": interval["boundaryAccount"],
             "affectedLegs": interval["affectedLegs"], "steps": steps,
             "state": "in-progress", "openedAt": now, "conflicts": []}
         self._record(receipt_id, "rollback-opened", {
-            "authorityId": authority.authority_id, "refusedLegIndex": refused_leg_index,
+            "authorityId": authority.authority_id, "triggerKind": trigger,
+            "refusedLegIndex": refused_leg_index,
             "affectedLegs": list(interval["affectedLegs"]),
             "boundaryIndex": interval["boundaryIndex"],
             "boundaryAccount": interval["boundaryAccount"],
@@ -1182,6 +1227,192 @@ class Exchange:
             "withdrawnMechanismsNotUsed": WITHDRAWN_MECHANISMS,
             "conflicts": tuple(state["conflicts"]),
             "observedAt": now}
+
+    # -------------------------------------------- deadline, exit and burn
+
+    def evaluate_deadline(self, receipt_id, now=None):
+        """Whether new trades stop, what is still in flight, and what is undefined.
+
+        The mint-time stop instant is preserved exactly as recorded. After it
+        passes, new trades are refused while in-flight registration, settlement
+        and rollback continue under their own rules.
+
+        The precedence between a registration timeout, this deadline and an
+        in-flight result is still open in the requirements, so where two of them
+        are live at once this reports the conflict instead of ranking them.
+        """
+        now = self._now(now)
+        receipt = self.receipt(receipt_id)
+        overdue = self.overdue_requests(receipt_id, now)
+        past = now >= receipt.trade_stop_at
+        in_flight = tuple(leg.leg_index for leg in self._legs[receipt_id]
+                          if leg.registration_status == "pending")
+        undefined = []
+        if past and overdue:
+            undefined.append("D-03: a registration timeout and the trading deadline are both "
+                             "live; their precedence is not defined in the requirements")
+        if past and self.deferred_legs(receipt_id):
+            undefined.append("D-03: a deferred in-flight result and the trading deadline are "
+                             "both live; their precedence is not defined in the requirements")
+        return {"receiptId": receipt_id, "tradeStopAt": receipt.trade_stop_at,
+                "observedAt": now, "pastDeadline": past,
+                "newTradesAccepted": not past,
+                "inFlightRegistrationLegs": in_flight,
+                "overdueRequests": tuple(entry["legIndex"] for entry in overdue),
+                "deferredLegs": self.deferred_legs(receipt_id),
+                "ownerIndex": self.owner_index(receipt_id),
+                "holderIndex": self._holder_index[receipt_id],
+                "unfinishedSuffixReturnsTo": self.holder_of(receipt_id)
+                if self.owner_index(receipt_id) != self._holder_index[receipt_id] else None,
+                "undefinedOrdering": tuple(undefined)}
+
+    def exit_eligibility(self, receipt_id, requester, authorization_id=None, verified_checks=(),
+                         now=None):
+        """Every exit condition, each reported separately.
+
+        ``owner == holder`` is necessary and never sufficient. A check this layer
+        cannot establish must arrive as a verified fact; an unsupplied check
+        counts as not met.
+        """
+        now = self._now(now)
+        view = self.receipt_view(receipt_id, now)
+        address(requester, "EX_REDEMPTION_REFUSED")
+        supplied = frozenset(verified_checks)
+        reasons = []
+        if not view["ownerEqualsHolder"]:
+            reasons.append("EX_OWNER_HOLDER_DIVERGED")
+        if view["owner"]["account"] != requester or view["holder"]["account"] != requester:
+            reasons.append("EX_REDEMPTION_REQUESTER_REFUSED")
+        if authorization_id is None:
+            reasons.append("EX_REDEMPTION_AUTHORIZATION_MISSING")
+        else:
+            state = self.authorization_state(authorization_id, now)
+            reasons.extend(state["reasons"])
+            grant = self.authorization(authorization_id)
+            if grant.account != requester:
+                reasons.append("EX_AUTH_ACCOUNT_REFUSED")
+            if "redeem" not in grant.allowed_actions:
+                reasons.append("EX_AUTH_ACTION_REFUSED")
+            if grant.asset.key != self.receipt(receipt_id).asset.key:
+                reasons.append("EX_AUTH_ASSET_REFUSED")
+        existing = self._exits[receipt_id]
+        if existing is not None:
+            reasons.append("EX_REDEMPTION_ALREADY_REQUESTED")
+        missing = tuple(check for check in REQUIRED_OTHER_CHECKS if check not in supplied)
+        if missing:
+            reasons.append("EX_REDEMPTION_CHECKS_NOT_VERIFIED")
+        ordered = tuple(dict.fromkeys(reasons))
+        return {"receiptId": receipt_id, "requester": requester,
+                "ownerEqualsHolder": view["ownerEqualsHolder"],
+                "necessaryConditionMet": view["ownerEqualsHolder"],
+                "eligible": ordered == (), "reasons": ordered,
+                "verifiedChecks": tuple(sorted(supplied)), "missingChecks": missing,
+                "ownerEqualsHolderIsNotSufficient": True, "observedAt": now}
+
+    def request_redemption(self, receipt_id, requester, authorization_id, request_id,
+                           verified_checks=(), now=None):
+        """Open an exit, or refuse with every reason it is not available."""
+        now = self._now(now)
+        eligibility = self.exit_eligibility(receipt_id, requester, authorization_id,
+                                            verified_checks, now)
+        require(eligibility["eligible"], "EX_REDEMPTION_REFUSED", ",".join(eligibility["reasons"]))
+        require(self.voucher_desk is not None, "EX_VOUCHER_DESK_REQUIRED",
+                "an exit needs the simulated collection desk to be configured")
+        request = RedemptionRequest(request_id=request_id, receipt_id=receipt_id,
+                                    requester=requester, authorization_id=authorization_id,
+                                    requested_at=now)
+        self._exits[receipt_id] = {
+            "request": request, "state": "requested",
+            "steps": [ExitStep(name=name, key=f"{name}:{request_id}") for name in EXIT_STEPS],
+            "verifiedChecks": eligibility["verifiedChecks"], "openedAt": now}
+        self._record(receipt_id, "redemption-requested", {
+            "requestId": request_id, "requester": requester,
+            "authorizationId": authorization_id,
+            "verifiedChecks": list(eligibility["verifiedChecks"]),
+            "ownerEqualsHolderIsNotSufficient": True,
+            "plannedSteps": list(EXIT_STEPS)})
+        return self._exits[receipt_id]
+
+    def advance_exit(self, receipt_id, through=None, now=None):
+        """Run the exit steps in order, one act at a time.
+
+        ``through`` stops after that step, because the confirmation and recovery
+        order inside the hand-over and burn pair is still open: a later step is
+        never completed from an earlier one, and the physical hand-over and the
+        on-chain burn record their own instants.
+        """
+        now = self._now(now)
+        state = self._exits[self.receipt(receipt_id).receipt_id]
+        require(state is not None, "EX_REDEMPTION_NOT_OPEN", receipt_id)
+        if through is not None:
+            require(through in EXIT_STEPS, "EX_EXIT_STEP_REFUSED", through)
+        limit = EXIT_STEPS.index(through) if through is not None else len(EXIT_STEPS) - 1
+        updated = list(state["steps"])
+        for position, step in enumerate(updated):
+            if position > limit:
+                break
+            if step.status == "done":
+                continue
+            record = self.voucher_desk.lookup(step.key)
+            if record is None or record["status"] == "failed":
+                record = self.voucher_desk.act(step.key, step.name, receipt_id,
+                                               state["request"].requester)
+            if record["status"] != "done":
+                updated[position] = replace(step, status="blocked",
+                                            detail=(("voucherStatus", record["status"]),))
+                self._record(receipt_id, "exit-step-blocked", {
+                    "step": step.name, "status": record["status"], "secondActSent": False})
+                break
+            updated[position] = replace(step, status="done", completed_at=record["observedAt"],
+                                        detail=(("reference", record["reference"]),))
+            self._record(receipt_id, "exit-step-done", {
+                "step": step.name, "completedAt": record["observedAt"],
+                "reference": record["reference"], "simulated": True,
+                "atomicWithOtherSteps": False})
+            if step.name == "burn":
+                self._replace_leg_free_burn(receipt_id)
+        state["steps"] = updated
+        outstanding = [step for step in updated if step.status != "done"]
+        blocked = [step for step in updated if step.status == "blocked"]
+        state["state"] = ("complete" if not outstanding else
+                          "blocked" if blocked else "in-progress")
+        return self.exit_report(receipt_id, now)
+
+    def _replace_leg_free_burn(self, receipt_id):
+        """Mark the receipt burned while keeping its whole history readable."""
+        self._record(receipt_id, "receipt-burned", {
+            "historyPreserved": True,
+            "assetLink": "retained", "registrationOrder": "retained",
+            "fundsRecord": "retained", "collectionRecord": "retained"})
+
+    def exit_report(self, receipt_id, now=None):
+        """Each exit step with its own instant, and what is still open."""
+        now = self._now(now)
+        state = self._exits[self.receipt(receipt_id).receipt_id]
+        if state is None:
+            return {"receiptId": receipt_id, "open": False, "state": None, "complete": False,
+                    "observedAt": now}
+        steps = tuple({"step": step.name, "status": step.status,
+                       "completedAt": step.completed_at, "detail": dict(step.detail)}
+                      for step in state["steps"])
+        done = [entry for entry in steps if entry["status"] == "done"]
+        instants = sorted({entry["completedAt"] for entry in done if entry["completedAt"]})
+        burned = any(entry["step"] == "burn" and entry["status"] == "done" for entry in steps)
+        return {"receiptId": receipt_id, "open": True, "state": state["state"],
+                "complete": state["state"] == "complete",
+                "requestId": state["request"].request_id,
+                "requester": state["request"].requester,
+                "verifiedChecks": state["verifiedChecks"],
+                "steps": steps, "burned": burned,
+                "physicalAndOnChainAreAtomic": False,
+                "distinctCompletionInstants": tuple(instants),
+                "completionInstantsDiffer": len(instants) > 1,
+                "undefinedOrdering": (
+                    ("D-07: the exact confirmation and recovery order for the voucher hand-over "
+                     "and the burn is not defined in the requirements; no step is completed from "
+                     "a neighbour",)),
+                "historyPreserved": True,
+                "observedAt": now}
 
     # ------------------------------------------------------------- reporting
 
