@@ -123,6 +123,23 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None):
            for record in commands if record["outcome"] == "not-run"],
     }
     executed = [record for record in commands if record["executed"]]
+    # The evidence record is the shape the validator refuses a guess in. It is
+    # built from this run and checked here, so a record that could not stand on
+    # its own identity blocks the run instead of being reported beside it.
+    evidence = {
+        "schema": "8415ex-local-delivery-evidence/1",
+        "runId": run_id,
+        "commit": source["commit"],
+        "tree": source["tree"],
+        "worktreeClean": source["worktreeClean"],
+        "commands": commands,
+        "startedAt": started_at,
+        "finishedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "scenarioDigest": scenario_report["deterministicDigest"],
+        # Filled in below, once the outstanding obligations are collected.
+        "notRun": [],
+        "transactionHashes": "NOT_RUN",
+    }
     blocking = []
     if not scenario_report["allPassed"]:
         blocking.append("a scenario did not pass")
@@ -144,6 +161,13 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None):
     for record in executed:
         if record["outcome"] != "passed":
             blocking.append(f"{record['command']} ended {record['outcome']}")
+    evidence["notRun"] = [{"obligation": entry["obligation"], "status": "NOT_RUN"}
+                          for entry in bundle["notRun"]]
+    checked = validation.validate_result(evidence)
+    bundle["evidence"] = evidence
+    bundle["evidenceValidation"] = checked
+    if not checked["accepted"]:
+        blocking.append("the evidence record was refused: " + ", ".join(checked["reasons"]))
     bundle["blocking"] = blocking
     bundle["allLocalPassed"] = blocking == []
     bundle["meaning"] = ("every local expectation passed over a confirmed source tree; it is "
@@ -161,6 +185,12 @@ def seal(bundle, exit_code, finished_at=None):
     bundle["commands"] = [record] + list(bundle["commands"])
     bundle["manifest"]["commands"] = list(bundle["commands"])
     bundle["exitCode"] = exit_code
+    # The sealed evidence carries the run's own record and its real end time.
+    # It is validated again, so the record that leaves this run is the one that
+    # was checked, not an earlier draft of it.
+    bundle["evidence"] = dict(bundle["evidence"], commands=list(bundle["commands"]),
+                              finishedAt=finished_at)
+    bundle["evidenceValidation"] = validation.validate_result(bundle["evidence"])
     return bundle
 
 

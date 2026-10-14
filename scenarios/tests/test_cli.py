@@ -61,6 +61,35 @@ class OneRunOneIdentity(unittest.TestCase):
                 self.assertIn("no exit code recorded", line)
 
 
+class EvidenceRecord(unittest.TestCase):
+    """The validator guards the delivery; it does not sit beside it."""
+
+    def test_the_sealed_evidence_record_is_accepted(self):
+        bundle = cli.seal(cli._bundle(ROOT), 0)
+        self.assertTrue(bundle["evidenceValidation"]["accepted"],
+                        bundle["evidenceValidation"]["reasons"])
+        self.assertGreater(bundle["evidenceValidation"]["canonicalBytes"], 0)
+
+    def test_the_record_carries_this_run_identity_and_digest(self):
+        bundle = cli.seal(cli._bundle(ROOT), 0)
+        evidence = bundle["evidence"]
+        self.assertEqual(evidence["runId"], bundle["runId"])
+        self.assertEqual(evidence["commit"], bundle["source"]["commit"])
+        self.assertEqual(evidence["tree"], bundle["source"]["tree"])
+        self.assertEqual(evidence["scenarioDigest"],
+                         bundle["scenarioReport"]["deterministicDigest"])
+        self.assertEqual(evidence["commands"], bundle["commands"])
+        self.assertEqual(evidence["finishedAt"], bundle["finishedAt"])
+        self.assertEqual(evidence["transactionHashes"], "NOT_RUN")
+
+    def test_a_refused_evidence_record_blocks_the_run(self):
+        bundle = cli._bundle("/tmp")
+        self.assertFalse(bundle["evidenceValidation"]["accepted"])
+        self.assertTrue(any("evidence record was refused" in reason
+                            for reason in bundle["blocking"]))
+        self.assertFalse(bundle["allLocalPassed"])
+
+
 class ExitStatus(unittest.TestCase):
 
     def test_the_bundle_names_what_blocks_a_local_pass(self):
