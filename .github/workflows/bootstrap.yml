@@ -44,6 +44,17 @@ jobs:
         run: |
           set -euo pipefail
           python3 -B -m unittest discover -s exchange/tests -t . -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/stage1-tests.log"
+      - name: Run local Stage 5 preparation tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s scenarios/tests -t . -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/stage5-preparation-tests.log"
+      - name: Run the six local scenarios and the three route contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B -m scenarios.cli run-all 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/stage5-scenarios.log"
+          python3 -B -m scenarios.cli run-all --json > "$BOOTSTRAP_ROOT/evidence/stage5-delivery.json"
       - name: Verify deliberate failure and successful smoke
         shell: bash
         run: |
