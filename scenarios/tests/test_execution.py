@@ -102,12 +102,30 @@ class UnexecutedRecords(unittest.TestCase):
             execution.self_record("x", None, "2026-10-14T00:00:00Z", "2026-10-14T00:00:01Z")
 
 
-class BundleRecords(unittest.TestCase):
+class _WithoutNestingGuard(unittest.TestCase):
+    """Tests about the outermost behaviour, run with the guard cleared.
+
+    The scenario suite is itself one of the suites a bundle can execute, so this
+    file may run inside a bundle's own subprocess with the guard set. These
+    cases are about what the outer run does, so they clear it and put it back.
+    """
+
+    def setUp(self):
+        self._guard = os.environ.pop(cli.NESTING_GUARD_ENV, None)
+
+    def tearDown(self):
+        if self._guard is None:
+            os.environ.pop(cli.NESTING_GUARD_ENV, None)
+        else:
+            os.environ[cli.NESTING_GUARD_ENV] = self._guard
+
+
+class BundleRecords(_WithoutNestingGuard):
     """The bundle must not invent a result for a command it did not run."""
 
-    @classmethod
-    def setUpClass(cls):
-        cls.bundle = cli._bundle(ROOT)
+    def setUp(self):
+        super().setUp()
+        self.bundle = cli._bundle(ROOT)
 
     def test_the_bundle_records_no_command_result_before_it_is_sealed(self):
         for record in self.bundle["commands"]:
