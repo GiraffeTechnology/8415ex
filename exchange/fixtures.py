@@ -197,3 +197,62 @@ def release_authority(exchange, leg_index, authority_id, receipt_id="rcpt-8415-0
                   observed_at=now)
     fields.update(overrides)
     return ReleaseAuthority(**fields)
+
+
+# ----------------------------------------------------------- Stage 3 fixtures
+
+#: The source whose evidence may unwind a suffix in these fixtures. The real
+#: asset-return control is still open in the requirements, so this stands in for
+#: verified configuration and is supplied explicitly.
+ROLLBACK_SOURCE = "sim-rollback-authority"
+
+
+def rollback_exchange(registration_path="REG_DIRECT", clock=None, outcomes=None,
+                      return_outcomes=None, gas_budgets=None):
+    """A funded exchange that also has the simulated asset-return control."""
+    from .ledger import Exchange
+    from .rollback import SimulatedAssetControl
+    from .settlement import SimulatedPaymentAdapter
+
+    clock = clock or ManualClock()
+    payments = SimulatedPaymentAdapter(clock, outcomes=outcomes)
+    control = SimulatedAssetControl(clock, outcomes=return_outcomes)
+    exchange = Exchange(clock, payment_adapter=payments, release_sources=(RELEASE_SOURCE,),
+                        funding_required=True, asset_control=control,
+                        rollback_sources=(ROLLBACK_SOURCE,), gas_budgets=gas_budgets)
+    exchange.mint(receipt(registration_path=registration_path))
+    exchange.connect_wallet(A, "session-a")
+    return exchange, clock
+
+
+def rollback_chain_to_d(**kwargs):
+    """A -> B -> C -> D, each leg funded, with the return control available."""
+    exchange, clock = rollback_exchange(**kwargs)
+    funded_hop(exchange, A, B, 1, "transfer-ab", "session-a", "session-b", price=PRICE_AB)
+    funded_hop(exchange, B, C, 2, "transfer-bc", "session-b", "session-c", price=PRICE_BC)
+    funded_hop(exchange, C, D, 3, "transfer-cd", "session-c", "session-d", price=PRICE_CD)
+    return exchange, clock
+
+
+def rollback_authority(exchange, refused_leg_index, authority_id,
+                       receipt_id="rcpt-8415-0001", source=ROLLBACK_SOURCE,
+                       now=1_700_000_800, **overrides):
+    """Correctly bound rollback evidence for the current interval."""
+    from .rollback import RollbackAuthority, rollback_binding
+
+    receipt_record = exchange.receipt(receipt_id)
+    interval = exchange.rollback_interval(receipt_id, refused_leg_index)
+    fields = dict(authority_id=authority_id, source=source, receipt_id=receipt_id,
+                  refused_leg_index=refused_leg_index, asset=receipt_record.asset,
+                  boundary_account=interval["boundaryAccount"],
+                  binding=rollback_binding(receipt_record.asset, receipt_id, refused_leg_index,
+                                           interval["boundaryAccount"],
+                                           interval["affectedLegs"]),
+                  observed_at=now)
+    fields.update(overrides)
+    return RollbackAuthority(**fields)
+
+
+def refuse(exchange, request, result_id, receipt_id="rcpt-8415-0001"):
+    """Record a registrar refusal for one already-filed request."""
+    return confirm(exchange, request, result_id, outcome="rejected", receipt_id=receipt_id)

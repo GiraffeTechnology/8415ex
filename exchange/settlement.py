@@ -44,6 +44,9 @@ class EscrowPosition:
     payment_key: str = None
     payment_status: str = None
     payment_reference: str = None
+    #: What the recorded payment was for, so a resumed enquiry applies the
+    #: outcome that was actually attempted instead of assuming a release.
+    payment_intent: str = None
     gas_record: tuple = ()
 
     def __post_init__(self):
@@ -63,6 +66,9 @@ class EscrowPosition:
                 "release and refund are mutually exclusive")
         if self.payment_status is not None:
             require(self.payment_status in PAYMENT_OUTCOMES, "EX_ESCROW_REFUSED", self.payment_status)
+        if self.payment_intent is not None:
+            require(self.payment_intent in ("release", "refund"), "EX_ESCROW_REFUSED",
+                    self.payment_intent)
 
     @property
     def terminal(self):

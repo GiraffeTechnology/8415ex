@@ -12,6 +12,10 @@ per segment on the positional condition with bound authority evidence, an
 optional separate payment adapter, unknown-outcome recovery by enquiry, and
 per-segment reconciliation.
 
+**Stage 3**: suffix rollback that protects the finalized prefix, refunds each
+segment to its own original buyer, returns the asset to the boundary in one
+control operation, and records each leg's buyer's own gas.
+
 Execute according to the private requirements document. That document, the full
 task text and any internal path, endpoint or credential stay out of this
 repository.
@@ -23,9 +27,12 @@ repository.
 - The three registration paths are **simulated business roles**. None of them is
   a real registration institution, and no real institutional cooperation,
   API access or business licence is implied.
-- Suffix rollback, deadline handling and redemption are later stages. Where an
-  implemented stage touches them it says they are not implemented rather than
-  showing a zero or an empty success.
+- Deadline handling and redemption are later stages. Where an implemented stage
+  touches them it says they are not implemented rather than showing a zero or an
+  empty success.
+- A rollback never takes the asset into temporary custody, never imposes a
+  time-limited redemption or an overdue sale, and never liquidates a position to
+  cover a shortfall. A shortfall is a blocked, resumable state.
 - Payment is an optional, separate adapter. An escrow record, an amount or a
   released payment is never authority for completion, acceptance or return.
 - A rendered page from `exchange.views` is development evidence. It is not UI
@@ -65,7 +72,15 @@ repository.
     public JSON or a bare settlement identifier is refused. The evidence must
     bind source, asset, network, receipt, transfer, leg and a journal reference.
 12. **An unknown payment is never repaired by a second payment.** The adapter is
-    asked what happened first, and a restart does not read unknown as failed.
+    asked what happened first, a restart does not read unknown as failed, and an
+    enquiry applies the outcome the payment was actually for.
+13. **A finalized prefix is immutable.** A released segment is detached for
+    good: it is not reopened, reversed or re-collected, and a return stops at
+    the boundary that prefix established.
+14. **A return is one control operation** to the boundary account. It does not
+    walk back through the intermediate wallets and does not depend on their gas.
+15. **A rollback is only complete when every step has its own evidence**, and
+    each step is keyed so a resumed rollback repeats no refund and no return.
 
 ## Layout
 
@@ -76,6 +91,7 @@ repository.
 | `model.py` | `WarehouseReceipt`, `AuthorizationReference`, `TradeIntent`, `Asset` |
 | `registration.py` | request/evidence contract and the three simulated adapters |
 | `settlement.py` | escrow positions, release authority, optional payment adapter |
+| `rollback.py` | rollback authority, recoverable steps, simulated asset-return control |
 | `ledger.py` | the state machine: chain, dual track, registration, reporting |
 | `views.py` | the six status pages and their wording rules |
 | `webui.py` | read-only console over `http.server` |
@@ -130,16 +146,27 @@ tests cover each Stage 1 case; it names no requirement text.
 | T-16 | `test_settlement.PaymentFailureAndRecovery` | confirmed registration with a late payment is tracked, not refunded |
 | T-28 | `test_settlement.PaymentFailureAndRecovery` | enquiry before retry; restart and repeat move nothing twice |
 | T-31 | `test_settlement.Reconciliation` | release and refund exclusive; principal, gas and net per segment |
+| T-17 | `test_rollback.FullSuffixRollback` | a refusal at the first leg unwinds the whole suffix back to the origin |
+| T-18 | `test_rollback.FinalizedPrefixSurvives` | a settled prefix survives; only the later segments unwind, back to its buyer |
+| T-19 | `test_rollback.RefundsAndGas` | each original buyer's own principal, with actual gas and net |
+| T-20 | `test_rollback.ReturnDoesNotWalkIntermediates` | one control operation; a zero-balance intermediate changes no obligation |
+| T-21 | `test_rollback.RefundsAndGas` | a shared operation is recorded once, never charged in full twice |
+| T-22 | `test_rollback.ShortfallStaysBlocked` | a shortfall blocks and resumes; no custody, sale or liquidation |
+| T-23 | `test_rollback.InterruptionAndLateResults` | resume without repeating; a late success revives nothing |
+| T-29 | `test_rollback.RollbackPermission` | unverified authority refused; no confiscation, no prefix rewrite |
+| T-30 | `test_rollback.DuplicateAndReorderedEvents` | duplicate and re-ordered observations move nothing twice |
 
-Later-stage cases (T-17 onward) are out of the implemented scope and are not
-claimed here.
+Later-stage cases (T-24, T-25, T-32, T-33 and the Stage 5 set) are out of the
+implemented scope and are not claimed here.
 
 ## Dependency gaps that do not block Stage 1
 
 The gas apportionment rule for a shared on-chain operation, the actual fee
 deduction mechanism, the recovery detail for a confirmed registration whose
 payment failed, the real asset-return control and the exit ordering are all
-still open in the requirements document. The code records the facts and refuses
+still open in the requirements document. Re-trading a receipt after a rollback
+returned it is also not a defined order, so it is refused with
+`EX_TRADE_RETURNED_CHAIN_CLOSED` rather than guessed. The code records the facts and refuses
 where an order is undefined; it does not assume an answer. A shared operation is
 recorded once and is never charged in full to every leg.
 
