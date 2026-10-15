@@ -153,11 +153,22 @@ def build(source_identity, run_identity, scenario_report=None, path_report=None)
             # every case it serves. Assertions that happened to pass before the
             # exception are not an acceptance result for those cases: the
             # scenario did not complete, so the case is not passed.
+            # Why it did not pass matters: a scenario that raised is an
+            # error, one with a failed assertion is a failure, one that only
+            # could not run a check is blocked, and one that recorded nothing
+            # conclusive is incomplete. Collapsing these into "failed" loses
+            # the difference between a wrong answer and no answer.
             status = None
             if scenario.get("error"):
                 status = "error"
             elif scenario.get("passed") is False:
-                status = "failed"
+                scenario_counts = scenario.get("counts") or {}
+                if scenario_counts.get("failed"):
+                    status = "failed"
+                elif scenario_counts.get("blocked"):
+                    status = "blocked"
+                else:
+                    status = "incomplete"
             if status is not None:
                 for case in sorted(touched):
                     problems.setdefault(case, []).append(
@@ -170,15 +181,27 @@ def build(source_identity, run_identity, scenario_report=None, path_report=None)
         implementation, unit_cover = CASE_IMPLEMENTATION[case]
         counts = recorded.get(case)
         raised = problems.get(case, [])
-        if any(entry["status"] == "error" for entry in raised):
+        statuses = {entry["status"] for entry in raised}
+        # A case is judged on its own recorded assertions first, then on what
+        # happened to the scenarios carrying it. Each state keeps its own name.
+        if "error" in statuses:
             local = "error"
-        elif raised:
-            local = "failed"
         elif counts and counts["failed"]:
+            local = "failed"
+        elif "failed" in statuses:
             local = "failed"
         elif counts and counts["blocked"]:
             local = "blocked"
+        elif "blocked" in statuses:
+            local = "blocked"
+        elif "incomplete" in statuses:
+            # Assertions may have passed, but the scenario did not complete, so
+            # this is not acceptance for the case either.
+            local = "incomplete"
         elif case in REMAINING_EVIDENCE:
+            local = "not-run"
+        elif counts and counts["not-run"] and not counts["passed"]:
+            # The scenarios covering this case recorded only obligations.
             local = "not-run"
         elif counts and counts["passed"]:
             local = "passed"
@@ -197,10 +220,10 @@ def build(source_identity, run_identity, scenario_report=None, path_report=None)
             "partiallyLocal": PARTIAL_LOCAL.get(case),
             "remainingRealEvidence": REMAINING_EVIDENCE.get(case),
         })
-    unsound = [row["case"] for row in rows if row["localOutcome"] in ("error", "failed",
-                                                                     "blocked")]
+    unsound = [row["case"] for row in rows
+               if row["localOutcome"] in ("error", "failed", "blocked", "incomplete")]
     return {
-        "schema": "8415ex-acceptance-matrix/2",
+        "schema": "8415ex-acceptance-matrix/3",
         "sourceIdentity": source_identity,
         "runIdentity": run_identity,
         "rows": rows,

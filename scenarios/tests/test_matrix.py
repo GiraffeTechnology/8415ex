@@ -74,10 +74,27 @@ class Matrix(unittest.TestCase):
         self.assertFalse(built["allCasesSound"])
         self.assertIn("T-17", built["unsoundCases"])
 
-    def test_a_scenario_that_did_not_pass_marks_its_cases_failed(self):
+    def test_a_scenario_that_did_not_pass_marks_its_cases_by_its_own_reason(self):
+        """Its counts say a check was blocked, so the case is blocked.
+
+        This case previously asserted "failed", which was the defect item 5
+        names: a scenario that merely could not run a check was reported the
+        same way as one that got a wrong answer.
+        """
         report = {"scenarios": [{
             "scenarioId": "DEMO-Y", "cases": ["T-11"], "passed": False, "error": None,
             "counts": {"passed": 1, "failed": 0, "blocked": 1, "not-run": 0},
+            "expectations": [{"name": "an early check", "cases": ["T-11"],
+                              "outcome": "passed"}]}]}
+        rows = {row["case"]: row
+                for row in matrix.build({}, {}, report, None)["rows"]}
+        self.assertEqual(rows["T-11"]["localOutcome"], "blocked")
+        self.assertEqual(rows["T-11"]["scenarioProblems"][0]["status"], "blocked")
+
+    def test_a_scenario_with_a_failed_assertion_marks_its_cases_failed(self):
+        report = {"scenarios": [{
+            "scenarioId": "DEMO-Y", "cases": ["T-11"], "passed": False, "error": None,
+            "counts": {"passed": 1, "failed": 1, "blocked": 0, "not-run": 0},
             "expectations": [{"name": "an early check", "cases": ["T-11"],
                               "outcome": "passed"}]}]}
         rows = {row["case"]: row
@@ -93,6 +110,104 @@ class Matrix(unittest.TestCase):
         rows = {row["case"]: row
                 for row in matrix.build({}, {}, report, None)["rows"]}
         self.assertIn(rows["T-12"]["localOutcome"], ("failed", "blocked"))
+
+    def _one_scenario(self, expectations, passed, error=None, **counts):
+        tally = {"passed": 0, "failed": 0, "blocked": 0, "not-run": 0}
+        tally.update(counts)
+        return {"scenarios": [{"scenarioId": "DEMO-X", "cases": ["T-17"],
+                               "passed": passed, "error": error, "counts": tally,
+                               "expectations": expectations}]}
+
+    def _case_outcome(self, report):
+        rows = {row["case"]: row for row in matrix.build({}, {}, report, None)["rows"]}
+        return rows["T-17"]["localOutcome"]
+
+    def test_a_blocked_only_case_stays_blocked_rather_than_failed(self):
+        """The reviewed defect: blocked became failed because passed was false."""
+        outcome = self._case_outcome(self._one_scenario(
+            [{"name": "b", "cases": ["T-17"], "outcome": "blocked"}],
+            passed=False, blocked=1))
+        self.assertEqual(outcome, "blocked")
+
+    def test_blocked_beside_passing_assertions_is_still_blocked(self):
+        outcome = self._case_outcome(self._one_scenario(
+            [{"name": "p", "cases": ["T-17"], "outcome": "passed"},
+             {"name": "b", "cases": ["T-17"], "outcome": "blocked"}],
+            passed=False, blocked=1))
+        self.assertEqual(outcome, "blocked")
+
+    def test_a_real_failure_is_still_failed(self):
+        outcome = self._case_outcome(self._one_scenario(
+            [{"name": "f", "cases": ["T-17"], "outcome": "failed"}],
+            passed=False, failed=1))
+        self.assertEqual(outcome, "failed")
+
+    def test_a_failure_outranks_a_block_in_the_same_case(self):
+        outcome = self._case_outcome(self._one_scenario(
+            [{"name": "f", "cases": ["T-17"], "outcome": "failed"},
+             {"name": "b", "cases": ["T-17"], "outcome": "blocked"}],
+            passed=False, failed=1, blocked=1))
+        self.assertEqual(outcome, "failed")
+
+    def test_a_raised_scenario_is_an_error_not_a_failure(self):
+        outcome = self._case_outcome(self._one_scenario(
+            [{"name": "p", "cases": ["T-17"], "outcome": "passed"}],
+            passed=False, error="RuntimeError: boom"))
+        self.assertEqual(outcome, "error")
+
+    def test_a_case_covered_only_by_obligations_is_not_run(self):
+        """It has scenario coverage, so it is not merely unit-suite-only."""
+        outcome = self._case_outcome(self._one_scenario(
+            [{"name": "n", "cases": ["T-17"], "outcome": "not-run"}],
+            passed=True, **{"not-run": 1}))
+        self.assertEqual(outcome, "not-run")
+
+    def test_a_scenario_that_concluded_nothing_is_incomplete(self):
+        """Not a pass, and not a failure either: no answer was recorded."""
+        outcome = self._case_outcome(self._one_scenario([], passed=False))
+        self.assertEqual(outcome, "incomplete")
+
+    def test_partial_assertions_before_an_exception_are_preserved(self):
+        report = self._one_scenario(
+            [{"name": "early", "cases": ["T-17"], "outcome": "passed",
+              "expected": {"a": 1}, "observed": {"a": 1}}],
+            passed=False, error="RuntimeError: stopped half way")
+        rows = {row["case"]: row for row in matrix.build({}, {}, report, None)["rows"]}
+        row = rows["T-17"]
+        self.assertEqual(row["localOutcome"], "error")
+        self.assertEqual(row["scenarioAssertionCounts"]["passed"], 1,
+                         "the partial assertion is still recorded")
+        self.assertIn("stopped half way", row["scenarioProblems"][0]["error"])
+
+    def test_the_four_states_are_never_collapsed(self):
+        outcomes = {
+            "error": self._one_scenario(
+                [{"name": "p", "cases": ["T-17"], "outcome": "passed"}],
+                passed=False, error="boom"),
+            "failed": self._one_scenario(
+                [{"name": "f", "cases": ["T-17"], "outcome": "failed"}],
+                passed=False, failed=1),
+            "blocked": self._one_scenario(
+                [{"name": "b", "cases": ["T-17"], "outcome": "blocked"}],
+                passed=False, blocked=1),
+            "not-run": self._one_scenario(
+                [{"name": "n", "cases": ["T-17"], "outcome": "not-run"}],
+                passed=True, **{"not-run": 1}),
+        }
+        seen = {name: self._case_outcome(report) for name, report in outcomes.items()}
+        self.assertEqual(seen, {"error": "error", "failed": "failed",
+                                "blocked": "blocked", "not-run": "not-run"})
+        self.assertEqual(len(set(seen.values())), 4)
+
+    def test_an_incomplete_or_blocked_case_is_never_sound(self):
+        for report in (self._one_scenario([], passed=False),
+                       self._one_scenario(
+                           [{"name": "b", "cases": ["T-17"], "outcome": "blocked"}],
+                           passed=False, blocked=1)):
+            built = matrix.build({}, {}, report, None)
+            with self.subTest(outcome=self._case_outcome(report)):
+                self.assertFalse(built["allCasesSound"])
+                self.assertIn("T-17", built["unsoundCases"])
 
     def test_a_clean_run_reports_every_case_sound(self):
         self.assertTrue(self.built["allCasesSound"])
