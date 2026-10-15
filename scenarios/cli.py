@@ -36,8 +36,9 @@ import uuid
 from exchange.ids import canonical_json
 
 from .commands import COMMANDS
-from . import (decisions, docs, dossier, events, evidence_index, execution,
-               handoff, manifest, matrix, operations, reuse, stages, storyboard,
+from . import (completion, decisions, docs, dossier, events, evidence_index,
+               execution, handoff, manifest, matrix, operations, reuse, stages,
+               storyboard,
                observations, receipt, validation)
 from .demos import DEMOS
 from .harness import report_text, run_all
@@ -106,6 +107,9 @@ CONSISTENCY_CHECKS = (
      "reason": "the event vocabulary does not account for what the domain records"},
     {"key": "dossier", "flag": ("allItemsCarried",), "blocks": True,
      "reason": "a scenario does not record something a demonstration must carry"},
+    {"key": "completion", "flag": ("notMeantHolds",), "blocks": True,
+     "reason": "something this round explicitly does not mean was observed in "
+               "the run: a main network, a real adapter or a live quote asset"},
 )
 
 #: Verdict field names a report uses to say it agrees with the code. Any report
@@ -239,6 +243,11 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
         "notRun": [],
         "transactionHashes": "NOT_RUN",
     }
+    # The ledger reads the reports this bundle already carries, so it is built
+    # from the bundle rather than beside it - and after the reconciliation it
+    # reads, because a signal pointing at a report that is not there yet would
+    # resolve to None and look like a clause that is not evidenced.
+    bundle["completion"] = completion.build(bundle)
     blocking = []
     if not scenario_report["allPassed"]:
         blocking.append("a scenario did not pass")
@@ -550,6 +559,12 @@ def main(argv=None):
     if arguments.command == "decisions":
         print(canonical_json(decisions.register()))
         return 0
+    if arguments.command == "completion":
+        # The ledger describes a completed run, so one is performed and then
+        # read; nothing in it is recomputed from the run.
+        bundle = _bundle(arguments.root, execute_suites=arguments.execute_suites)
+        print(canonical_json(bundle["completion"]))
+        return 0 if bundle["completion"]["notMeantHolds"] else 1
     if arguments.command == "usage":
         built = docs.check(arguments.root)
         print(canonical_json(built))

@@ -74,6 +74,7 @@ Each is a subcommand of `python3 -B -m scenarios.cli`.
 | `observations` | the bounded secret scan, and the recorded load, backlog and rates |
 | `validate-config` | would this configuration be accepted, and why a bad one is refused |
 | `usage` | do these instructions still match the commands that exist |
+| `completion` | per clause of the definition of done: its evidence here, or the owner who owes the rest |
 
 The domain has its own diagnostic command line, which supplements the console
 and does not replace it:

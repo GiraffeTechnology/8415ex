@@ -30,6 +30,7 @@ separate from it.
 | `dossier.py` | per scenario: the nine items a demonstration must carry, and what did not resolve |
 | `storyboard.py` | the presentation outline, parsed and checked against the code it describes |
 | `docs.py` | the documented commands, checked against the commands that exist |
+| `completion.py` | the definition of done, clause by clause, with its evidence or its owner |
 | `commands.py` | the subcommand list, declared once so the parser and the check cannot disagree |
 | `evidence_index.py` | one index from requirement to artifact over a run's own artefacts |
 | `cli.py` | one reproducible entry point |
@@ -76,6 +77,9 @@ python3 -B -m scenarios.cli storyboard
 
 # whether the guides and the real commands still agree
 python3 -B -m scenarios.cli usage
+
+# the definition of done, clause by clause
+python3 -B -m scenarios.cli completion
 
 # individual parts
 python3 -B -m scenarios.cli scenarios
@@ -270,6 +274,39 @@ mentioning the backlog, not that it ended with one. Writing that distinction
 down immediately earned its keep: the out-of-order scenario recorded its
 deferral building up and never recorded it draining, so the one scenario that
 demonstrates a backlog clearing had no record of it clearing. It records it now.
+
+## The definition of done, and the half of it that is easiest to lose
+
+The requirements state what this round's completion means and, just as
+explicitly, what it does not. Both halves slip: the first becomes a vague sense
+that things are going well, and the second erodes until a local model run is
+being described as a product. `scenarios.cli completion` resolves each clause
+against a real run.
+
+A clause whose signals are all present is **evidenced locally**, and still names
+what is owed and by whom - every clause here does, because a finished local half
+is not a finished clause. Two clauses resolve through the acceptance matrix
+rather than through a report flag, so the stage coverage they claim is the
+coverage the matrix actually records. A missing report resolves to `None`, which
+is not `True`, so an absent report never reads as a met signal.
+
+Completion is never established here, and the report says why rather than
+leaving it as an omission: every clause also needs evidence another owner holds.
+Nothing reports a percentage either - a clause evidenced locally is one clause,
+not a fraction of a product.
+
+The second half gets the same treatment in the one respect that matters. Three
+of the non-claims are **confirmed against the run** - that every asset names a
+test chain, that every adapter the run used is a simulated one, and that the
+quote asset and fee figures are declared local fixtures - because those are the
+ones a reader could otherwise mistake for the real thing. The rest say that
+declared is what they are. Each is phrased as what is *not* the case, so a
+skimmed list cannot be read as confirming the opposite.
+
+That check is gated, unlike the clauses: a run that reached a main network, used
+a real adapter or priced in a live asset is not a reportable observation, it is
+a stop. The suite constructs both violations, because nothing in the fixtures
+can reach them.
 
 ## Every verdict is acted on
 
