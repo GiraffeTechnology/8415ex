@@ -49,6 +49,11 @@ jobs:
         run: |
           set -euo pipefail
           python3 -B -m unittest discover -s scenarios/tests -t . -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/stage5-preparation-tests.log"
+      - name: Run joined Stage 5 integration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s integration -t . -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/stage5-integration-tests.log"
       - name: Run the six local scenarios and the three route contracts
         shell: bash
         run: |
