@@ -266,7 +266,8 @@ def demo_02(recorder):
 
     _, bc = F.confirm(exchange, requests[1], "res-bc")
     recorder.step("BC confirmed, draining the buffered CD result",
-                  disposition=bc["disposition"], **_positions(exchange))
+                  disposition=bc["disposition"],
+                  deferredLegs=exchange.deferred_legs(RECEIPT), **_positions(exchange))
     recorder.expect("filling the gap drains the buffer in order", ("T-04",),
                     {"holderPosition": 3, "holder": F.D, "deferredLegs": ()},
                     {"holderPosition": exchange.holder_index(RECEIPT),

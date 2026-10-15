@@ -236,6 +236,32 @@ reads as a dependency with an owner rather than as an unexplained hole.
 
 The subcommand exits non-zero when the map stops accounting for the source.
 
+## The load record, and what it refuses to be
+
+`EX-NFR-08` asks that a recorded test load, execution time, queue backlog and
+failure rate exist before any throughput or latency figure is spoken about. The
+workload observation is those four, and it is explicit about not being a fifth
+thing: one observation on one machine is a load record, never a target.
+
+Two separations carry the weight. A `not-run` obligation is not a failure, so it
+has its own rate and is excluded from the failure rate; counting it as one would
+make an honest outstanding duty read as a defect. And a backlog is a count, not
+a problem: a deferred registration result waiting for its gap is the normal
+serial state, and an outstanding leg is work in flight.
+
+Rates are integers in parts per thousand, because no floating point appears in
+these records, and a rate over nothing is null rather than zero, because zero
+would read as a measurement.
+
+The backlog is read from facts the scenarios already record, so nothing is
+instrumented specially for it. The second figure per scenario is the **last
+recorded** value, not the end state: a scenario stops recording a fact once it
+is no longer what a step is about, so a non-zero last value means it stopped
+mentioning the backlog, not that it ended with one. Writing that distinction
+down immediately earned its keep: the out-of-order scenario recorded its
+deferral building up and never recorded it draining, so the one scenario that
+demonstrates a backlog clearing had no record of it clearing. It records it now.
+
 ## Keeping the outline from going stale
 
 `STORYBOARD.md` is the part of this delivery most likely to go stale and least

@@ -284,5 +284,92 @@ class ResourceObservation(unittest.TestCase):
         self.assertEqual(workload["outcomeTotals"]["failed"], 0)
 
 
+class WorkloadBaseline(unittest.TestCase):
+    """EX-NFR-08 asks for load, time, backlog and failure rate, and no SLA."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.report = run_all(list(DEMOS))
+        cls.workload = observations.workload_observation(cls.report)
+
+    def test_it_records_the_load_and_the_time_it_took(self):
+        self.assertEqual(self.workload["scenarios"], 6)
+        self.assertGreater(self.workload["recordedSteps"], 0)
+        self.assertGreaterEqual(self.workload["totalScenarioMs"],
+                                self.workload["slowestScenarioMs"])
+
+    def test_the_rates_are_integers_over_a_stated_denominator(self):
+        rates = self.workload["ratesPerThousand"]
+        self.assertEqual(sorted(rates), ["blocked", "failed", "notRun", "passed"])
+        for name, value in sorted(rates.items()):
+            with self.subTest(rate=name):
+                self.assertIsInstance(value, int,
+                                      "no floating point appears in these records")
+        self.assertEqual(self.workload["rateDenominator"],
+                         sum(self.workload["outcomeTotals"][outcome] for outcome in
+                             ("passed", "failed", "blocked", "not-run")))
+        self.assertEqual(sum(rates.values()), 1000)
+
+    def test_a_not_run_obligation_is_not_counted_as_a_failure(self):
+        self.assertTrue(self.workload["failureRateExcludesNotRun"])
+        self.assertGreater(self.workload["outcomeTotals"]["not-run"], 0,
+                           "this run really does carry outstanding obligations")
+        self.assertEqual(self.workload["ratesPerThousand"]["failed"], 0)
+        self.assertGreater(self.workload["ratesPerThousand"]["notRun"], 0)
+
+    def test_a_rate_over_nothing_is_null_rather_than_zero(self):
+        empty = observations.workload_observation(
+            {"scenarios": [], "scenariosTotal": 0,
+             "totals": {"passed": 0, "failed": 0, "blocked": 0, "not-run": 0}})
+        for name, value in sorted(empty["ratesPerThousand"].items()):
+            with self.subTest(rate=name):
+                self.assertIsNone(value, "zero would read as a measurement")
+
+    def test_the_backlog_is_read_from_the_facts_the_scenarios_record(self):
+        backlog = self.workload["backlog"]
+        self.assertEqual(sorted(backlog), sorted(observations.BACKLOG_FACTS))
+        outstanding = backlog["outstandingLegs"]
+        self.assertEqual(outstanding["observedIn"],
+                         sorted(scenario["scenarioId"]
+                                for scenario in self.report["scenarios"]))
+        self.assertGreater(outstanding["peak"], 0)
+
+    def test_the_deferral_backlog_peaks_and_then_clears(self):
+        deferred = self.workload["backlog"]["deferredLegs"]
+        self.assertEqual(deferred["observedIn"], ["DEMO-02"],
+                         "only the out-of-order scenario buffers a result")
+        self.assertEqual(deferred["peak"], 1)
+        self.assertEqual(deferred["clearedWhereLastRecorded"], ["DEMO-02"])
+        self.assertEqual(deferred["stillCountedWhenLastRecorded"], [])
+
+    def test_the_last_recorded_backlog_is_not_called_the_end_state(self):
+        for fact, entry in sorted(self.workload["backlog"].items()):
+            if entry is None:
+                continue
+            with self.subTest(fact=fact):
+                self.assertTrue(entry["lastRecordedIsNotTheEndState"])
+                self.assertIn("lastRecordedByScenario", entry)
+                self.assertNotIn("finalByScenario", entry,
+                                 "a scenario stops recording a fact once it is "
+                                 "no longer what a step is about")
+                self.assertIn("lastRecordedStepByScenario", entry)
+
+    def test_a_fact_no_scenario_recorded_is_null_rather_than_an_empty_reading(self):
+        backlog = observations.workload_observation(
+            {"scenarios": [{"scenarioId": "X", "expectations": [], "steps": [],
+                            "elapsedMs": 0}],
+             "scenariosTotal": 1,
+             "totals": {"passed": 0, "failed": 0, "blocked": 0, "not-run": 0}})["backlog"]
+        for fact in observations.BACKLOG_FACTS:
+            with self.subTest(fact=fact):
+                self.assertIsNone(backlog[fact])
+
+    def test_it_sets_no_service_level_and_names_no_defect(self):
+        said = " ".join(self.workload["isNot"])
+        self.assertIn("not a service level", said)
+        self.assertIn("not a defect count", said)
+        self.assertIn("not a backlog problem", said)
+
+
 if __name__ == "__main__":
     unittest.main()
