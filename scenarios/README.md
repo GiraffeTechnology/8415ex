@@ -21,6 +21,10 @@ separate from it.
 | `handoff.py` | the execution checklist with NOT_RUN evidence slots |
 | `observations.py` | tracked-file enumeration, the secret scan (T-39) and measured observations (T-40) |
 | `execution.py` | real command records: what ran, how it ended, or NOT_RUN |
+| `decisions.py` | the open-decision register: what each one blocks, and what it does not |
+| `receipt.py` | the nine-group candidate receipt, assembled from a completed run |
+| `reuse.py` | what this package reuses, what is simulated, and what is not located yet |
+| `evidence_index.py` | one index from requirement to artifact over a run's own artefacts |
 | `cli.py` | one reproducible entry point |
 | `STORYBOARD.md` | the factual storyboard and presentation outline |
 
@@ -39,6 +43,15 @@ python3 -B -m scenarios.cli run-all --json-out /tmp/ex-run.json --text-out /tmp/
 # also really execute the two unit suites and record their true status
 python3 -B -m scenarios.cli run-all --execute-suites
 
+# the nine-group candidate receipt for a completed run
+python3 -B -m scenarios.cli receipt [--execute-suites]
+
+# the open-decision register
+python3 -B -m scenarios.cli decisions
+
+# the reuse and interface map, read from the imported modules and this source
+python3 -B -m scenarios.cli reuse
+
 # individual parts
 python3 -B -m scenarios.cli scenarios
 python3 -B -m scenarios.cli paths
@@ -47,6 +60,7 @@ python3 -B -m scenarios.cli manifest --json
 python3 -B -m scenarios.cli handoff --json
 python3 -B -m scenarios.cli validate-config
 python3 -B -m scenarios.cli observations
+python3 -B -m scenarios.cli evidence-index
 
 # this package's own tests
 PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s scenarios/tests -t . -v
@@ -123,6 +137,128 @@ derived by subtracting a gas-unit count from a quote-asset principal. That
 projection lives in `exchange/ledger.py`, which this package does not own and
 does not change. It is recorded as an existing-owner dependency in
 `scenarios/handoff.py` and is never read here as real net proceeds.
+
+## The candidate receipt
+
+`scenarios.cli receipt` performs a run and then describes it, in the nine groups
+a candidate has to account for. Run identity, ancestry and decisions are read from the recorded bundle, never
+from a later checkout. Explicit caller-supplied artifact paths are measured at
+receipt construction time; they are not proof of delivery or of their build origin.
+
+| Group | Covers |
+| --- | --- |
+| 1 source | repository, branch, full commit and tree, parents, base and the exact diff range |
+| 2 requirements | which identifiers this candidate claims, which are recorded as not locally testable, cases requiring follow-up, and the open decisions |
+| 3 environment | platform, runtime, the actual commands, a configuration summary and the run id |
+| 4 results | totals, per-command outcome, exit code, instants and the digests identifying the raw output |
+| 5 artifacts | each produced file with its byte count, digest, how it was built and where it is stored |
+| 6 deployment | target, deployed version, URL and health verification |
+| 7 chain | chain id, verified addresses, transaction hashes, receipts, block identity, confirmation policy and events |
+| 8 reconciliation | per scenario, the per-segment funds and gas, owner and holder positions, registration prefix and recovery outcome |
+| 9 blockers | the blocked action, the missing input, the affected scope, its owner, and the independent work that continued |
+
+Groups 6 and 7 cover work this package does not perform, so every field in them
+reads `NOT_RUN`. They are still emitted, because in a hand-written receipt an
+omitted group and an unperformed one look identical, and here they cannot.
+
+The private requirements identity belongs to group 2 and is never embedded in
+this source. Supply it at call time through `EX_REQUIREMENTS_IDENTITY`, the same
+way the scan takes private markers; the receipt reports only whether it was
+supplied, so a published artifact never carries it.
+
+Group 1's diff range is the range a reviewer can pass straight to `git diff`.
+It is captured with the run against an immutable head and base commit. By
+default the first parent is the comparison baseline, not an inferred PR target.
+`manifest.parent_identity(base=...)` accepts an explicit review base. Missing
+history is an error; root commits have no parent or diff range. Receipts of older
+bundles without captured ancestry say NOT_RECORDED rather than reading live Git.
+
+## The open-decision register
+
+`scenarios.cli decisions` prints the open decisions, and each entry names four
+things: what is undecided, who confirms it, the narrowest scope that genuinely
+waits on it, and the work that proceeds anyway. That last column is the point.
+Without it an open decision tends to be read as blocking far more than it does,
+and authorized work stops for a question it does not depend on.
+
+The register answers nothing and is not a defect list. Where a question could be
+settled by reading an existing interface or configuration rather than by a
+product choice, the entry says so, so it is investigated instead of escalated.
+Three decisions are reported by a scenario as an observation rather than
+resolved, and `decisions.reported_locally()` names which scenario does that.
+
+It also records the defaults that must not be assumed in place of a decision: a
+pre-funded test account standing in for a gas policy, a budget deduction
+standing in for a fee mechanism, or a device or attestation setting standing in
+for an authorization model.
+
+## The reuse and interface map
+
+`scenarios.cli reuse` answers two questions that otherwise get answered from
+memory: what does this package actually consume, and what is simulated.
+
+The domain map is a maintained declaration checked against observed imports. It declares the real
+attribute names taken from each domain module and checks them against the
+imported module, so a rename in the domain shows up as an unresolved name. It
+then reads this package's own import statements out of the source and compares
+them with the declaration, which catches the opposite drift: a module that is
+consumed but never declared. The two findings are kept apart, because they mean
+different things — an undeclared module is a gap in the map, a declared module
+with no import left is a dependency the code dropped. Imports that only the test
+suites make are reported on their own line and are not counted as package
+reuse: a suite importing a domain module to assert something about it is not
+this package consuming it.
+
+The adapter half is read from a real run rather than from the module's own list,
+so a role that stopped being exercised stops appearing. Every adapter role is
+simulated. This package connects to no real registrar, payment provider, asset
+control, collection desk or wallet, and says so wherever a result is reported.
+
+The last section is the one usually missing: the interfaces that are **not
+located yet**. An unlocated interface is neither a defect nor a simulated one —
+it is work that cannot start until someone says where the real thing is. Each
+names the open decision that tracks it and the owner who can answer it, so it
+reads as a dependency with an owner rather than as an unexplained hole.
+
+The subcommand exits non-zero when the map stops accounting for the source.
+
+## The evidence index, including the artifact it lands in
+
+`scenarios.cli evidence-index` prints one row per case, and the row is a chain a
+reviewer can walk in either direction:
+
+    approved requirement
+      -> the assertion that was actually recorded
+      -> where it is implemented, and which test covers it
+      -> the exact source and run it was observed under
+      -> what was observed, with the raw expected and observed values
+      -> which artifact carries the row, and where inside it
+      -> what real evidence is still owed, and who owns it
+
+The last-but-one leg is new, and it closes the gap that mattered: without it, a
+reviewer holding a delivered file cannot tell which rows that file is supposed
+to carry, and a row cannot say whether it reached a file at all. Each row names
+every declared output, and for the JSON output gives a pointer that resolves
+that same row inside the delivered record — the pointer is relative to the
+file's own root, because that is where a reviewer opening the file starts.
+
+It is also the leg most easily overstated, so it is deliberately understated.
+The index is built before the outputs are written, so at index time every
+artifact is **declared, not delivered**: each slot and the index as a whole
+report `NOT_CAPTURED_IN_PROCESS` and point at the delivery report that carries
+the actual per-path result. The published file says this about itself even
+though its own existence proves the write happened, because the record inside it
+was serialised before the write was attempted. A run that declared no output
+file is reported as `NO_ARTIFACT_DECLARED` — a legitimate run whose rows are
+not a delivery failure. Full rows require JSON stdout capture; default run-all stdout is only a summary.
+
+The text summary is named as an artifact but carries no row pointer, because it
+is a summary and does not contain the row verbatim.
+
+The index is rebuilt when the run is sealed, so the declared plan is carried on
+the bundle from the moment it is declared. A rebuild without it would drop the
+artifact leg from the only copy a reviewer ever reads, which is why the
+guarantee is tested on the published file rather than on the in-memory bundle.
 
 ## Route coverage
 
@@ -207,3 +343,26 @@ that only recorded blocked assertions. This deliberately conservative choice
 is not a claim that the blocked assertion itself executed and failed.
 An exception or incomplete scenario remains unsound for every served case.
 Neither conservative propagation nor a unit-suite-only row is a false pass.
+
+### Receipt publication and result scope
+
+The receipt, decisions and reuse commands emit JSON to stdout only. They reject
+`--json-out` and `--text-out` rather than silently ignoring requested files.
+Capture stdout, stderr and the final process exit externally. The receipt's
+self-reported status covers calculation only, before stdout publication; no
+embedded record can attest its own final write or outer process exit. The
+receipt preserves command scope, execution flags and signals, and does not
+assert raw-log delivery or continued work without recorded evidence.
+`casesRequiringFollowup` includes failed/blocked/incomplete cases; it is not an
+assertion that their features were never developed. Linux is the acceptance
+policy, while the observed platform is the runtime record.
+
+Artifact formats in run-all are declared by the output option, independent of
+filename extension. Text summaries have no row JSON pointers. The final
+outputDelivery record is available in externally captured run-all --json stdout,
+not inside the already-written JSON file. Capture the outer exit separately.
+Legacy direct index callers passing bare paths retain suffix inference, explicitly
+labelled as such; callers should pass {path, format} declarations instead.
+Reuse imports are parsed as Python syntax without execution. Missing declared
+attributes, undeclared bare imports and unresolved runtime names prevent a
+complete map; comments and strings are not imports.
