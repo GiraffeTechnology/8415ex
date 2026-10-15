@@ -108,3 +108,22 @@ def self_record(command, exit_code, started_at, finished_at, cases=(), detail=No
             "cases": list(cases), "executed": True, "selfReported": True,
             "detail": detail or ("this record is written after the final exit code was "
                                  "determined for this very run")}
+
+
+def capture_cli(argv, root=".", timeout=DEFAULT_TIMEOUT_SECONDS, env=None):
+    """Observe a command's final outer status from outside it.
+
+    A process cannot record its own final exit status: it is not known until the
+    process has ended, and the record it writes is already written by then. The
+    authoritative final status of a CLI invocation therefore has to be captured
+    by something that outlives it, which is what this does. It runs the command
+    and returns the real argv, stdout, stderr, exit status and timing, with an
+    explicit note of what the record covers.
+
+    This observes an existing entry point; it is not a second runner, and it
+    computes nothing of its own.
+    """
+    record = run_command(argv, root=root, timeout=timeout, env=env)
+    record["scope"] = "final-outer-process"
+    record["observedBy"] = "external observer, not the observed process"
+    return record
