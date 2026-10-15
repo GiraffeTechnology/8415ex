@@ -35,8 +35,8 @@ import uuid
 
 from exchange.ids import canonical_json
 
-from . import (evidence_index, execution, handoff, manifest, matrix,
-               observations, validation)
+from . import (decisions, evidence_index, execution, handoff, manifest, matrix,
+               observations, receipt, validation)
 from .demos import DEMOS
 from .harness import report_text, run_all
 from .paths import PATH_CONTRACTS, coverage_map
@@ -115,6 +115,7 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None):
         "manifest": package,
         "commands": commands,
         "handoff": handoff.build(acceptance),
+        "openDecisions": decisions.register(),
         "evidenceIndex": evidence_index.build(
             scenario_report, path_report, root,
             {"runId": run_id, "startedAt": started_at}),
@@ -420,7 +421,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Local Stage 5 preparation for 8415ex.")
     parser.add_argument("command", choices=("run-all", "scenarios", "paths", "matrix",
                                             "manifest", "handoff", "validate-config",
-                                            "observations", "evidence-index"))
+                                            "observations", "evidence-index",
+                                            "decisions", "receipt"))
     parser.add_argument("--root", default=".")
     parser.add_argument("--json", action="store_true", help="print the canonical record only")
     parser.add_argument("--json-out", help="write the canonical record of this same run here")
@@ -445,6 +447,17 @@ def main(argv=None):
         built = manifest.build(arguments.root, run_id=_run_id())
         print(canonical_json(built))
         return 0 if built["consistent"] else 1
+    if arguments.command == "decisions":
+        print(canonical_json(decisions.register()))
+        return 0
+    if arguments.command == "receipt":
+        # The receipt describes a completed run, so one is performed first and
+        # then described. Nothing in the receipt is recomputed from the run.
+        bundle = _bundle(arguments.root, execute_suites=arguments.execute_suites)
+        seal(bundle, 0 if bundle["allLocalPassed"] else 1)
+        built = receipt.build(bundle, arguments.root)
+        print(canonical_json(built))
+        return 0 if bundle["allLocalPassed"] else 1
     if arguments.command == "evidence-index":
         built = evidence_index.build(run_all(list(DEMOS)), run_all(list(PATH_CONTRACTS)),
                                      arguments.root, {"runId": _run_id()})

@@ -235,6 +235,49 @@ def source_identity(root="."):
     return identity
 
 
+def parent_identity(root=".", base=None):
+    """The commits this candidate descends from, and its exact diff range.
+
+    A candidate is only reviewable against something. This reports the head's
+    parents, the merge base against the branch the work is based on, and the
+    range a reviewer can pass straight to ``git diff``, so the diff under review
+    is named rather than left to be guessed.
+    """
+    head, head_error = _git("rev-parse", "HEAD", root=root)
+    parents, parents_error = _git("rev-list", "--parents", "-n", "1", "HEAD",
+                                  root=root)
+    listed = []
+    if isinstance(parents, str) and parents.strip():
+        listed = parents.split()[1:]
+    identity = {
+        "head": head.strip() if isinstance(head, str) else None,
+        "parents": listed,
+        "parentCount": len(listed),
+        "base": None,
+        "mergeBase": None,
+        "diffRange": None,
+        "errors": [error for error in (head_error, parents_error) if error],
+    }
+    if base is None:
+        # The branch this work is based on, when it can be read from the remote
+        # tracking refs rather than assumed.
+        for candidate in ("origin/feat/stage4-deadline-exit-20261014",
+                          "origin/main"):
+            resolved, _ = _git("rev-parse", "--verify", candidate, root=root)
+            if isinstance(resolved, str) and resolved.strip():
+                base = candidate
+                break
+    if base is not None:
+        merge_base, error = _git("merge-base", base, "HEAD", root=root)
+        if error is not None:
+            identity["errors"].append(error)
+        else:
+            identity["base"] = base
+            identity["mergeBase"] = merge_base.strip()
+            identity["diffRange"] = f"{merge_base.strip()}..{identity['head']}"
+    return identity
+
+
 def runtime_identity():
     """The runtime a run actually used."""
     return {

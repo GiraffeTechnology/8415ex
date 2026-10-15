@@ -21,6 +21,8 @@ separate from it.
 | `handoff.py` | the execution checklist with NOT_RUN evidence slots |
 | `observations.py` | tracked-file enumeration, the secret scan (T-39) and measured observations (T-40) |
 | `execution.py` | real command records: what ran, how it ended, or NOT_RUN |
+| `decisions.py` | the open-decision register: what each one blocks, and what it does not |
+| `receipt.py` | the nine-group candidate receipt, assembled from a completed run |
 | `cli.py` | one reproducible entry point |
 | `STORYBOARD.md` | the factual storyboard and presentation outline |
 
@@ -38,6 +40,12 @@ python3 -B -m scenarios.cli run-all --json-out /tmp/ex-run.json --text-out /tmp/
 
 # also really execute the two unit suites and record their true status
 python3 -B -m scenarios.cli run-all --execute-suites
+
+# the nine-group candidate receipt for a completed run
+python3 -B -m scenarios.cli receipt [--execute-suites]
+
+# the open-decision register
+python3 -B -m scenarios.cli decisions
 
 # individual parts
 python3 -B -m scenarios.cli scenarios
@@ -123,6 +131,58 @@ derived by subtracting a gas-unit count from a quote-asset principal. That
 projection lives in `exchange/ledger.py`, which this package does not own and
 does not change. It is recorded as an existing-owner dependency in
 `scenarios/handoff.py` and is never read here as real net proceeds.
+
+## The candidate receipt
+
+`scenarios.cli receipt` performs a run and then describes it, in the nine groups
+a candidate has to account for. Nothing in the receipt is recomputed: it is
+assembled from the record that run already produced, so it cannot disagree with
+it.
+
+| Group | Covers |
+| --- | --- |
+| 1 source | repository, branch, full commit and tree, parents, base and the exact diff range |
+| 2 requirements | which identifiers this candidate claims, which are recorded as not locally testable, what is unimplemented or unexecuted, and the open decisions |
+| 3 environment | platform, runtime, the actual commands, a configuration summary and the run id |
+| 4 results | totals, per-command outcome, exit code, instants and the digests identifying the raw output |
+| 5 artifacts | each produced file with its byte count, digest, how it was built and where it is stored |
+| 6 deployment | target, deployed version, URL and health verification |
+| 7 chain | chain id, verified addresses, transaction hashes, receipts, block identity, confirmation policy and events |
+| 8 reconciliation | per scenario, the per-segment funds and gas, owner and holder positions, registration prefix and recovery outcome |
+| 9 blockers | the blocked action, the missing input, the affected scope, its owner, and the independent work that continued |
+
+Groups 6 and 7 cover work this package does not perform, so every field in them
+reads `NOT_RUN`. They are still emitted, because in a hand-written receipt an
+omitted group and an unperformed one look identical, and here they cannot.
+
+The private requirements identity belongs to group 2 and is never embedded in
+this source. Supply it at call time through `EX_REQUIREMENTS_IDENTITY`, the same
+way the scan takes private markers; the receipt reports only whether it was
+supplied, so a published artifact never carries it.
+
+Group 1's diff range is the range a reviewer can pass straight to `git diff`.
+It is computed from the head's parents and the merge base against the branch
+this work is based on, so the diff under review is named rather than guessed.
+`manifest.parent_identity()` returns it on its own if that is all you need.
+
+## The open-decision register
+
+`scenarios.cli decisions` prints the open decisions, and each entry names four
+things: what is undecided, who confirms it, the narrowest scope that genuinely
+waits on it, and the work that proceeds anyway. That last column is the point.
+Without it an open decision tends to be read as blocking far more than it does,
+and authorized work stops for a question it does not depend on.
+
+The register answers nothing and is not a defect list. Where a question could be
+settled by reading an existing interface or configuration rather than by a
+product choice, the entry says so, so it is investigated instead of escalated.
+Three decisions are reported by a scenario as an observation rather than
+resolved, and `decisions.reported_locally()` names which scenario does that.
+
+It also records the defaults that must not be assumed in place of a decision: a
+pre-funded test account standing in for a gas policy, a budget deduction
+standing in for a fee mechanism, or a device or attestation setting standing in
+for an authorization model.
 
 ## Route coverage
 
