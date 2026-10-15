@@ -11,26 +11,16 @@ exist is a broken instruction. A command that exists and is documented nowhere
 is a report nobody will find. Both are findings, and they are reported
 separately because they are different mistakes.
 
-The scenario commands are read from the list the parser itself uses, so the
-parser and this check cannot disagree. The domain commands are read out of the
+The scenario commands are read from the one list the parser itself uses, held in
+a module with no dependencies of its own, so the parser and this check cannot
+disagree and neither imports the other. The domain commands are read out of the
 domain's own source, because that module belongs to another surface and is not
 edited from here to make a check easier.
 """
 import pathlib
 import re
 
-
-def scenario_commands():
-    """The scenario command line's own list, imported where it is needed.
-
-    Imported inside the function rather than at module level: the command line
-    imports this module to expose the check as a subcommand, and a module-level
-    import would close that loop.
-    """
-    from .cli import COMMANDS
-
-    return tuple(COMMANDS)
-
+from .commands import COMMANDS as SCENARIO_COMMANDS
 
 #: The guides that carry usage instructions.
 GUIDES = ("README.md", "scenarios/README.md", "exchange/README.md", "ci/README.md")
@@ -88,7 +78,7 @@ def check(root="."):
     """Both directions: broken instructions, and reports nobody will find."""
     guides = documented(root)
     domain = domain_commands(root)
-    real = {"scenarios": sorted(scenario_commands()),
+    real = {"scenarios": sorted(SCENARIO_COMMANDS),
             "exchange": sorted(domain["commands"])}
     findings = []
     for guide in guides["guidesMissing"]:

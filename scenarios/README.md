@@ -30,6 +30,7 @@ separate from it.
 | `dossier.py` | per scenario: the nine items a demonstration must carry, and what did not resolve |
 | `storyboard.py` | the presentation outline, parsed and checked against the code it describes |
 | `docs.py` | the documented commands, checked against the commands that exist |
+| `commands.py` | the subcommand list, declared once so the parser and the check cannot disagree |
 | `evidence_index.py` | one index from requirement to artifact over a run's own artefacts |
 | `cli.py` | one reproducible entry point |
 | `STORYBOARD.md` | the factual storyboard and presentation outline |
@@ -269,6 +270,30 @@ mentioning the backlog, not that it ended with one. Writing that distinction
 down immediately earned its keep: the out-of-order scenario recorded its
 deferral building up and never recorded it draining, so the one scenario that
 demonstrates a backlog clearing had no record of it clearing. It records it now.
+
+## Every verdict is acted on
+
+Several of these reports state whether they still agree with the code. A verdict
+nobody reads is worse than no verdict: it reads as authoritative and changes
+nothing. So `run-all` declares which checks it gates on, and a failing one is a
+blocking reason rather than a field in the record.
+
+Two guards keep that from rotting. A report that carries a verdict field and is
+neither gated on nor named as handled by an earlier rule is itself a blocking
+finding, so a new check cannot be added and then left out of the verdict. And a
+missing report reads as absent, never as passing: the verdict is `None`, which
+is not `True`, so it blocks.
+
+The reports whose verdicts an earlier rule already acts on, the file
+inventory, the secret scan, the source reconciliation and the evidence record, are named rather than checked twice, so there is still one place to
+look for what happens to every verdict in the bundle.
+
+Writing this turned up a real one. The command list lived in the command-line
+module, and the usage check imported it lazily to avoid an import loop. That
+loaded the same file a second time under a different name, and the provenance
+snapshot correctly reported the loaded source changing mid-run. The list now
+lives in `commands.py`, which imports nothing, so one list serves both and
+nothing loads twice.
 
 ## Keeping the instructions true
 

@@ -35,6 +35,7 @@ import uuid
 
 from exchange.ids import canonical_json
 
+from .commands import COMMANDS
 from . import (decisions, docs, dossier, events, evidence_index, execution,
                handoff, manifest, matrix, operations, reuse, stages, storyboard,
                observations, receipt, validation)
@@ -85,10 +86,71 @@ def _suite_records(root, execute):
 
 #: Every subcommand, declared once so the parser and the documentation check
 #: read the same list rather than two lists that can disagree.
-COMMANDS = ("run-all", "scenarios", "paths", "matrix", "manifest", "handoff",
-            "validate-config", "observations", "evidence-index", "decisions",
-            "receipt", "reuse", "events", "stages", "dossier", "storyboard",
-            "operations", "usage")
+#: The self-consistency checks this bundle carries, and what a failure means.
+#:
+#: A report that quietly disagrees with the code is worse than no report, so a
+#: failing check blocks the run rather than sitting in the record as a field
+#: nobody reads. ``flag`` is the path to the verdict inside that report.
+CONSISTENCY_CHECKS = (
+    {"key": "usage", "flag": ("consistent",), "blocks": True,
+     "reason": "the guides and the commands that exist disagree"},
+    {"key": "storyboard", "flag": ("consistent",), "blocks": True,
+     "reason": "the presentation outline no longer describes the code"},
+    {"key": "operations", "flag": ("consistent",), "blocks": True,
+     "reason": "a logical operation does not resolve, or a read moved something"},
+    {"key": "stageMap", "flag": ("agreesWithMatrix",), "blocks": True,
+     "reason": "the stage map disagrees with the acceptance matrix"},
+    {"key": "reuse", "flag": ("declaredCoverage", "complete"), "blocks": True,
+     "reason": "the reuse map does not account for what this package imports"},
+    {"key": "eventContract", "flag": ("conformance", "accountedFor"), "blocks": True,
+     "reason": "the event vocabulary does not account for what the domain records"},
+    {"key": "dossier", "flag": ("allItemsCarried",), "blocks": True,
+     "reason": "a scenario does not record something a demonstration must carry"},
+)
+
+#: Verdict field names a report uses to say it agrees with the code. Any report
+#: in the bundle carrying one of these must be accounted for, so a new check
+#: cannot be added and then left out of the run's verdict.
+VERDICT_FIELDS = ("consistent", "agreesWithMatrix", "allItemsCarried",
+                  "accountedFor")
+
+#: Reports whose verdict an earlier rule already acts on. They are named here
+#: rather than checked twice, so there is still one place to look for what
+#: happens to every verdict in the bundle.
+HANDLED_ELSEWHERE = {
+    "manifest": "the file inventory rule",
+    "secretScan": "the secret scan rule",
+    "sourceReconciliation": "the source-held-still rule",
+    "evidenceValidation": "the evidence record rule",
+}
+
+def _verdict(bundle, check):
+    """The verdict one consistency check reports, or None if it is absent."""
+    found = bundle.get(check["key"])
+    for step in check["flag"]:
+        found = found.get(step) if isinstance(found, dict) else None
+    return found
+
+
+def unclassified_verdicts(bundle):
+    """Reports that state a verdict about the code which nothing acts on.
+
+    A report added to the bundle with a verdict field, and not declared in
+    CONSISTENCY_CHECKS, would be a check whose failure the run ignores. That is
+    the failure mode this guards: the check exists, reads as authoritative, and
+    changes nothing.
+    """
+    declared = ({check["key"] for check in CONSISTENCY_CHECKS}
+                | set(HANDLED_ELSEWHERE))
+    found = []
+    for key, value in sorted(bundle.items()):
+        if key in declared or not isinstance(value, dict):
+            continue
+        nested = [value] + [inner for inner in value.values()
+                            if isinstance(inner, dict)]
+        if any(field in level for level in nested for field in VERDICT_FIELDS):
+            found.append(key)
+    return found
 
 
 def _bundle(root, execute_suites=False, run_id=None, started_at=None,
@@ -213,6 +275,20 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
     for reason in checked["notPassing"]:
         if reason not in blocking:
             blocking.append(reason)
+    for check in CONSISTENCY_CHECKS:
+        verdict = bundle.get(check["key"])
+        for step in check["flag"]:
+            verdict = verdict.get(step) if isinstance(verdict, dict) else None
+        if verdict is not True and check["blocks"]:
+            blocking.append("%s (%s)" % (check["reason"], check["key"]))
+    bundle["consistencyChecks"] = [
+        dict(check, flag=list(check["flag"]),
+             verdict=_verdict(bundle, check))
+        for check in CONSISTENCY_CHECKS]
+    bundle["verdictsHandledElsewhere"] = dict(HANDLED_ELSEWHERE)
+    bundle["unclassifiedVerdicts"] = unclassified_verdicts(bundle)
+    for key in bundle["unclassifiedVerdicts"]:
+        blocking.append("a report states a verdict that the run ignores: " + key)
     bundle["blocking"] = blocking
     bundle["allLocalPassed"] = blocking == []
     bundle["meaning"] = ("every local expectation passed over a confirmed source tree; it is "
