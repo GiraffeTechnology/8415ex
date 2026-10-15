@@ -25,6 +25,7 @@ separate from it.
 | `receipt.py` | the nine-group candidate receipt, assembled from a completed run |
 | `reuse.py` | what this package reuses, what is simulated, and what is not located yet |
 | `events.py` | the logical event contract, checked read-only over the domain's timeline |
+| `stages.py` | per stage: what is developed here, what is accepted elsewhere, what is owed |
 | `evidence_index.py` | one index from requirement to artifact over a run's own artefacts |
 | `cli.py` | one reproducible entry point |
 | `STORYBOARD.md` | the factual storyboard and presentation outline |
@@ -55,6 +56,9 @@ python3 -B -m scenarios.cli reuse
 
 # the logical event contract, its conformance, and one timeline's coverage
 python3 -B -m scenarios.cli events
+
+# the stage map: developed here, accepted elsewhere, still owed
+python3 -B -m scenarios.cli stages
 
 # individual parts
 python3 -B -m scenarios.cli scenarios
@@ -223,6 +227,33 @@ names the open decision that tracks it and the owner who can answer it, so it
 reads as a dependency with an owner rather than as an unexplained hole.
 
 The subcommand exits non-zero when the map stops accounting for the source.
+
+## The stage map
+
+The acceptance matrix says which case belongs to which stage. It does not say
+who does the rest, and that is what `scenarios.cli stages` answers: per stage,
+what this surface develops, what is tested and accepted by whoever owns that,
+and what genuine real-world input stays with its existing owner.
+
+Three things keep it checkable rather than decorative. Every deliverable names a
+path and the path is checked against the disk, so a deliverable claiming a module
+that is not there is a finding instead of prose nobody re-reads. Every stage's
+case list is read from the matrix rather than restated, so the two cannot
+disagree without this module reporting it. And every dependency names its owner,
+the scope it genuinely blocks, the scope it does **not** block, and the next
+step, pointing at a slot that really exists in the handoff checklist.
+
+That "does not block" column is the one that earns its place. A dependency
+stated without it reads as blocking everything, and authorized work stops for a
+question it does not depend on: a missing deployment target blocks every
+real-chain obligation and blocks none of the local delivery, and an undecided
+refund fee blocks the fee figure in a real refund and not the refund model that
+deducts nothing and says so.
+
+The map claims nothing about completion. A stage being developed here says
+nothing about it being accepted, every stage carries `localHalfOnly`, and the
+two cases that belong to every stage rather than one are named as such rather
+than dropped.
 
 ## The logical event contract
 
