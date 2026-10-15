@@ -13,6 +13,24 @@ from scenarios import cli, execution, validation
 ROOT = str(Path(__file__).resolve().parents[2])
 
 
+class _WithoutNestingGuard(unittest.TestCase):
+    """Tests about the outermost behaviour, run with the guard cleared.
+
+    The scenario suite is itself one of the suites a bundle can execute, so this
+    file may run inside a bundle's own subprocess with the guard set. These
+    cases are about what the outer run does, so they clear it and put it back.
+    """
+
+    def setUp(self):
+        self._guard = os.environ.pop(cli.NESTING_GUARD_ENV, None)
+
+    def tearDown(self):
+        if self._guard is None:
+            os.environ.pop(cli.NESTING_GUARD_ENV, None)
+        else:
+            os.environ[cli.NESTING_GUARD_ENV] = self._guard
+
+
 class RealExecution(unittest.TestCase):
 
     def test_a_successful_command_records_its_real_output(self):
@@ -75,7 +93,7 @@ class RealExecution(unittest.TestCase):
                               execution.not_run("x", "y")["outcome"]}), 4)
 
 
-class GeneratedRecordsThroughTheValidator(unittest.TestCase):
+class GeneratedRecordsThroughTheValidator(_WithoutNestingGuard):
     """Item 2: real process records, not hand-written fixtures, validated.
 
     Every record in this class comes from an actual subprocess, or from an
@@ -103,6 +121,7 @@ class GeneratedRecordsThroughTheValidator(unittest.TestCase):
         cls.generated["not-run"] = execution.not_run("later", "owner supplies it")
 
     def _record(self, commands):
+        """A record wrapper for the generated command records."""
         return {"schema": "8415ex-local-delivery-evidence/1", "runId": "generated-1",
                 "commit": "a" * 40, "tree": "b" * 40, "worktreeClean": True,
                 "commands": commands, "startedAt": "2026-10-15T10:00:00Z",
@@ -242,24 +261,6 @@ class UnexecutedRecords(unittest.TestCase):
     def test_a_self_record_cannot_be_written_before_the_exit_code_is_known(self):
         with self.assertRaises(ValueError):
             execution.self_record("x", None, "2026-10-14T00:00:00Z", "2026-10-14T00:00:01Z")
-
-
-class _WithoutNestingGuard(unittest.TestCase):
-    """Tests about the outermost behaviour, run with the guard cleared.
-
-    The scenario suite is itself one of the suites a bundle can execute, so this
-    file may run inside a bundle's own subprocess with the guard set. These
-    cases are about what the outer run does, so they clear it and put it back.
-    """
-
-    def setUp(self):
-        self._guard = os.environ.pop(cli.NESTING_GUARD_ENV, None)
-
-    def tearDown(self):
-        if self._guard is None:
-            os.environ.pop(cli.NESTING_GUARD_ENV, None)
-        else:
-            os.environ[cli.NESTING_GUARD_ENV] = self._guard
 
 
 class BundleRecords(_WithoutNestingGuard):
