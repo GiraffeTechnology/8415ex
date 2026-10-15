@@ -25,7 +25,7 @@ and authorized test-network execution.
 | --- | --- | --- | --- | --- |
 | 1 | DEMO-01, route REG_DIRECT | one whole receipt; owner and holder both at the origin; the buyer funding its own segment; the segment releasing; the four exit steps with four distinct instants; the retained history after the burn | Local | T-35, T-36: real transactions, receipts and a real interface journey |
 | 2 | DEMO-02, route REG_ELECTRONIC | the owner at D while the holder is still at the origin; the later result waiting for the gap; the first segment releasing before the holder reaches D; each segment's own principal | Local | T-35, T-36 |
-| 3 | DEMO-03, route REG_INTERMEDIARY | a first-hop refusal; the whole unfinished suffix returning to the origin; each buyer's own refund with its own fixture fee and net | Local | T-35, T-36 |
+| 3 | DEMO-03, route REG_INTERMEDIARY | a first-hop refusal; the whole unfinished suffix returning to the origin; each buyer's whole principal refunded in the quote asset, with that leg's gas shown separately as an amount in gas units and the party bearing it | Local | T-35, T-36 |
 | 4 | DEMO-04, route REG_DIRECT | a settled first segment surviving a later refusal; only the later segments unwinding; the receipt returning to the first buyer, not the origin | Local | T-35, T-36 |
 | 5 | DEMO-05, route REG_ELECTRONIC | intermediate wallets without gas; one return operation that does not walk them; the blocked, resumable state; no custody, no forced sale, no liquidation | Local | T-35, T-36 |
 | 6 | DEMO-06, route REG_INTERMEDIARY | the stop-trading instant; a new trade refused; in-flight registration and settlement continuing; the eligible exit checked | Local | T-35, T-36 |

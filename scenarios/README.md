@@ -116,6 +116,12 @@ They are recorded side by side and never subtracted from one another. Whether a
 real fee is deducted from a refunded principal, in which asset and by whom, is
 open decision D-04 and is reported `NOT_RUN`.
 
+The domain's own rollback report still carries `netToOriginalBuyer`, a figure
+derived by subtracting a gas-unit count from a quote-asset principal. That
+projection lives in `exchange/ledger.py`, which this package does not own and
+does not change. It is recorded as an existing-owner dependency in
+`scenarios/handoff.py` and is never read here as real net proceeds.
+
 ## Route coverage
 
 All three routes go through the same state machine and the same adapter

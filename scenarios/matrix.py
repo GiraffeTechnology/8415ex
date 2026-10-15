@@ -139,6 +139,11 @@ def build(source_identity, run_identity, scenario_report=None, path_report=None)
     each row carries the recorded local outcome for its scenarios.
     """
     scenario_cases = _scenario_cases()
+    # A scenario may assert against a case it does not list in its own header,
+    # as DEMO-05 does for T-19. The coverage column has to follow the
+    # assertions that were actually recorded, or it under-reports which runners
+    # exercise a case and a reviewer cannot find the evidence from the row.
+    observed_cases = {}
     recorded, problems = {}, {}
     for report in (scenario_report, path_report):
         for scenario in (report or {}).get("scenarios", []):
@@ -146,6 +151,7 @@ def build(source_identity, run_identity, scenario_report=None, path_report=None)
             for expectation in scenario["expectations"]:
                 touched.update(expectation["cases"])
                 for case in expectation["cases"]:
+                    observed_cases.setdefault(case, set()).add(scenario["scenarioId"])
                     bucket = recorded.setdefault(case, {"passed": 0, "failed": 0,
                                                         "blocked": 0, "not-run": 0})
                     bucket[expectation["outcome"]] += 1
@@ -213,7 +219,9 @@ def build(source_identity, run_identity, scenario_report=None, path_report=None)
             "stage": CASE_STAGE[case],
             "implementation": implementation,
             "unitCoverage": unit_cover,
-            "scenarios": scenario_cases.get(case, []),
+            "scenarios": sorted(set(scenario_cases.get(case, []))
+                                | observed_cases.get(case, set())),
+            "declaredScenarios": scenario_cases.get(case, []),
             "scenarioAssertionCounts": counts or {},
             "localOutcome": local,
             "scenarioProblems": raised,
