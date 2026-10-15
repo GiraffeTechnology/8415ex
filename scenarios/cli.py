@@ -36,7 +36,7 @@ import uuid
 from exchange.ids import canonical_json
 
 from . import (decisions, dossier, events, evidence_index, execution, handoff,
-               manifest, matrix, reuse, stages, storyboard,
+               manifest, matrix, operations, reuse, stages, storyboard,
                observations, receipt, validation)
 from .demos import DEMOS
 from .harness import report_text, run_all
@@ -128,6 +128,7 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
         "stageMap": stages.build(root),
         "dossier": dossier.build(scenario_report),
         "storyboard": storyboard.check(root),
+        "operations": operations.build(root),
         "evidenceIndex": evidence_index.build(
             scenario_report, path_report, root,
             {"runId": run_id, "startedAt": started_at},
@@ -441,7 +442,7 @@ def main(argv=None):
                                             "observations", "evidence-index",
                                             "decisions", "receipt", "reuse",
                                             "events", "stages", "dossier",
-                                            "storyboard"))
+                                            "storyboard", "operations"))
     parser.add_argument("--root", default=".")
     parser.add_argument("--json", action="store_true", help="print the canonical record only")
     parser.add_argument("--json-out", help="write the canonical record of this same run here")
@@ -469,6 +470,10 @@ def main(argv=None):
     if arguments.command == "decisions":
         print(canonical_json(decisions.register()))
         return 0
+    if arguments.command == "operations":
+        built = operations.build(arguments.root)
+        print(canonical_json(built))
+        return 0 if built["consistent"] else 1
     if arguments.command == "storyboard":
         built = storyboard.check(arguments.root)
         print(canonical_json(built))

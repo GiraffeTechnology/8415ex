@@ -52,6 +52,15 @@ DOMAIN_REUSE = (
         "simulated": False,
     },
     {
+        "module": "exchange.ledger",
+        "uses": ("Exchange",),
+        "purpose": "the domain class itself, so the logical operations of the "
+                   "requirements are resolved against the real methods rather "
+                   "than against a list of names",
+        "kind": "domain contract",
+        "simulated": False,
+    },
+    {
         "module": "exchange.registration",
         "uses": ("RegistrationEvidence",),
         "purpose": "the registration evidence record, so a path scenario reports "

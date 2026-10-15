@@ -25,6 +25,7 @@ separate from it.
 | `receipt.py` | the nine-group candidate receipt, assembled from a completed run |
 | `reuse.py` | what this package reuses, what is simulated, and what is not located yet |
 | `events.py` | the logical event contract, checked read-only over the domain's timeline |
+| `operations.py` | the logical operations, resolved onto real methods, with reads shown to move nothing |
 | `stages.py` | per stage: what is developed here, what is accepted elsewhere, what is owed |
 | `dossier.py` | per scenario: the nine items a demonstration must carry, and what did not resolve |
 | `storyboard.py` | the presentation outline, parsed and checked against the code it describes |
@@ -58,6 +59,9 @@ python3 -B -m scenarios.cli reuse
 
 # the logical event contract, its conformance, and one timeline's coverage
 python3 -B -m scenarios.cli events
+
+# the logical operations, and the demonstration that reads move nothing
+python3 -B -m scenarios.cli operations
 
 # the stage map: developed here, accepted elsewhere, still owed
 python3 -B -m scenarios.cli stages
@@ -348,6 +352,39 @@ The map claims nothing about completion. A stage being developed here says
 nothing about it being accepted, every stage carries `localHalfOnly`, and the
 two cases that belong to every stage rather than one are named as such rather
 than dropped.
+
+## The logical operations
+
+The PRD names ten logical operations. They are not an ABI and not a published
+standard, but they still have to land somewhere: a logical operation with no
+implementation behind it is a requirement nobody is carrying, and nothing
+notices until someone goes looking. `scenarios.cli operations` resolves each one
+onto the domain methods that implement it, so a renamed or removed method is a
+finding. One operation maps to two methods and says so, with the reason on
+record - opening a rollback and advancing it are separate because a rollback is
+resumable and a blocked advance has to be retryable without reopening.
+
+Two of the section's rules are then handled, each the only way it honestly can
+be.
+
+**A read must not move money or an asset.** That is a behaviour, so it is
+exercised rather than declared: every read-only operation, plus the eleven other
+reads this layer relies on, is called against a funded chain that also holds
+asset control, and the payment counter, the asset-return counter, the recorded
+event count, the owner and the holder index are compared before and after. The
+check comes with its own negative control: a release really does move money and
+append to the trail, and the suite asserts the same counters differ across it,
+so a passing read-only result is not vacuous.
+
+**Whether a state-changing operation checks its preconditions** is answered by
+the acceptance cases that exercise it, not by inspecting a signature. Each
+operation names its cases and the cases are checked against the matrix, and the
+report says that is the route rather than dressing it up as an assertion about
+the code.
+
+What is deliberately not claimed: that a method's return carries everything the
+PRD's result column asks for. That is a review judgement over real output, and
+the existence of a method settles none of it.
 
 ## The logical event contract
 

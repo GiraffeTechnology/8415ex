@@ -40,9 +40,9 @@ class DomainReuse(unittest.TestCase):
         # The suites import domain modules to assert things about them. That is
         # not this package consuming them, so it must not be counted as reuse,
         # and must not be hidden either.
-        self.assertNotIn("exchange.ledger", coverage["importsFoundInModules"])
+        self.assertNotIn("exchange.settlement", coverage["importsFoundInModules"])
         self.assertIn("exchange", coverage["importsFoundInTests"])
-        self.assertIn("ledger", coverage["importsFoundInTests"]["exchange"])
+        self.assertIn("settlement", coverage["importsFoundInTests"]["exchange"])
         self.assertIn("exchange", coverage["importedOnlyByTests"])
 
     def test_source_imports_are_read_from_the_files_not_from_a_list(self):
