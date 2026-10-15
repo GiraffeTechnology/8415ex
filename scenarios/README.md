@@ -174,14 +174,14 @@ does not change. It is recorded as an existing-owner dependency in
 ## The candidate receipt
 
 `scenarios.cli receipt` performs a run and then describes it, in the nine groups
-a candidate has to account for. Nothing in the receipt is recomputed: it is
-assembled from the record that run already produced, so it cannot disagree with
-it.
+a candidate has to account for. Run identity, ancestry and decisions are read from the recorded bundle, never
+from a later checkout. Explicit caller-supplied artifact paths are measured at
+receipt construction time; they are not proof of delivery or of their build origin.
 
 | Group | Covers |
 | --- | --- |
 | 1 source | repository, branch, full commit and tree, parents, base and the exact diff range |
-| 2 requirements | which identifiers this candidate claims, which are recorded as not locally testable, what is unimplemented or unexecuted, and the open decisions |
+| 2 requirements | which identifiers this candidate claims, which are recorded as not locally testable, cases requiring follow-up, and the open decisions |
 | 3 environment | platform, runtime, the actual commands, a configuration summary and the run id |
 | 4 results | totals, per-command outcome, exit code, instants and the digests identifying the raw output |
 | 5 artifacts | each produced file with its byte count, digest, how it was built and where it is stored |
@@ -200,9 +200,11 @@ way the scan takes private markers; the receipt reports only whether it was
 supplied, so a published artifact never carries it.
 
 Group 1's diff range is the range a reviewer can pass straight to `git diff`.
-It is computed from the head's parents and the merge base against the branch
-this work is based on, so the diff under review is named rather than guessed.
-`manifest.parent_identity()` returns it on its own if that is all you need.
+It is captured with the run against an immutable head and base commit. By
+default the first parent is the comparison baseline, not an inferred PR target.
+`manifest.parent_identity(base=...)` accepts an explicit review base. Missing
+history is an error; root commits have no parent or diff range. Receipts of older
+bundles without captured ancestry say NOT_RECORDED rather than reading live Git.
 
 ## The open-decision register
 
@@ -228,7 +230,7 @@ for an authorization model.
 `scenarios.cli reuse` answers two questions that otherwise get answered from
 memory: what does this package actually consume, and what is simulated.
 
-Neither half is a hand-maintained list. The domain half declares the real
+The domain map is a maintained declaration checked against observed imports. It declares the real
 attribute names taken from each domain module and checks them against the
 imported module, so a rename in the domain shows up as an unresolved name. It
 then reads this package's own import statements out of the source and compares
@@ -597,7 +599,7 @@ the actual per-path result. The published file says this about itself even
 though its own existence proves the write happened, because the record inside it
 was serialised before the write was attempted. A run that declared no output
 file is reported as `NO_ARTIFACT_DECLARED` — a legitimate run whose rows are
-carried by stdout only, not a delivery failure.
+not a delivery failure. Full rows require JSON stdout capture; default run-all stdout is only a summary.
 
 The text summary is named as an artifact but carries no row pointer, because it
 is a summary and does not contain the row verbatim.
@@ -690,3 +692,26 @@ that only recorded blocked assertions. This deliberately conservative choice
 is not a claim that the blocked assertion itself executed and failed.
 An exception or incomplete scenario remains unsound for every served case.
 Neither conservative propagation nor a unit-suite-only row is a false pass.
+
+### Receipt publication and result scope
+
+The receipt, decisions and reuse commands emit JSON to stdout only. They reject
+`--json-out` and `--text-out` rather than silently ignoring requested files.
+Capture stdout, stderr and the final process exit externally. The receipt's
+self-reported status covers calculation only, before stdout publication; no
+embedded record can attest its own final write or outer process exit. The
+receipt preserves command scope, execution flags and signals, and does not
+assert raw-log delivery or continued work without recorded evidence.
+`casesRequiringFollowup` includes failed/blocked/incomplete cases; it is not an
+assertion that their features were never developed. Linux is the acceptance
+policy, while the observed platform is the runtime record.
+
+Artifact formats in run-all are declared by the output option, independent of
+filename extension. Text summaries have no row JSON pointers. The final
+outputDelivery record is available in externally captured run-all --json stdout,
+not inside the already-written JSON file. Capture the outer exit separately.
+Legacy direct index callers passing bare paths retain suffix inference, explicitly
+labelled as such; callers should pass {path, format} declarations instead.
+Reuse imports are parsed as Python syntax without execution. Missing declared
+attributes, undeclared bare imports and unresolved runtime names prevent a
+complete map; comments and strings are not imports.

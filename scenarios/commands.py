@@ -13,3 +13,9 @@ COMMANDS = ("run-all", "scenarios", "paths", "matrix", "manifest", "handoff",
             "validate-config", "observations", "evidence-index", "decisions",
             "receipt", "reuse", "events", "stages", "dossier", "storyboard",
             "operations", "usage", "completion", "sections")
+
+#: Subcommands that publish to stdout only. ``run-all`` is the whole local
+#: delivery and is the only one that writes an output file, so every other
+#: subcommand must refuse ``--json-out``/``--text-out`` rather than accept a
+#: destination it was never going to write.
+STDOUT_ONLY = tuple(name for name in COMMANDS if name != "run-all")

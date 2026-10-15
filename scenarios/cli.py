@@ -30,16 +30,16 @@ import hashlib
 import os
 import sys
 import shutil
+import shlex
 import time
 import uuid
 
 from exchange.ids import canonical_json
 
-from .commands import COMMANDS
+from .commands import COMMANDS, STDOUT_ONLY
 from . import (completion, decisions, docs, dossier, events, evidence_index,
-               execution, handoff, manifest, matrix, operations, prd, reuse,
-               stages, storyboard,
-               observations, receipt, validation)
+               execution, handoff, manifest, matrix, observations, operations,
+               prd, receipt, reuse, stages, storyboard, validation)
 from .demos import DEMOS
 from .harness import report_text, run_all
 from .paths import PATH_CONTRACTS, coverage_map
@@ -85,8 +85,6 @@ def _suite_records(root, execute):
     return records
 
 
-#: Every subcommand, declared once so the parser and the documentation check
-#: read the same list rather than two lists that can disagree.
 #: The self-consistency checks this bundle carries, and what a failure means.
 #:
 #: A report that quietly disagrees with the code is worse than no report, so a
@@ -101,8 +99,6 @@ CONSISTENCY_CHECKS = (
      "reason": "a logical operation does not resolve, or a read moved something"},
     {"key": "stageMap", "flag": ("agreesWithMatrix",), "blocks": True,
      "reason": "the stage map disagrees with the acceptance matrix"},
-    {"key": "reuse", "flag": ("declaredCoverage", "complete"), "blocks": True,
-     "reason": "the reuse map does not account for what this package imports"},
     {"key": "eventContract", "flag": ("conformance", "accountedFor"), "blocks": True,
      "reason": "the event vocabulary does not account for what the domain records"},
     {"key": "dossier", "flag": ("allItemsCarried",), "blocks": True,
@@ -128,6 +124,7 @@ HANDLED_ELSEWHERE = {
     "manifest": "the file inventory rule",
     "secretScan": "the secret scan rule",
     "sourceReconciliation": "the source-held-still rule",
+    "reuse": "the reuse-map rule, which reads the stricter top-level verdict",
     "evidenceValidation": "the evidence record rule",
 }
 
@@ -180,6 +177,7 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
     (scenario_report, path_report), measured = observations.measure(
         lambda: (run_all(list(DEMOS)), run_all(list(PATH_CONTRACTS))))
     source = manifest.source_identity(root)
+    source["ancestry"] = manifest.parent_identity(root, head=source["commit"])
     acceptance = matrix.build(source, {"runId": run_id, "startedAt": started_at},
                               scenario_report, path_report)
     commands = _suite_records(root, execute_suites)
@@ -199,7 +197,9 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
         "commands": commands,
         "handoff": handoff.build(acceptance),
         "openDecisions": decisions.register(),
-        "outputDeliveryPlan": [path for path in (artifacts or []) if path],
+        "outputDeliveryPlan": [entry.get("path") if isinstance(entry, dict) else entry
+                               for entry in (artifacts or []) if entry],
+        "outputArtifacts": artifacts or [],
         "reuse": reuse.build(scenario_report, root),
         "eventContract": events.build(root=root),
         "stageMap": stages.build(root),
@@ -252,7 +252,9 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
     # reads, because a signal pointing at a report that is not there yet would
     # resolve to None and look like a clause that is not evidenced.
     bundle["completion"] = completion.build(bundle)
-    blocking = []
+    blocking = receipt.source_binding_errors(bundle)
+    if not bundle["reuse"]["complete"]:
+        blocking.append("the reuse map is incomplete")
     if not scenario_report["allPassed"]:
         blocking.append("a scenario did not pass")
     if not path_report["allPassed"]:
@@ -310,7 +312,7 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
     return bundle
 
 
-def seal(bundle, exit_code, finished_at=None):
+def seal(bundle, exit_code, finished_at=None, command="python3 -B -m scenarios.cli run-all"):
     """Attach this run's own record, once the calculation's status is known.
 
     The record covers only the completed calculation, before output publication.
@@ -319,7 +321,7 @@ def seal(bundle, exit_code, finished_at=None):
     needing external capture and `execution.capture_cli` is what captures it.
     """
     finished_at = finished_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    record = execution.self_record("python3 -B -m scenarios.cli run-all", exit_code,
+    record = execution.self_record(command, exit_code,
                                    bundle["startedAt"], finished_at)
     record["scope"] = "calculation-only-before-publication"
     record["finalProcessStatus"] = "NOT_CAPTURED_IN_PROCESS"
@@ -349,7 +351,7 @@ def seal(bundle, exit_code, finished_at=None):
         observations={key: bundle[key] for key in
                       ("secretScan", "resourceObservation", "workload")},
         source=bundle["source"],
-        artifacts=bundle.get("outputDeliveryPlan"))
+        artifacts=bundle.get("outputArtifacts", bundle.get("outputDeliveryPlan")))
     return bundle
 
 
@@ -560,6 +562,9 @@ def main(argv=None):
         built = manifest.build(arguments.root, run_id=_run_id())
         print(canonical_json(built))
         return 0 if built["consistent"] else 1
+    if arguments.command in STDOUT_ONLY and (arguments.json_out or arguments.text_out):
+        parser.error("%s publish JSON to stdout only; capture stdout externally"
+                     % ", ".join(sorted(STDOUT_ONLY)))
     if arguments.command == "decisions":
         print(canonical_json(decisions.register()))
         return 0
@@ -605,17 +610,36 @@ def main(argv=None):
         # domain half is read from the imported modules and the package source.
         built = reuse.build(run_all(list(DEMOS)), arguments.root)
         print(canonical_json(built))
-        return 0 if built["declaredCoverage"]["complete"] else 1
+        return 0 if built["complete"] else 1
     if arguments.command == "receipt":
-        # The receipt describes a completed run, so one is performed first and
-        # then described. Nothing in the receipt is recomputed from the run.
         bundle = _bundle(arguments.root, execute_suites=arguments.execute_suites)
-        seal(bundle, 0 if bundle["allLocalPassed"] else 1)
-        built = receipt.build(bundle, arguments.root)
-        print(canonical_json(built))
-        return 0 if bundle["allLocalPassed"] else 1
+        final_source = manifest.reconcile(bundle["sourceReconciliation"]["before"],
+                                          manifest.snapshot(arguments.root))
+        if not final_source["consistent"]:
+            bundle["blocking"].append("source changed before receipt publication")
+            bundle["allLocalPassed"] = False
+        ancestry = bundle["source"].get("ancestry", {})
+        if ancestry.get("errors") or ancestry.get("head") != bundle["source"].get("commit"):
+            bundle["blocking"].append("receipt ancestry is incomplete or mismatched")
+            bundle["allLocalPassed"] = False
+        code = 0 if bundle["allLocalPassed"] else 1
+        bundle["calculationPassed"] = bundle["allLocalPassed"]
+        seal(bundle, code, command=shlex.join(
+            ["python3", "-B", "-m", "scenarios.cli"]
+            + list(argv if argv is not None else sys.argv[1:])))
+        try:
+            built = receipt.build(bundle, arguments.root)
+        except ValueError as problem:
+            print(f"receipt source binding failed: {problem}", file=sys.stderr)
+            return 1
+        try:
+            print(canonical_json(built), flush=True)
+        except OSError as problem:
+            print(f"receipt stdout delivery failed: {problem}", file=sys.stderr)
+            return 1
+        return code
     if arguments.command == "evidence-index":
-        # This subcommand prints and writes nothing, so it declares no
+        # This subcommand prints JSON but writes no named file, so it declares no
         # artifact. The index then says so rather than naming a file that was
         # never going to be written; ``run-all`` is where the plan is real.
         built = evidence_index.build(run_all(list(DEMOS)), run_all(list(PATH_CONTRACTS)),
@@ -640,8 +664,8 @@ def main(argv=None):
         return 0 if scan["clean"] else 1
 
     bundle = _bundle(arguments.root, execute_suites=arguments.execute_suites,
-                     artifacts=[path for path in (arguments.json_out,
-                                                  arguments.text_out) if path])
+                     artifacts=[{"path": path, "format": kind} for path, kind in
+                                ((arguments.json_out, "json"), (arguments.text_out, "text")) if path])
     # The calculation's status is decided from the observations. It is not the
     # command's status: the outputs still have to be delivered, and a process
     # cannot observe its own final exit.

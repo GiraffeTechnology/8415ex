@@ -32,16 +32,18 @@ The nine groups:
 
 The private requirements identity belongs in group 2 and is never embedded in
 this source. It is supplied at call time through the same mechanism the scan
-uses for private markers, and only its presence is reported unless the caller
-asks for it, so a public artifact never carries it.
+uses for private markers. Only its presence at receipt construction is
+reported; its value is never emitted. This does not prove it was supplied to
+the original run.
 """
 import os
+from copy import deepcopy
 
-from . import decisions, manifest
+from . import manifest
 
 #: The environment variable through which the private requirements identity may
 #: be supplied at call time. Its value is never written into this source, and
-#: never into a record unless the caller explicitly includes it.
+#: never into a record.
 REQUIREMENTS_IDENTITY_ENV = "EX_REQUIREMENTS_IDENTITY"
 
 NOT_RUN = "NOT_RUN"
@@ -64,19 +66,44 @@ def _requirements_identity(supplied=None):
         "supplied": present,
         "where": ("supplied at call time through the approved private mechanism"
                   if present else
-                  "not supplied to this run; the identity is held privately and is "
+                  "not supplied to this receipt; the identity is held privately and is "
                   "never embedded in this source"),
         "publishedHere": False,
     }
 
 
-def _source_group(root, source, parents=None, diff_range=None):
-    identity = dict(source)
-    identity["parents"] = list(parents or manifest.parent_identity(root)["parents"])
-    identity["base"] = (diff_range or manifest.parent_identity(root))["base"]
-    identity["diffRange"] = (diff_range
-                             or manifest.parent_identity(root))["diffRange"]
+def _source_group(root, source):
+    # root is retained for API compatibility; a receipt must not consult it.
+    identity = deepcopy(source)
+    ancestry = source.get("ancestry")
+    if ancestry is None:
+        identity.update(parents=None, base=None, diffRange=None,
+                        ancestryStatus="NOT_RECORDED")
+        return identity
+    if ancestry.get("head") != source.get("commit"):
+        raise ValueError("recorded ancestry does not match the bundle source commit")
+    for key in ("parents", "base", "baseRef", "basePolicy", "mergeBase", "diffRange"):
+        identity[key] = deepcopy(ancestry.get(key))
+    identity["ancestryStatus"] = "error" if ancestry.get("errors") else "recorded"
+    identity["ancestryErrors"] = list(ancestry.get("errors", []))
     return identity
+
+
+def source_binding_errors(bundle):
+    """Cross-check every recorded source observation, without reading live Git."""
+    source = bundle.get("source", {})
+    observations = {"manifest": bundle.get("manifest", {}).get("source")}
+    reconciliation = bundle.get("sourceReconciliation", {})
+    observations.update({"before": reconciliation.get("before"),
+                         "after": reconciliation.get("after")})
+    errors = []
+    for label, observed in observations.items():
+        if not observed:
+            continue  # Older partial bundles do not supply every observation.
+        for key in ("commit", "tree"):
+            if key in observed and observed[key] != source.get(key):
+                errors.append(f"recorded {label} {key} disagrees with bundle source")
+    return errors
 
 
 def build(bundle, root=".", requirements_identity=None, artifacts=(),
@@ -88,6 +115,9 @@ def build(bundle, root=".", requirements_identity=None, artifacts=(),
     mapping with at least a path; their bytes and digests are read here so the
     receipt cannot disagree with what is on disk.
     """
+    binding_errors = source_binding_errors(bundle)
+    if binding_errors:
+        raise ValueError("; ".join(binding_errors))
     source = bundle.get("source", {})
     scenario_report = bundle.get("scenarioReport", {})
     path_report = bundle.get("pathReport", {})
@@ -98,11 +128,11 @@ def build(bundle, root=".", requirements_identity=None, artifacts=(),
     measured = []
     for entry in artifacts:
         path = entry.get("path") if isinstance(entry, dict) else entry
-        record = {"path": str(path),
+        record = {"path": str(path), "measurementScope": "file-bytes-at-receipt-construction",
                   "builtBy": (entry.get("builtBy") if isinstance(entry, dict)
-                              else None) or "scenarios.cli, this run",
+                              else None) or "NOT_RECORDED",
                   "storedAt": (entry.get("storedAt") if isinstance(entry, dict)
-                               else None) or "private hand-off; not in the repository"}
+                               else None) or "NOT_PROVIDED"}
         try:
             record.update(manifest.digest_of(path))
         except OSError as problem:
@@ -114,19 +144,25 @@ def build(bundle, root=".", requirements_identity=None, artifacts=(),
         "commandCount": len(commands),
         "commands": [{"command": entry.get("command"),
                       "outcome": entry.get("outcome"),
+                      "executed": entry.get("executed"),
+                      "scope": entry.get("scope"),
+                      "signal": entry.get("signal"),
+                      "selfReported": entry.get("selfReported"),
+                      "finalProcessStatus": entry.get("finalProcessStatus"),
                       "exitCode": entry.get("exitCode"),
                       "startedAt": entry.get("startedAt"),
                       "finishedAt": entry.get("finishedAt"),
                       "stdoutSha256": (entry.get("stdout") or {}).get("sha256"),
                       "stderrSha256": (entry.get("stderr") or {}).get("sha256")}
                      for entry in commands if isinstance(entry, dict)],
+        "calculationPassed": bundle.get("calculationPassed", bundle.get("allLocalPassed")),
+        "calculationExitCode": bundle.get("calculationExitCode"),
         "scenarioTotals": scenario_report.get("totals"),
         "pathTotals": path_report.get("totals"),
         "scenariosPassed": scenario_report.get("scenariosPassed"),
         "scenariosTotal": scenario_report.get("scenariosTotal"),
         "rawLog": ("the per-command stdout and stderr digests above identify the raw "
-                   "output; the full log is handed over privately, outside the "
-                   "repository"),
+                   "output only; no log location or delivery is established here"),
     }
 
     reconciliation = []
@@ -158,6 +194,10 @@ def build(bundle, root=".", requirements_identity=None, artifacts=(),
     return {
         "schema": "8415ex-candidate-receipt/1",
         "runId": bundle.get("runId"),
+        "publication": {"scope": "receipt-calculation-before-stdout-publication",
+                        "outputDeliveryStatus": "NOT_CAPTURED_IN_PROCESS",
+                        "finalProcessStatus": "NOT_CAPTURED_IN_PROCESS",
+                        "requires": "external stdout, stderr and exit capture"},
         "groups": {
             "1-source": _source_group(root, source),
             "2-requirements": {
@@ -166,19 +206,18 @@ def build(bundle, root=".", requirements_identity=None, artifacts=(),
                 "claimedCount": coverage.get("claimedCount"),
                 "notLocallyTestable": coverage.get("notLocallyTestable", {}),
                 "unclaimed": coverage.get("unclaimed", []),
-                "unimplementedOrUnexecuted": [
+                "casesRequiringFollowup": [
                     {"case": row.get("case"),
                      "state": row.get("localOutcome"),
                      "requires": row.get("remainingRealEvidence")}
                     for row in acceptance.get("rows", [])
                     if row.get("localOutcome") in ("not-run", "incomplete", "blocked",
                                                    "failed", "error")],
-                "openDecisions": decisions.register(),
+                "openDecisions": deepcopy(bundle.get("openDecisions", "NOT_RECORDED")),
             },
             "3-environment": {
                 "runtime": bundle.get("runtime"),
-                "platformConstraint": "Linux only; no other platform is used for "
-                                      "any run reported here",
+                "platformConstraint": "Linux is required for acceptance; observed platform is in runtime",
                 "commands": [entry.get("command") for entry in commands
                              if isinstance(entry, dict)],
                 "configurationSummary": bundle.get("configuration", {}).get(
@@ -219,7 +258,8 @@ def build(bundle, root=".", requirements_identity=None, artifacts=(),
             "9-blockers": {
                 "blockers": list(blockers or []),
                 "blockingFromThisRun": bundle.get("blocking", []),
-                "independentWorkContinued": True,
+                "independentWorkContinued": deepcopy(bundle.get("independentWorkContinued",
+                                                                 "NOT_RECORDED")),
                 "note": ("a blocker names the exact action, its target, the error or "
                          "missing input, the affected scope, the owner and the next "
                          "step; only the dependent work pauses"),

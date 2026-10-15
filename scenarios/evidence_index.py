@@ -104,15 +104,20 @@ def _artifact_slots(artifacts):
     run whose rows are carried by stdout only.
     """
     slots = []
-    for position, path in enumerate(artifacts or []):
+    for position, entry in enumerate(artifacts or []):
+        path = entry.get("path") if isinstance(entry, dict) else entry
+        kind = entry.get("format", "unknown") if isinstance(entry, dict) else (
+            "json" if str(path).endswith(".json") else "text" if str(path).endswith(".txt") else "unknown")
         slots.append({
             "artifactRef": "#/artifacts/%d" % position,
             "path": path,
-            "format": ("json" if str(path).endswith(".json")
-                       else "text" if str(path).endswith(".txt") else "unknown"),
-            "carries": "the sealed calculation record, this index included",
+            "format": kind,
+            "formatBasis": "declared-output-role" if isinstance(entry, dict) else "caller-path-suffix-inference",
+            "carries": ("the sealed calculation record, this index included" if kind == "json"
+                        else "text summary only" if kind == "text" else "unspecified content"),
             "deliveryStatus": ARTIFACT_NOT_OBSERVED,
-            "deliveryReportedBy": "#/outputDelivery in the delivered record",
+            "deliveryReportedBy": ("outputDelivery in externally captured final stdout JSON from run-all --json; "
+                                   "not a pointer inside this saved artifact; final process exit must also be captured"),
         })
     return slots
 
@@ -128,7 +133,7 @@ def _artifact_references(position, slots):
             "pointerInIndex": within_index,
             "pointerInArtifact": None,
             "deliveryStatus": "NO_ARTIFACT_DECLARED",
-            "note": "this run declared no output file; the row is carried by stdout only",
+            "note": "no output file declared; full rows require JSON stdout capture, not the default text summary",
         }]
     return [{
         "artifactRef": slot["artifactRef"],

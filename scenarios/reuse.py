@@ -17,7 +17,7 @@ adapter is labelled simulated wherever it appears.
 """
 import importlib
 import pathlib
-import re
+import ast
 import sys
 
 from . import decisions
@@ -87,10 +87,6 @@ DOMAIN_REUSE = (
 #: Where this package's own source states its domain imports. Read from the
 #: files rather than from a list, so a new import that nobody declared is
 #: visible as an undeclared module instead of staying invisible.
-_IMPORT_FORMS = (
-    re.compile(r"^\s*from\s+(exchange(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s+import\s+(.+)$"),
-    re.compile(r"^\s*import\s+(exchange(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*$"),
-)
 
 #: The adapter roles a scenario runs against. Every one of them is simulated:
 #: this package connects to no real registrar, payment provider, asset control
@@ -188,26 +184,23 @@ def source_imports(root="."):
     where the import is: ``modules`` for the shipped modules, ``tests`` for the
     test suite. The split matters because the test suite imports domain modules
     to assert things about them, which is not the package consuming them.
-    Comments and strings are not parsed, so a line has to look like a real
-    import statement to count.
+    Python syntax is parsed without executing it. Comments and string literals
+    cannot masquerade as imports; aliases and multiline imports are retained.
     """
     found = {"modules": {}, "tests": {}}
     package = pathlib.Path(root) / "scenarios"
     for path in sorted(package.rglob("*.py")):
         where = "tests" if "tests" in path.relative_to(package).parts else "modules"
-        for line in path.read_text(encoding="utf-8").splitlines():
-            for form in _IMPORT_FORMS:
-                match = form.match(line)
-                if not match:
-                    continue
-                names = set()
-                if match.lastindex == 2:
-                    for part in match.group(2).split(","):
-                        part = part.strip().strip("()").strip()
-                        if part:
-                            names.add(part.split(" as ")[0].strip())
-                found[where].setdefault(match.group(1), set()).update(names)
-                break
+        parsed = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(parsed):
+            if isinstance(node, ast.ImportFrom) and node.level == 0:
+                module = node.module or ""
+                if module == "exchange" or module.startswith("exchange."):
+                    found[where].setdefault(module, set()).update(alias.name for alias in node.names)
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == "exchange" or alias.name.startswith("exchange."):
+                        found[where].setdefault(alias.name, set())
     return {where: {module: sorted(names) for module, names in sorted(entries.items())}
             for where, entries in found.items()}
 
@@ -222,7 +215,7 @@ def _attribute(imported, declared):
         placed = [name for name in names if "%s.%s" % (module, name) in declared]
         for name in placed:
             attributed.setdefault("%s.%s" % (module, name), set())
-        if set(names) - set(placed):
+        if not names or set(names) - set(placed):
             attributed.setdefault(module, set()).update(set(names) - set(placed))
     return {module: sorted(names) for module, names in sorted(attributed.items())}
 
@@ -245,14 +238,19 @@ def declared_coverage(root="."):
     unused = sorted(declared - set(shipped))
     test_only = sorted(module for module in tested
                        if module not in declared and module not in shipped)
+    declared_names = {entry["module"]: set(entry["uses"]) for entry in DOMAIN_REUSE}
+    undeclared_names = {module: sorted(set(names) - declared_names[module])
+                        for module, names in shipped.items()
+                        if module in declared_names and set(names) - declared_names[module]}
     return {
+        "undeclaredNames": undeclared_names,
         "importsFoundInModules": shipped,
         "importsFoundInTests": tested,
         "declaredModules": sorted(declared),
         "undeclaredModules": undeclared,
         "declaredButNotImported": unused,
         "importedOnlyByTests": test_only,
-        "complete": not undeclared and not unused,
+        "complete": not undeclared and not unused and not undeclared_names,
     }
 
 
@@ -280,10 +278,14 @@ def build(scenario_report=None, root="."):
                       decision=register.get(entry["trackedBy"], {}).get("undecided"),
                       blocks=register.get(entry["trackedBy"], {}).get("blocks"))
                  for entry in UNLOCATED_INTERFACES]
+    domain = observed_domain_modules()
+    coverage = declared_coverage(root)
     return {
+        "complete": coverage["complete"] and all(
+            not row["error"] and not row["unresolvedNames"] for row in domain),
         "schema": "8415ex-reuse-map/1",
-        "domainReuse": observed_domain_modules(),
-        "declaredCoverage": declared_coverage(root),
+        "domainReuse": domain,
+        "declaredCoverage": coverage,
         "adapterRoles": [dict(entry) for entry in ADAPTER_ROLES],
         "adaptersRecordedInThisRun": recorded,
         "allAdaptersSimulated": all(entry["simulated"] for entry in ADAPTER_ROLES),

@@ -235,46 +235,45 @@ def source_identity(root="."):
     return identity
 
 
-def parent_identity(root=".", base=None):
-    """The commits this candidate descends from, and its exact diff range.
+def parent_identity(root=".", base=None, head=None):
+    """Pin ancestry to one immutable commit, never mix multiple HEAD reads.
 
-    A candidate is only reviewable against something. This reports the head's
-    parents, the merge base against the branch the work is based on, and the
-    range a reviewer can pass straight to ``git diff``, so the diff under review
-    is named rather than left to be guessed.
+    An explicit base is resolved to a commit before merge-base. Without one,
+    the first parent is the documented comparison baseline (not a guessed PR
+    target). Root commits have no comparison range. Shallow/missing history is
+    reported, not interpreted as an empty successful diff.
     """
-    head, head_error = _git("rev-parse", "HEAD", root=root)
-    parents, parents_error = _git("rev-list", "--parents", "-n", "1", "HEAD",
-                                  root=root)
-    listed = []
-    if isinstance(parents, str) and parents.strip():
-        listed = parents.split()[1:]
-    identity = {
-        "head": head.strip() if isinstance(head, str) else None,
-        "parents": listed,
-        "parentCount": len(listed),
-        "base": None,
-        "mergeBase": None,
-        "diffRange": None,
-        "errors": [error for error in (head_error, parents_error) if error],
-    }
+    resolved, error = _git("rev-parse", "--verify", (head or "HEAD") + "^{commit}",
+                           root=root)
+    identity = {"head": resolved.strip() if resolved else None, "parents": [],
+                "parentCount": 0, "base": None, "baseRef": base,
+                "basePolicy": "explicit" if base else "first-parent",
+                "mergeBase": None, "diffRange": None,
+                "errors": [error] if error else []}
+    if error or not resolved:
+        return identity
+    pinned = identity["head"]
+    raw, error = _git("cat-file", "-p", pinned, root=root)
+    if error:
+        identity["errors"].append(error)
+        return identity
+    identity["parents"] = [line.split()[1] for line in raw.split("\n\n", 1)[0].splitlines()
+                           if line.startswith("parent ")]
+    identity["parentCount"] = len(identity["parents"])
+    base = base or next(iter(identity["parents"]), None)
     if base is None:
-        # The branch this work is based on, when it can be read from the remote
-        # tracking refs rather than assumed.
-        for candidate in ("origin/feat/stage4-deadline-exit-20261014",
-                          "origin/main"):
-            resolved, _ = _git("rev-parse", "--verify", candidate, root=root)
-            if isinstance(resolved, str) and resolved.strip():
-                base = candidate
-                break
-    if base is not None:
-        merge_base, error = _git("merge-base", base, "HEAD", root=root)
-        if error is not None:
-            identity["errors"].append(error)
-        else:
-            identity["base"] = base
-            identity["mergeBase"] = merge_base.strip()
-            identity["diffRange"] = f"{merge_base.strip()}..{identity['head']}"
+        return identity
+    resolved_base, error = _git("rev-parse", "--verify", base + "^{commit}", root=root)
+    if error or not resolved_base:
+        identity["errors"].append(error or "base could not be resolved")
+        return identity
+    identity["base"] = resolved_base.strip()
+    merged, error = _git("merge-base", identity["base"], pinned, root=root)
+    if error or not merged:
+        identity["errors"].append(error or "merge base could not be resolved")
+    else:
+        identity["mergeBase"] = merged.strip()
+        identity["diffRange"] = merged.strip() + ".." + pinned
     return identity
 
 
