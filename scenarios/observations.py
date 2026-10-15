@@ -115,6 +115,39 @@ def _private_markers(supplied=None):
     return tuple(marker.strip() for marker in raw.split(",") if marker.strip())
 
 
+#: What this scan is, said plainly, and what it is not. A pattern scan over the
+#: tracked text of one checkout is bounded evidence, and saying so is part of
+#: the result rather than a footnote somewhere else.
+def coverage_statement(coverage, marker_count, enumeration_state):
+    """A statement of exactly how far this scan reached."""
+    enumerated = coverage["enumerated"]
+    scanned = coverage["scanned"]
+    skipped = len(coverage["skipped"])
+    unreadable = len(coverage["unreadable"])
+    return {
+        "inventoryTotal": enumerated,
+        "scannedCount": scanned,
+        "skippedCount": skipped,
+        "unreadableCount": unreadable,
+        "accountedFor": scanned + skipped + unreadable == enumerated,
+        "enumerationState": enumeration_state,
+        "suppliedPrivateMarkers": marker_count,
+        "boundedCoverage": (
+            f"{scanned} of {enumerated} tracked files were read; {skipped} were "
+            f"skipped with a recorded reason and {unreadable} were unreadable"),
+        "isNot": [
+            "not a private-fingerprint certification: "
+            + ("no private markers were supplied, so detection was generic only"
+               if marker_count == 0 else
+               f"{marker_count} supplied markers were checked, which certifies "
+               "nothing beyond those exact values"),
+            "not a historical-repository certification: only this checkout's "
+            "tracked text was read, not any earlier commit",
+            "not an independent security review",
+        ],
+    }
+
+
 def secret_scan(root=".", private_markers=None):
     """T-39: credential-shaped content and private material in the source.
 
@@ -128,6 +161,9 @@ def secret_scan(root=".", private_markers=None):
             "schema": "8415ex-secret-scan/2", "cases": ["T-39"], "ok": False,
             "enumerationState": enumeration["state"], "error": enumeration["error"],
             "coverage": {"enumerated": 0, "scanned": 0, "skipped": [], "unreadable": []},
+            "coverageStatement": coverage_statement(
+                {"enumerated": 0, "scanned": 0, "skipped": [], "unreadable": []},
+                len(markers), enumeration["state"]),
             "findings": [], "clean": False,
             "privateMarkerCount": len(markers),
             "scope": "the source file list could not be established, so nothing is certified",
@@ -169,12 +205,15 @@ def secret_scan(root=".", private_markers=None):
                                      "pattern": "non-english prose in public source",
                                      "line": number})
     clean = findings == [] and scanned > 0 and unreadable == []
+    coverage = {"enumerated": len(enumeration["files"]), "scanned": scanned,
+                "skipped": skipped, "unreadable": unreadable,
+                "scannedSuffixes": list(TEXT_SUFFIXES)}
     return {
-        "schema": "8415ex-secret-scan/2", "cases": ["T-39"], "ok": True,
+        "schema": "8415ex-secret-scan/3", "cases": ["T-39"], "ok": True,
         "enumerationState": enumeration["state"], "error": None,
-        "coverage": {"enumerated": len(enumeration["files"]), "scanned": scanned,
-                     "skipped": skipped, "unreadable": unreadable,
-                     "scannedSuffixes": list(TEXT_SUFFIXES)},
+        "coverage": coverage,
+        "coverageStatement": coverage_statement(coverage, len(markers),
+                                                enumeration["state"]),
         "findings": findings, "clean": clean,
         "privateMarkerCount": len(markers),
         "scope": ("a pattern scan of this repository's tracked text, including this scanner's "

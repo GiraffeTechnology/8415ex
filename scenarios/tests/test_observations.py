@@ -203,6 +203,64 @@ class ScanIntegrity(unittest.TestCase):
         self.assertEqual(len(scan["coverage"]["unreadable"]), 1)
         self.assertEqual(scan["coverage"]["scanned"], 0)
 
+    def test_the_coverage_statement_counts_this_candidate(self):
+        """Item 6: the numbers come from this scan, not carried forward."""
+        statement = self.scan["coverageStatement"]
+        coverage = self.scan["coverage"]
+        self.assertEqual(statement["inventoryTotal"], coverage["enumerated"])
+        self.assertEqual(statement["scannedCount"], coverage["scanned"])
+        self.assertEqual(statement["skippedCount"], len(coverage["skipped"]))
+        self.assertEqual(statement["unreadableCount"], len(coverage["unreadable"]))
+        self.assertTrue(statement["accountedFor"])
+        self.assertEqual(statement["enumerationState"], "enumerated")
+        # Re-reading must produce the same counts for the same tree, and they
+        # must be the live ones rather than a remembered pair.
+        again = observations.secret_scan(ROOT)["coverageStatement"]
+        self.assertEqual(again["inventoryTotal"], statement["inventoryTotal"])
+        self.assertGreater(statement["inventoryTotal"], 0)
+
+    def test_every_skip_is_named_with_its_reason(self):
+        for entry in self.scan["coverage"]["skipped"]:
+            with self.subTest(path=entry["path"]):
+                self.assertTrue(entry["path"])
+                self.assertTrue(entry["reason"])
+        for entry in self.scan["coverage"]["unreadable"]:
+            with self.subTest(path=entry["path"]):
+                self.assertTrue(entry["reason"])
+
+    def test_zero_markers_is_stated_as_generic_scanning_only(self):
+        statement = self.scan["coverageStatement"]
+        self.assertEqual(statement["suppliedPrivateMarkers"], 0)
+        self.assertTrue(any("generic" in line for line in statement["isNot"]))
+
+    def test_supplied_markers_certify_nothing_beyond_themselves(self):
+        scan = observations.secret_scan(ROOT, private_markers=("marker-a", "marker-b"))
+        statement = scan["coverageStatement"]
+        self.assertEqual(statement["suppliedPrivateMarkers"], 2)
+        self.assertTrue(any("certifies" in line for line in statement["isNot"]))
+        rendered = str(scan)
+        for marker in ("marker-a", "marker-b"):
+            self.assertNotIn(marker, rendered, "a marker is never echoed")
+
+    def test_the_statement_denies_fingerprint_and_history_certification(self):
+        joined = " ".join(self.scan["coverageStatement"]["isNot"])
+        self.assertIn("not a private-fingerprint certification", joined)
+        self.assertIn("not a historical-repository certification", joined)
+        self.assertIn("not an independent security review", joined)
+
+    def test_a_failed_enumeration_still_states_its_coverage(self):
+        scan = observations.secret_scan("/tmp")
+        statement = scan["coverageStatement"]
+        self.assertFalse(scan["clean"])
+        self.assertEqual(statement["inventoryTotal"], 0)
+        self.assertEqual(statement["scannedCount"], 0)
+        self.assertEqual(statement["enumerationState"], "not-a-repository")
+
+    def test_the_bounded_coverage_sentence_matches_the_counts(self):
+        statement = self.scan["coverageStatement"]
+        self.assertIn(f"{statement['scannedCount']} of "
+                      f"{statement['inventoryTotal']}", statement["boundedCoverage"])
+
     def test_it_does_not_claim_to_be_a_security_review(self):
         self.assertIn("not a substitute for an independent security review", self.scan["scope"])
 
