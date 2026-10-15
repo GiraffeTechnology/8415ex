@@ -29,6 +29,7 @@ separate from it.
 | `stages.py` | per stage: what is developed here, what is accepted elsewhere, what is owed |
 | `dossier.py` | per scenario: the nine items a demonstration must carry, and what did not resolve |
 | `storyboard.py` | the presentation outline, parsed and checked against the code it describes |
+| `docs.py` | the documented commands, checked against the commands that exist |
 | `evidence_index.py` | one index from requirement to artifact over a run's own artefacts |
 | `cli.py` | one reproducible entry point |
 | `STORYBOARD.md` | the factual storyboard and presentation outline |
@@ -71,6 +72,9 @@ python3 -B -m scenarios.cli dossier
 
 # whether the presentation outline still describes the code
 python3 -B -m scenarios.cli storyboard
+
+# whether the guides and the real commands still agree
+python3 -B -m scenarios.cli usage
 
 # individual parts
 python3 -B -m scenarios.cli scenarios
@@ -265,6 +269,26 @@ mentioning the backlog, not that it ended with one. Writing that distinction
 down immediately earned its keep: the out-of-order scenario recorded its
 deferral building up and never recorded it draining, so the one scenario that
 demonstrates a backlog clearing had no record of it clearing. It records it now.
+
+## Keeping the instructions true
+
+Usage documentation drifts the same way an outline does, with worse
+consequences: a reader follows a command that no longer exists and concludes the
+delivery is broken, or never learns a report exists because nothing mentions it.
+Neither failure turns a test red on its own.
+
+`scenarios.cli usage` extracts every command the guides show and compares it
+with the commands the two command lines really expose, in both directions. A
+documented command that does not exist is a broken instruction; a command no
+guide mentions is a report nobody will find. They are reported separately
+because they are different mistakes, and each has its own negative control in
+the suite.
+
+The scenario commands come from the single list the parser itself uses, so the
+parser and the check cannot disagree. The domain commands are read out of the
+domain's own source, because that module belongs to another surface and is not
+edited from here to make a check easier - the same approach `events.py` takes to
+the event kinds.
 
 ## Keeping the outline from going stale
 

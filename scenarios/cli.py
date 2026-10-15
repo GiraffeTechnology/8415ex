@@ -35,8 +35,8 @@ import uuid
 
 from exchange.ids import canonical_json
 
-from . import (decisions, dossier, events, evidence_index, execution, handoff,
-               manifest, matrix, operations, reuse, stages, storyboard,
+from . import (decisions, docs, dossier, events, evidence_index, execution,
+               handoff, manifest, matrix, operations, reuse, stages, storyboard,
                observations, receipt, validation)
 from .demos import DEMOS
 from .harness import report_text, run_all
@@ -81,6 +81,14 @@ def _suite_records(root, execute):
         record["title"] = title
         records.append(record)
     return records
+
+
+#: Every subcommand, declared once so the parser and the documentation check
+#: read the same list rather than two lists that can disagree.
+COMMANDS = ("run-all", "scenarios", "paths", "matrix", "manifest", "handoff",
+            "validate-config", "observations", "evidence-index", "decisions",
+            "receipt", "reuse", "events", "stages", "dossier", "storyboard",
+            "operations", "usage")
 
 
 def _bundle(root, execute_suites=False, run_id=None, started_at=None,
@@ -129,6 +137,7 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
         "dossier": dossier.build(scenario_report),
         "storyboard": storyboard.check(root),
         "operations": operations.build(root),
+        "usage": docs.check(root),
         "evidenceIndex": evidence_index.build(
             scenario_report, path_report, root,
             {"runId": run_id, "startedAt": started_at},
@@ -437,12 +446,7 @@ def summary_text(bundle):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Local Stage 5 preparation for 8415ex.")
-    parser.add_argument("command", choices=("run-all", "scenarios", "paths", "matrix",
-                                            "manifest", "handoff", "validate-config",
-                                            "observations", "evidence-index",
-                                            "decisions", "receipt", "reuse",
-                                            "events", "stages", "dossier",
-                                            "storyboard", "operations"))
+    parser.add_argument("command", choices=COMMANDS)
     parser.add_argument("--root", default=".")
     parser.add_argument("--json", action="store_true", help="print the canonical record only")
     parser.add_argument("--json-out", help="write the canonical record of this same run here")
@@ -470,6 +474,10 @@ def main(argv=None):
     if arguments.command == "decisions":
         print(canonical_json(decisions.register()))
         return 0
+    if arguments.command == "usage":
+        built = docs.check(arguments.root)
+        print(canonical_json(built))
+        return 0 if built["consistent"] else 1
     if arguments.command == "operations":
         built = operations.build(arguments.root)
         print(canonical_json(built))

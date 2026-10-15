@@ -50,6 +50,8 @@ DEVELOPED_HERE = {
          "where": "scenarios/harness.py"},
         {"deliverable": "the logical event contract, checked read-only over the timeline",
          "where": "scenarios/events.py"},
+        {"deliverable": "the logical operations, resolved onto the real methods",
+         "where": "scenarios/operations.py"},
     ),
     2: (
         {"deliverable": "the segmented-funding scenarios, with principal, amount, asset "
@@ -82,6 +84,8 @@ DEVELOPED_HERE = {
          "where": "scenarios/observations.py"},
         {"deliverable": "the execution checklist with every real-evidence slot unfilled",
          "where": "scenarios/handoff.py"},
+        {"deliverable": "the check that keeps the usage instructions true",
+         "where": "scenarios/docs.py"},
         {"deliverable": "per scenario, the nine items a demonstration must carry",
          "where": "scenarios/dossier.py"},
         {"deliverable": "the factual storyboard and presentation outline",
