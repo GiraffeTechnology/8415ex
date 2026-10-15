@@ -16,6 +16,8 @@ For every case the index answers, in one row:
       -> what was observed, with the raw expected and observed values
       -> what real evidence is still owed, and who owns it
 """
+from copy import deepcopy
+
 from . import handoff, manifest, matrix
 from .demos import MAIN_PATHS
 from .paths import PATH_CONTRACTS
@@ -41,14 +43,57 @@ def _assertions_by_case(reports):
     return grouped
 
 
-def build(scenario_report=None, path_report=None, root=".", run_identity=None):
-    """One index over the whole local candidate, including what failed."""
-    source = manifest.source_identity(root)
+def _command_references(case, commands):
+    """Pointers to supplied records, never guessed log filenames or results.
+
+    Suite coverage is aggregate evidence, not an individual test verdict.
+    Inline stream tails/digests are explicitly distinguished from full raw logs.
+    """
+    refs = []
+    coverage = matrix.CASE_IMPLEMENTATION[case][1]
+    for position, command in enumerate(commands):
+        text = command.get("command", "")
+        explicit = case in command.get("cases", [])
+        suite = (("scenarios/tests" in text and "scenarios/tests/" in coverage)
+                 or ("exchange/tests" in text and "exchange/tests/" in coverage))
+        if not (explicit or suite):
+            continue
+        pointer = f"#/commands/{position}"
+        refs.append({
+            "commandRef": pointer,
+            "coverageScope": ("whole-invocation" if command.get("scope") == "final-outer-process"
+                              else "declared-case" if explicit else "suite-aggregate"),
+            "command": text,
+            "outcome": command.get("outcome"),
+            "executed": command.get("executed"),
+            "runRef": "#/runIdentity",
+            "streamRefs": {name: pointer + "/" + name
+                           for name in ("stdout", "stderr") if name in command},
+            "rawLogRefs": {name: pointer + "/" + name
+                           for name in ("rawLog", "rawLogPath", "rawLogRef")
+                           if command.get(name)},
+            "note": "stream references contain captured tails and digests, not full raw logs",
+        })
+    return refs
+
+
+def build(scenario_report=None, path_report=None, root=".", run_identity=None,
+          commands=None, observations=None, source=None):
+    """One index over supplied evidence, including missing execution records.
+
+    JSON pointers are relative to this index. Optional command and observation
+    records are copied verbatim; absent evidence produces no invented pointer.
+    Observation references locate measurements, not per-case acceptance passes.
+    Supply the observed bundle source when indexing an earlier execution; a
+    later observer must not relabel earlier results with its own source reading.
+    """
+    source = deepcopy(source) if source is not None else manifest.source_identity(root)
     run_identity = dict(run_identity or {})
+    commands = deepcopy(commands or [])
+    observations = deepcopy(observations or {})
     acceptance = matrix.build(source, run_identity, scenario_report, path_report)
     assertions = _assertions_by_case([scenario_report, path_report])
     checklist = handoff.build(acceptance)
-    owed = {entry["case"]: entry for entry in acceptance["rows"]}
 
     rows = []
     for row in acceptance["rows"]:
@@ -60,6 +105,13 @@ def build(scenario_report=None, path_report=None, root=".", run_identity=None):
             "stage": row["stage"],
             "assertions": recorded,
             "assertionCount": len(recorded),
+            "commandReferences": _command_references(case, commands),
+            "observationReferences": [
+                {"observationRef": "#/observations/" + name,
+                 "runRef": "#/runIdentity", "scope": "run-level observation"}
+                for name in ({"T-39": ("secretScan", "resourceObservation"),
+                              "T-40": ("workload",)}.get(case, ()))
+                if name in observations],
             "implementation": row["implementation"],
             "unitCoverage": row["unitCoverage"],
             "scenarios": row["scenarios"],
@@ -95,9 +147,11 @@ def build(scenario_report=None, path_report=None, root=".", run_identity=None):
     for row in rows:
         by_outcome.setdefault(row["localOutcome"], []).append(row["case"])
     return {
-        "schema": "8415ex-evidence-index/1",
+        "schema": "8415ex-evidence-index/2",
         "sourceIdentity": source,
         "runIdentity": run_identity,
+        "commands": commands,
+        "observations": observations,
         "runners": runners,
         "runnerCount": len(runners),
         "scenarioRunners": sorted(MAIN_PATHS),
@@ -116,7 +170,7 @@ def build(scenario_report=None, path_report=None, root=".", run_identity=None):
             "PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover "
             "-s exchange/tests -t .",
             "PYTHONDONTWRITEBYTECODE=1 python3 -B -m scenarios.cli run-all "
-            "--execute-suites --json-out run.json --text-out run.txt",
+            "--execute-suites --json-out /tmp/ex-run.json --text-out /tmp/ex-run.txt",
         ],
         "note": ("assembled from the artefacts this run already produced, so it "
                  "cannot disagree with them; it records what failed, what was "

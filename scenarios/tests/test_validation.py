@@ -296,13 +296,30 @@ class EvidenceValidation(unittest.TestCase):
         outcome = validation.validate_result(self._record(commands=[entry]))
         self.assertTrue(outcome["accepted"], outcome["reasons"])
 
-    def test_evidence_from_an_earlier_run_may_be_cited_if_it_names_that_run(self):
-        """Citing prior evidence is allowed; passing it off as this run is not."""
+    def test_a_historical_run_name_is_not_source_provenance(self):
+        """Validate historical evidence independently under its own source/run."""
         earlier = self._command(startedAt="2026-10-01T00:00:00Z",
                                 finishedAt="2026-10-01T00:00:01Z",
                                 observedInRun="local-20261001T000000Z-aaaaaaaaaaaa")
         outcome = validation.validate_result(self._record(commands=[earlier]))
-        self.assertTrue(outcome["accepted"], outcome["reasons"])
+        self.assertFalse(outcome["accepted"])
+        self.assertIn("EX_EVIDENCE_HISTORICAL_COMMAND_UNSUPPORTED", outcome["reasons"])
+
+    def test_historical_citations_are_accepted_only_as_unverified_references(self):
+        citation = {"scope": "historical-citation", "verification": "unverified",
+                    "observedInRun": "prior-run", "evidenceLocator": "prior-run.json",
+                    "sourceIdentity": {"commit": "d" * 40, "tree": "e" * 40}}
+        result = validation.validate_result(self._record(historicalCitations=[citation]))
+        self.assertTrue(result["accepted"], result["reasons"])
+        self.assertFalse(result["historicalCitationsVerified"])
+        self.assertEqual(result["historicalCitationCount"], 1)
+        self.assertEqual(result["commandOutcomes"], ["passed"])
+        result = validation.validate_result(self._record(commands=[], historicalCitations=[citation]))
+        self.assertFalse(result["accepted"])
+        self.assertFalse(result["runPassed"])
+        result = validation.validate_result(self._record(historicalCitations=[
+            {**citation, "observedInRun": self._record()["runId"]}]))
+        self.assertIn("EX_EVIDENCE_HISTORICAL_CITATION_CURRENT_RUN", result["reasons"])
 
     def test_a_citation_that_names_this_run_is_held_to_this_window(self):
         record = self._record()

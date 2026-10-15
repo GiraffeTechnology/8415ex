@@ -29,6 +29,7 @@ import argparse
 import hashlib
 import os
 import sys
+import shutil
 import time
 import uuid
 
@@ -199,7 +200,7 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None):
 def seal(bundle, exit_code, finished_at=None):
     """Attach this run's own record, once the calculation's status is known.
 
-    The record covers the calculation and the delivery this process performed.
+    The record covers only the completed calculation, before output publication.
     It deliberately does not claim the final outer process status: that is not
     knowable from inside the process that is still running, so it is marked as
     needing external capture and `execution.capture_cli` is what captures it.
@@ -207,13 +208,12 @@ def seal(bundle, exit_code, finished_at=None):
     finished_at = finished_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     record = execution.self_record("python3 -B -m scenarios.cli run-all", exit_code,
                                    bundle["startedAt"], finished_at)
-    record["scope"] = "calculation-and-delivery-performed-in-process"
+    record["scope"] = "calculation-only-before-publication"
     record["finalProcessStatus"] = "NOT_CAPTURED_IN_PROCESS"
-    record["detail"] = ("this record covers the calculation and the output delivery "
-                        "this process performed, written once both were decided; the "
-                        "final outer process exit status is not observable from inside "
-                        "the running process and must be captured externally, with "
-                        "execution.capture_cli")
+    record["detail"] = ("only the completed calculation is covered; output publication "
+                        "has not happened. Delivery is reported separately after the "
+                        "attempt; final process status must be captured externally, "
+                        "with execution.capture_cli")
     bundle["finishedAt"] = finished_at
     bundle["commands"] = [record] + list(bundle["commands"])
     bundle["manifest"]["commands"] = list(bundle["commands"])
@@ -225,6 +225,14 @@ def seal(bundle, exit_code, finished_at=None):
     bundle["evidence"] = dict(bundle["evidence"], commands=list(bundle["commands"]),
                               finishedAt=finished_at)
     bundle["evidenceValidation"] = validation.validate_result(bundle["evidence"])
+    bundle["evidenceIndex"] = evidence_index.build(
+        bundle["scenarioReport"], bundle["pathReport"],
+        bundle["source"]["requestedRoot"],
+        {"runId": bundle["runId"], "startedAt": bundle["startedAt"],
+         "finishedAt": finished_at}, commands=bundle["commands"],
+        observations={key: bundle[key] for key in
+                      ("secretScan", "resourceObservation", "workload")},
+        source=bundle["source"])
     return bundle
 
 
@@ -240,64 +248,85 @@ def _destination_error(path):
     return None
 
 
-def deliver_outputs(targets, run_id):
-    """Write every requested output, or publish none of them.
+def deliver_outputs(targets, run_id, root=None):
+    """Stage all outputs and roll back earlier publications on a later failure.
 
-    Each destination is checked, each file is staged beside it, and only once
-    every stage has succeeded is anything moved into place. A failure anywhere
-    publishes nothing, leaves no partial output and leaves no staging file
-    behind, so the outputs can never disagree about which run produced them.
-    The returned records say what actually happened to each path.
-
-    Two outputs may not name the same destination. They carry different
-    content, only one of them could survive there, and a report saying both
-    were delivered would be describing a file that holds one of them.
+    Independent path replacements are not a filesystem transaction: concurrent
+    readers may see an intermediate pair, and process/power loss is not covered.
+    Caught publication errors restore previous bytes (or remove newly created
+    outputs). A failed restoration or cleanup is explicitly reported, with the
+    recovery backup retained. Never claim unconditional all-or-nothing delivery.
     """
-    wanted = [(path, content) for path, content in targets if path]
+    wanted = [(os.fspath(path), content) for path, content in targets if path]
     records = {path: None for path, _ in wanted}
-    created, staged = [], []
+    created, staged, backups, published = [], [], {}, []
+    preserve = set()
 
     def refuse(path, error, stage):
         records[path] = {"path": path, "ok": False, "bytes": None, "sha256": None,
                          "error": error, "stage": stage}
 
+    def withhold():
+        for path in records:
+            if records[path] is None:
+                refuse(path, "withheld: another output in the same delivery failed",
+                       "withheld")
+
     try:
         seen = {}
-        for position, (path, _) in enumerate(wanted):
-            resolved = os.path.abspath(path)
+        for path, _ in wanted:
+            resolved = os.path.realpath(path)
             if resolved in seen:
-                refuse(path, f"two outputs name the same destination as "
-                             f"{wanted[seen[resolved]][0]!r}; they carry different "
-                             f"content and only one could survive there",
+                refuse(path, f"two outputs name the same destination as {seen[resolved]!r}",
                        "destination")
-            seen.setdefault(resolved, position)
+            seen.setdefault(resolved, path)
+            error = _destination_error(path)
+            if error:
+                refuse(path, error, "destination")
+            if os.path.islink(path):
+                refuse(path, "output symlinks are not supported", "destination")
+            if root is not None:
+                # Fail closed: outputs belong outside the input repository, not
+                # just outside today's tracked file list. realpath catches parent
+                # symlink aliases; replacing a hard link cannot alter its source.
+                bases = (os.path.realpath(root),
+                         os.path.realpath(manifest.executed_source_root()))
+                if any(os.path.commonpath([base, resolved]) == base for base in bases):
+                    refuse(path, "output must be outside the input source repository",
+                           "source-protection")
+        if any(record is not None for record in records.values()):
+            withhold()
+            return [records[path] for path, _ in wanted]
 
         for path, content in wanted:
-            if records[path] is not None:
-                continue
-            error = _destination_error(path)
-            if error is not None:
-                refuse(path, error, "destination")
-                continue
             staging = f"{path}.staging-{run_id}"
-            # Tracked before the write, so the cleanup below reaches it however
-            # the write ends, including a failure part of the way through and an
-            # error this function does not expect.
+            # Keep tracking before writing; an unexpected partial-write exception
+            # must still pass through cleanup. Exclusive create never clobbers a
+            # pre-existing staging file.
+            if os.path.lexists(staging):
+                refuse(path, "staging path already exists", "staging")
+                continue
             created.append(staging)
             try:
-                with open(staging, "w", encoding="utf-8") as handle:
+                with open(staging, "x", encoding="utf-8") as handle:
                     handle.write(content)
+                if os.path.exists(path):
+                    backup = f"{path}.backup-{run_id}"
+                    if os.path.lexists(backup):
+                        raise FileExistsError(f"backup path already exists: {backup}")
+                    created.append(backup)
+                    with open(path, "rb") as src, open(backup, "xb") as dst:
+                        shutil.copyfileobj(src, dst)
+                    backups[path] = backup
+                else:
+                    backups[path] = None
             except OSError as problem:
                 refuse(path, str(problem), "staging")
                 continue
             staged.append((staging, path, content))
 
         if any(record is not None for record in records.values()):
-            # Something could not be prepared, so nothing is published.
-            for path in records:
-                if records[path] is None:
-                    refuse(path, "withheld: another output in the same delivery "
-                                 "could not be prepared", "withheld")
+            withhold()
             return [records[path] for path, _ in wanted]
 
         for staging, path, content in staged:
@@ -305,20 +334,51 @@ def deliver_outputs(targets, run_id):
                 os.replace(staging, path)
             except OSError as problem:
                 refuse(path, str(problem), "publish")
-                continue
+                for previous in reversed(published):
+                    backup = backups[previous]
+                    try:
+                        if backup is None:
+                            os.unlink(previous)
+                        else:
+                            os.replace(backup, previous)
+                        refuse(previous, "publication rolled back after another output failed",
+                               "rolled-back")
+                    except OSError as restore_problem:
+                        if backup is not None:
+                            preserve.add(backup)
+                        refuse(previous, f"rollback failed: {restore_problem}", "rollback-failed")
+                        records[previous]["recoveryBackup"] = backup
+                        records[previous]["mayContainNewOutput"] = True
+                withhold()
+                break
+            published.append(path)
             data = content.encode("utf-8")
             records[path] = {"path": path, "ok": True, "bytes": len(data),
                              "sha256": hashlib.sha256(data).hexdigest(),
                              "error": None, "stage": "published"}
         return [records[path] for path, _ in wanted]
     finally:
-        # No staging file survives this call, whatever happened above.
-        for staging in created:
-            if os.path.exists(staging):
+        cleanup_errors = []
+        for temporary in created:
+            if temporary in preserve:
+                continue
+            if os.path.lexists(temporary):
                 try:
-                    os.unlink(staging)
-                except OSError:
-                    pass
+                    os.unlink(temporary)
+                except OSError as problem:
+                    cleanup_errors.append({"path": temporary, "error": str(problem)})
+        if cleanup_errors:
+            for path in records:
+                if records[path] is None:
+                    refuse(path, "temporary file cleanup failed", "cleanup-failed")
+                entry = records[path]
+                entry["cleanupErrors"] = list(cleanup_errors)
+                entry["ok"] = False
+                entry["error"] = (entry["error"] + "; " if entry["error"] else "") + \
+                    "temporary file cleanup failed"
+            # Even an unexpected exception must not hide a cleanup failure.
+            if sys.exc_info()[0] is not None:
+                print(f"output cleanup failed: {cleanup_errors}", file=sys.stderr)
 
 
 def summary_text(bundle):
@@ -348,7 +408,11 @@ def summary_text(bundle):
                  f"executedFrom={bundle['source']['executedFrom']}")
     for reason in bundle["blocking"]:
         lines.append(f"BLOCKING {reason}")
-    lines.append(f"local delivery passed: {bundle['allLocalPassed']}")
+    if bundle.get("outputDeliveryStatus") == "NOT_CAPTURED_IN_PROCESS":
+        lines.append(f"calculation passed: {bundle['calculationPassed']}")
+        lines.append("output delivery: NOT_CAPTURED_IN_PROCESS (publication not yet attempted)")
+    else:
+        lines.append(f"local delivery passed: {bundle['allLocalPassed']}")
     return "\n".join(lines)
 
 
@@ -413,16 +477,25 @@ def main(argv=None):
     bundle["outputDeliveryPlan"] = [path for path in (arguments.json_out,
                                                       arguments.text_out) if path]
     bundle["outputDeliveryStatus"] = "NOT_CAPTURED_IN_PROCESS"
+    pre_publication = manifest.snapshot(arguments.root)
+    final_source = manifest.reconcile(bundle["sourceReconciliation"]["before"],
+                                      pre_publication)
+    bundle["prePublicationReconciliation"] = final_source
+    if not final_source["consistent"]:
+        bundle["blocking"].append("source changed before publication")
+        calculation_passed = False
+        calculation_exit = 1
+        bundle["allLocalPassed"] = False
+        bundle["calculationPassed"] = False
     seal(bundle, calculation_exit)
 
     # The published files carry this sealed calculation record. Both come from
-    # this one execution under this one run id, and they are published together
-    # or not at all, so one can never describe a run whose other half is
-    # missing.
+    # this one execution under this one run id. The delivery report records
+    # publication, rollback and cleanup separately from calculation.
     text, record = summary_text(bundle), canonical_json(bundle)
     delivery = deliver_outputs(
         [(arguments.json_out, record + "\n"), (arguments.text_out, text + "\n")],
-        bundle["runId"])
+        bundle["runId"], root=arguments.root)
     delivered = all(entry["ok"] for entry in delivery)
     for entry in delivery:
         if not entry["ok"]:
@@ -434,8 +507,13 @@ def main(argv=None):
     # than to the files it has already closed. Those files say so themselves,
     # through outputDeliveryStatus.
     bundle["outputDelivery"] = delivery
-    bundle["outputDeliveryStatus"] = "delivered" if delivered else "withheld"
-    bundle["allLocalPassed"] = calculation_passed and delivered
+    bundle["outputDeliveryStatus"] = "delivered" if delivered else "failed"
+    bundle["finalSourceReconciliation"] = manifest.reconcile(
+        pre_publication, manifest.snapshot(arguments.root))
+    source_held = bundle["finalSourceReconciliation"]["consistent"]
+    if not source_held:
+        bundle["blocking"].append("source changed during output delivery")
+    bundle["allLocalPassed"] = calculation_passed and delivered and source_held
     if not delivered:
         for entry in delivery:
             if not entry["ok"]:
@@ -443,6 +521,9 @@ def main(argv=None):
                     f"output delivery to {entry['path']} failed: {entry['error']}")
     exit_code = 0 if bundle["allLocalPassed"] else 1
     bundle["exitCode"] = exit_code
+    bundle["meaning"] = ("every local expectation and output delivery passed; "
+                         "not deployment, chain or UI evidence" if bundle["allLocalPassed"]
+                         else "this run is not a local pass")
     print(canonical_json(bundle) if arguments.json else summary_text(bundle))
     return exit_code
 

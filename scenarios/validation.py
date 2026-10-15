@@ -267,7 +267,7 @@ def validate_command_record(entry):
         return tuple(dict.fromkeys(reasons))
     exit_code = entry.get("exitCode")
     executed = entry.get("executed")
-    if executed is not None:
+    if "executed" in entry:
         if not _typed(executed, bool):
             reasons.append("EX_EVIDENCE_COMMAND_REFUSED:executed")
         elif executed is not (outcome in EXECUTED_OUTCOMES):
@@ -275,6 +275,12 @@ def validate_command_record(entry):
             # it ran and report no result at all.
             reasons.append("EX_EVIDENCE_EXECUTED_MISMATCH")
     if outcome in UNEXECUTED_OUTCOMES:
+        # Execution-only fields cannot turn an unexecuted placeholder into
+        # evidence. Empty optional fields are harmless, populated ones are not.
+        for key in ("signal", "durationMs", "stdout", "stderr", "rawLog",
+                    "rawLogPath", "rawLogRef", "observedInRun", "selfReported"):
+            if entry.get(key) not in (None, "", [], {}):
+                reasons.append(f"EX_EVIDENCE_UNEXECUTED_SIGNAL:{key}")
         # Nothing ran, so there is no exit code to report. A success code here
         # would be invented evidence.
         if exit_code is not None:
@@ -321,6 +327,33 @@ def validate_command_record(entry):
     return tuple(dict.fromkeys(reasons))
 
 
+def validate_historical_citation(citation):
+    """Check citation shape only, without verifying the referenced source.
+
+    Historical citations are separate from current-run commands. Full source
+    hashes, a run identity and an evidence locator make a citation inspectable;
+    they do not establish that the cited execution or source was verified.
+    """
+    reason = ("EX_EVIDENCE_HISTORICAL_CITATION_REFUSED",)
+    if not isinstance(citation, dict):
+        return reason
+    if citation.get("scope") != "historical-citation" or \
+            citation.get("verification") != "unverified":
+        return reason
+    for key in ("observedInRun", "evidenceLocator"):
+        value = citation.get(key)
+        if not isinstance(value, str) or not value.strip() or _fabricated(value):
+            return reason
+    source = citation.get("sourceIdentity")
+    if not isinstance(source, dict):
+        return reason
+    for key in ("commit", "tree"):
+        value = source.get(key)
+        if not isinstance(value, str) or COMMIT.fullmatch(value) is None or _fabricated(value):
+            return reason
+    return ()
+
+
 def validate_result(record):
     """Refuse a local result record that cannot stand on its own identity.
 
@@ -331,6 +364,14 @@ def validate_result(record):
     if not isinstance(record, dict):
         return {"accepted": False, "reasons": ("EX_EVIDENCE_SHAPE_REFUSED",)}
     reasons = []
+    citations = record.get("historicalCitations", [])
+    if not isinstance(citations, list):
+        reasons.append("EX_EVIDENCE_HISTORICAL_CITATION_REFUSED")
+    else:
+        for citation in citations:
+            reasons.extend(validate_historical_citation(citation))
+            if isinstance(citation, dict) and citation.get("observedInRun") == record.get("runId"):
+                reasons.append("EX_EVIDENCE_HISTORICAL_CITATION_CURRENT_RUN")
     for key, (expected, pattern) in EVIDENCE_SCHEMA.items():
         if key not in record:
             reasons.append(f"EX_EVIDENCE_MISSING:{key}")
@@ -361,24 +402,21 @@ def validate_result(record):
     # record whose own commands sit outside its own window is describing work
     # from somewhere else, however well-formed each half looks on its own.
     #
-    # Evidence from an earlier run may still be cited, which is a different
-    # thing and has to say so: such a record names the run it came from in
-    # observedInRun, and is then checked for that identity instead of against
-    # this window. What is refused is a command silently presented as this
-    # run's own while its timing says otherwise.
+    # This validator validates current-run evidence only. A historical run ID
+    # is a citation, not proof of its source tree, log integrity or timing.
+    # Historical evidence belongs in historicalCitations with its own source,
+    # run and locator, explicitly unverified. It cannot bypass this window by
+    # supplying observedInRun on a current-run command.
     if started is not None and finished is not None and isinstance(commands, list):
         for entry in commands:
             if not isinstance(entry, dict) or entry.get("outcome") in UNEXECUTED_OUTCOMES:
                 continue
             origin = entry.get("observedInRun")
-            if origin is not None:
+            if "observedInRun" in entry:
                 if not isinstance(origin, str) or origin.strip() == "":
                     reasons.append("EX_EVIDENCE_REFERENCED_RUN_REFUSED")
-                elif origin == record.get("runId"):
-                    # It claims to be this run's own, so the window applies.
-                    origin = None
-                else:
-                    continue
+                elif origin != record.get("runId"):
+                    reasons.append("EX_EVIDENCE_HISTORICAL_COMMAND_UNSUPPORTED")
             began = parse_instant(entry.get("startedAt"))
             ended = parse_instant(entry.get("finishedAt"))
             if (began is not None and began < started) or \
@@ -436,6 +474,9 @@ def validate_result(record):
             "commandOutcomes": [entry.get("outcome") for entry in commands
                                 if isinstance(entry, dict)]
             if isinstance(commands, list) else [],
+            "historicalCitationsVerified": False,
+            "historicalCitationCount": len(citations) if isinstance(citations, list) else 0,
+            "historicalCitationScope": "citations only; excluded from current-run proof",
             "notPassing": tuple(not_passing),
             "runPassed": ordered == () and not_passing == [],
             "canonicalBytes": len(canonical_json(record).encode("ascii"))

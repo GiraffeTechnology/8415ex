@@ -18,6 +18,8 @@ import hashlib
 import os
 import subprocess
 import time
+import uuid
+from pathlib import Path
 
 #: How much of each stream is kept inline. The digest covers the whole stream.
 TAIL_BYTES = 4096
@@ -51,13 +53,15 @@ def pending(command, reason, cases=()):
             "cases": list(cases), "executed": False}
 
 
-def run_command(argv, root=".", timeout=DEFAULT_TIMEOUT_SECONDS, cases=(), env=None):
+def run_command(argv, root=".", timeout=DEFAULT_TIMEOUT_SECONDS, cases=(), env=None,
+                raw_log_dir=None):
     """Execute one command and record only what actually happened."""
     command = " ".join(argv)
     environment = dict(os.environ)
     environment.setdefault("PYTHONDONTWRITEBYTECODE", "1")
     if env:
         environment.update(env)
+    raw_streams = {}
     started = time.time()
     started_at = _utc(started)
     record = {"command": command, "argv": list(argv), "cwd": str(root),
@@ -66,6 +70,7 @@ def run_command(argv, root=".", timeout=DEFAULT_TIMEOUT_SECONDS, cases=(), env=N
         completed = subprocess.run(argv, cwd=root, capture_output=True, check=False,
                                    timeout=timeout, env=environment)
     except subprocess.TimeoutExpired as expiry:
+        raw_streams = {"stdout": expiry.stdout or b"", "stderr": expiry.stderr or b""}
         finished = time.time()
         record.update({"outcome": "timeout", "exitCode": None,
                        "timeoutSeconds": timeout,
@@ -78,6 +83,7 @@ def run_command(argv, root=".", timeout=DEFAULT_TIMEOUT_SECONDS, cases=(), env=N
                        "stdout": _stream(b""), "stderr": _stream(b""),
                        "detail": f"the command could not be started: {problem}"})
     else:
+        raw_streams = {"stdout": completed.stdout, "stderr": completed.stderr}
         finished = time.time()
         status = completed.returncode
         if status == 0:
@@ -92,25 +98,38 @@ def run_command(argv, root=".", timeout=DEFAULT_TIMEOUT_SECONDS, cases=(), env=N
                        "stderr": _stream(completed.stderr)})
     record["finishedAt"] = _utc(finished)
     record["durationMs"] = int((finished - started) * 1000)
+    if raw_log_dir is not None:
+        # Only advertise files after the captured bytes have actually been saved.
+        # Do not fabricate raw logs for an invocation that never started.
+        directory = Path(raw_log_dir)
+        prefix = "command-" + uuid.uuid4().hex
+        record["rawLog"] = {}
+        for name, data in raw_streams.items():
+            target = directory / (prefix + "." + name + ".log")
+            with target.open("xb") as handle:
+                handle.write(data)
+            record["rawLog"][name] = {"path": str(target.resolve()),
+                                       "artifactPath": target.name, "bytes": len(data),
+                                       "sha256": hashlib.sha256(data).hexdigest()}
     return record
 
 
 def self_record(command, exit_code, started_at, finished_at, cases=(), detail=None):
     """The record for the run that is producing this bundle.
 
-    It is built only once the final exit code is known, so the outcome is read
-    from the real status rather than assumed.
+    It records a completed in-process calculation. Its caller must state that
+    scope; this is never evidence of the process's eventual exit or delivery.
     """
     if exit_code is None:
         raise ValueError("a self record needs the final exit code; nothing is pre-filled")
     return {"command": command, "outcome": "passed" if exit_code == 0 else "failed",
             "exitCode": exit_code, "startedAt": started_at, "finishedAt": finished_at,
             "cases": list(cases), "executed": True, "selfReported": True,
-            "detail": detail or ("this record is written after the final exit code was "
-                                 "determined for this very run")}
+            "detail": detail or ("this record describes a completed in-process calculation; "
+                                 "it does not capture final process exit or delivery")}
 
 
-def capture_cli(argv, root=".", timeout=DEFAULT_TIMEOUT_SECONDS, env=None):
+def capture_cli(argv, root=".", timeout=DEFAULT_TIMEOUT_SECONDS, env=None, raw_log_dir=None):
     """Observe a command's final outer status from outside it.
 
     A process cannot record its own final exit status: it is not known until the
@@ -123,7 +142,7 @@ def capture_cli(argv, root=".", timeout=DEFAULT_TIMEOUT_SECONDS, env=None):
     This observes an existing entry point; it is not a second runner, and it
     computes nothing of its own.
     """
-    record = run_command(argv, root=root, timeout=timeout, env=env)
+    record = run_command(argv, root=root, timeout=timeout, env=env, raw_log_dir=raw_log_dir)
     record["scope"] = "final-outer-process"
     record["observedBy"] = "external observer, not the observed process"
     return record

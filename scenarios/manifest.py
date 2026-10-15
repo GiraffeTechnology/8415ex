@@ -1,6 +1,6 @@
 """Source and package manifest for a local run.
 
-The manifest binds a result to the exact source it came from: the repository
+The manifest reports a result alongside observed source identity: the repository
 root actually imported, the commit, the tree, whether the worktree was clean,
 the runtime, and every tracked file with its byte count and digest. It records
 what was built and run, never that a deployment happened.
@@ -31,7 +31,7 @@ PROJECT_PACKAGES = ("scenarios", "exchange", "ci")
 
 
 def loaded_module_provenance(root="."):
-    """Where every loaded project module came from, and what it contains.
+    """Loaded project module origins and their current on-disk file bytes.
 
     Walks the modules actually imported into this interpreter, keeps the ones
     belonging to this project, and records each one's resolved path, byte count
@@ -41,14 +41,17 @@ def loaded_module_provenance(root="."):
     base = Path(root).resolve()
     modules, foreign, unreadable = [], [], []
     for name, module in sorted(sys.modules.items()):
-        if name.split(".")[0] not in PROJECT_PACKAGES:
+        spec_name = getattr(getattr(module, "__spec__", None), "name", None)
+        project_name = spec_name if name == "__main__" and spec_name else name
+        if project_name.split(".")[0] not in PROJECT_PACKAGES:
             continue
         origin = getattr(module, "__file__", None)
         if origin is None:
             # A namespace package carries no file of its own.
             continue
         resolved = Path(origin).resolve()
-        entry = {"module": name, "path": str(resolved)}
+        entry = {"module": name, "projectModule": project_name, "path": str(resolved),
+                 "measurement": "on-disk-file-at-observation-time"}
         try:
             data = resolved.read_bytes()
         except OSError as problem:
@@ -68,7 +71,11 @@ def loaded_module_provenance(root="."):
         modules.append(entry)
     return {
         "root": str(base),
-        "packages": sorted({entry["module"].split(".")[0] for entry in modules}),
+        "scope": "loaded module origins and current on-disk file bytes",
+        "executionBytesAttested": False,
+        "limitations": ("does not attest already loaded code objects, bytecode caches, "
+                        "import hooks, monkey patches or all executed bytes"),
+        "packages": sorted({entry["projectModule"].split(".")[0] for entry in modules}),
         "modules": modules,
         "moduleCount": len(modules),
         "foreign": foreign,
@@ -98,6 +105,7 @@ def snapshot(root="."):
             "\n".join(f"{entry['path']}:{entry['sha256']}"
                        for entry in inventory["files"]).encode("utf-8")).hexdigest(),
         "moduleDigest": provenance["digest"],
+        "moduleProvenance": provenance,
         "moduleCount": provenance["moduleCount"],
         "provenanceOk": provenance["ok"],
         "foreignModules": [entry["module"] for entry in provenance["foreign"]],
@@ -212,6 +220,7 @@ def source_identity(root="."):
     identity["loadedPackages"] = provenance["packages"]
     identity["foreignModules"] = [entry["module"] for entry in provenance["foreign"]]
     identity["moduleDigest"] = provenance["digest"]
+    identity["moduleProvenance"] = provenance
     for entry in provenance["foreign"]:
         errors.append(f"module {entry['module']} was loaded from {entry['path']}, "
                       f"outside {provenance['root']}")
