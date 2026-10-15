@@ -88,6 +88,8 @@ DEVELOPED_HERE = {
          "where": "scenarios/docs.py"},
         {"deliverable": "the definition of done, clause by clause, with its owner",
          "where": "scenarios/completion.py"},
+        {"deliverable": "per requirement section, what addresses it or whose it is",
+         "where": "scenarios/prd.py"},
         {"deliverable": "per scenario, the nine items a demonstration must carry",
          "where": "scenarios/dossier.py"},
         {"deliverable": "the factual storyboard and presentation outline",

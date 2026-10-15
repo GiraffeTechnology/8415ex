@@ -12,4 +12,4 @@ with no dependencies of its own avoids both.
 COMMANDS = ("run-all", "scenarios", "paths", "matrix", "manifest", "handoff",
             "validate-config", "observations", "evidence-index", "decisions",
             "receipt", "reuse", "events", "stages", "dossier", "storyboard",
-            "operations", "usage", "completion")
+            "operations", "usage", "completion", "sections")

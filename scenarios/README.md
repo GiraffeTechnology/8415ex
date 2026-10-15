@@ -31,6 +31,7 @@ separate from it.
 | `storyboard.py` | the presentation outline, parsed and checked against the code it describes |
 | `docs.py` | the documented commands, checked against the commands that exist |
 | `completion.py` | the definition of done, clause by clause, with its evidence or its owner |
+| `prd.py` | per requirement section: what addresses it here, or the owner it belongs to |
 | `commands.py` | the subcommand list, declared once so the parser and the check cannot disagree |
 | `evidence_index.py` | one index from requirement to artifact over a run's own artefacts |
 | `cli.py` | one reproducible entry point |
@@ -80,6 +81,9 @@ python3 -B -m scenarios.cli usage
 
 # the definition of done, clause by clause
 python3 -B -m scenarios.cli completion
+
+# per requirement section: what addresses it, or whose it is
+python3 -B -m scenarios.cli sections
 
 # individual parts
 python3 -B -m scenarios.cli scenarios
@@ -274,6 +278,36 @@ mentioning the backlog, not that it ended with one. Writing that distinction
 down immediately earned its keep: the out-of-order scenario recorded its
 deferral building up and never recorded it draining, so the one scenario that
 demonstrates a backlog clearing had no record of it clearing. It records it now.
+
+## Is any section addressed by nothing at all
+
+The acceptance matrix answers one axis and the stage map another. Neither
+answers the question that matters once a whole requirements document has been
+assigned at once: is any section of it addressed by nothing?
+
+That gap is easy to miss precisely because the other two reports look complete.
+Every declared requirement can have a case and every stage can have
+deliverables, while a whole section has quietly been skipped, because a section
+that produced no requirement identifier and no stage entry appears in neither
+report.
+
+`scenarios.cli sections` lists each section with what addresses it: the
+requirement families whose identifiers it carries, the modules and reports built
+for it, and, where it is not this surface's to carry, the owner it belongs to -
+and what this surface does instead, because handing a section to an owner is not
+an answer on its own. Every path is checked against the disk and every
+requirement family against the declared requirements, so a label cannot stand in
+for something that is not there. A section with no family, no deliverable and no
+owner is a finding, as is a declared requirement family that belongs to no
+section, and a gap in the section numbering.
+
+It found one on its first run: a whole requirement family had no section, which
+neither the matrix nor the stage map could have shown, because every one of its
+requirements already had a passing case.
+
+Sections are identified by number and by a short engineering label describing
+what this repository does about them. The requirements document is private and
+none of its text is reproduced.
 
 ## The definition of done, and the half of it that is easiest to lose
 

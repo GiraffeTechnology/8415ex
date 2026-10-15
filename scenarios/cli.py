@@ -37,8 +37,8 @@ from exchange.ids import canonical_json
 
 from .commands import COMMANDS
 from . import (completion, decisions, docs, dossier, events, evidence_index,
-               execution, handoff, manifest, matrix, operations, reuse, stages,
-               storyboard,
+               execution, handoff, manifest, matrix, operations, prd, reuse,
+               stages, storyboard,
                observations, receipt, validation)
 from .demos import DEMOS
 from .harness import report_text, run_all
@@ -107,6 +107,9 @@ CONSISTENCY_CHECKS = (
      "reason": "the event vocabulary does not account for what the domain records"},
     {"key": "dossier", "flag": ("allItemsCarried",), "blocks": True,
      "reason": "a scenario does not record something a demonstration must carry"},
+    {"key": "sectionLedger", "flag": ("consistent",), "blocks": True,
+     "reason": "a requirement section is addressed by nothing, or names "
+               "something that is not there"},
     {"key": "completion", "flag": ("notMeantHolds",), "blocks": True,
      "reason": "something this round explicitly does not mean was observed in "
                "the run: a main network, a real adapter or a live quote asset"},
@@ -203,6 +206,7 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
         "dossier": dossier.build(scenario_report),
         "storyboard": storyboard.check(root),
         "operations": operations.build(root),
+        "sectionLedger": prd.build(root),
         "usage": docs.check(root),
         "evidenceIndex": evidence_index.build(
             scenario_report, path_report, root,
@@ -559,6 +563,10 @@ def main(argv=None):
     if arguments.command == "decisions":
         print(canonical_json(decisions.register()))
         return 0
+    if arguments.command == "sections":
+        built = prd.build(arguments.root)
+        print(canonical_json(built))
+        return 0 if built["consistent"] else 1
     if arguments.command == "completion":
         # The ledger describes a completed run, so one is performed and then
         # read; nothing in it is recomputed from the run.
