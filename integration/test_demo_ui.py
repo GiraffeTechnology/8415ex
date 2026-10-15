@@ -163,3 +163,30 @@ class InteractiveDemoJourney(unittest.TestCase):
                 self.assertEqual(len(server.runs), 0)
             finally:
                 connection.close()
+
+    def test_early_eof_refuses_short_body_before_parsing_or_simulation(self):
+        import socket
+        with running() as server:
+            bodies = (urlencode({"csrf": server.csrf, "scenario": "DEMO-01"}).encode(),
+                      json.dumps({"csrf": server.csrf, "scenario": "DEMO-01"}).encode())
+            for body in bodies:
+                with self.subTest(body=body), patch.object(server, "simulate", wraps=server.simulate) as execute, patch.object(demo_ui, "parse_qs", wraps=demo_ui.parse_qs) as parse:
+                    connection = socket.create_connection(server.server_address[:2], timeout=3)
+                    try:
+                        headers = ("POST /simulate HTTP/1.1\r\nHost: "
+                                   + server.origin.removeprefix("http://")
+                                   + "\r\nOrigin: " + server.origin
+                                   + "\r\nContent-Type: application/x-www-form-urlencoded"
+                                   + "\r\nContent-Length: " + str(len(body) + 10) + "\r\n\r\n").encode()
+                        connection.sendall(headers + body)
+                        connection.shutdown(socket.SHUT_WR)
+                        response = http.client.HTTPResponse(connection)
+                        response.begin()
+                        response_body = response.read().decode()
+                        self.assertEqual(response.status, 400)
+                        self.assertIn("incomplete request body", response_body)
+                        parse.assert_not_called()
+                        execute.assert_not_called()
+                        self.assertEqual(len(server.runs), 0)
+                    finally:
+                        connection.close()

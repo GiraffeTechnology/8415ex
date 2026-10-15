@@ -194,7 +194,11 @@ class DemoHandler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
             if not 0 < length <= MAX_BODY:
                 raise ValueError("bounded request body required")
-            form = parse_qs(self.rfile.read(length).decode("utf-8"), strict_parsing=True)
+            body = self.rfile.read(length)
+            if len(body) != length:
+                self.close_connection = True
+                raise ValueError("incomplete request body")
+            form = parse_qs(body.decode("utf-8"), strict_parsing=True)
             if set(form) != {"csrf", "scenario"} or any(len(v) != 1 for v in form.values()):
                 raise ValueError("fixed scenario and token only; no outcomes accepted")
             if (not form["csrf"][0].isascii()
