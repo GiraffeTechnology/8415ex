@@ -138,3 +138,28 @@ class InteractiveDemoJourney(unittest.TestCase):
             demo_ui.DemoServer(host="0.0.0.0")
         with self.assertRaises(ValueError):
             demo_ui.DemoServer(commit="short")
+
+    def test_non_ascii_csrf_returns_stable_refusal_without_run(self):
+        with running() as server:
+            body = urlencode({"csrf": "\u4e2d\u6587", "scenario": "DEMO-01"})
+            self.assertEqual(request(server, "POST", "/simulate", body)[0], 403)
+            self.assertEqual(len(server.runs), 0)
+
+    def test_incomplete_body_times_out_without_executing(self):
+        import socket
+        with running() as server:
+            connection = socket.create_connection(server.server_address[:2], timeout=4)
+            try:
+                request_bytes = ("POST /simulate HTTP/1.1\r\nHost: "
+                                 + server.origin.removeprefix("http://")
+                                 + "\r\nOrigin: " + server.origin
+                                 + "\r\nContent-Type: application/x-www-form-urlencoded"
+                                 + "\r\nContent-Length: 100\r\n\r\nx=1").encode()
+                connection.sendall(request_bytes)
+                response = http.client.HTTPResponse(connection)
+                response.begin()
+                self.assertEqual(response.status, 408)
+                response.read()
+                self.assertEqual(len(server.runs), 0)
+            finally:
+                connection.close()

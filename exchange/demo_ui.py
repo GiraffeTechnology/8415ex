@@ -63,6 +63,10 @@ class DemoServer(HTTPServer):
 class DemoHandler(BaseHTTPRequestHandler):
     server_version = "8415ex-local-demo"
 
+    def setup(self):
+        super().setup()
+        self.connection.settimeout(2)  # bound a partial local request; no global network change
+
     def log_message(self, fmt, *args):
         return
 
@@ -193,11 +197,15 @@ class DemoHandler(BaseHTTPRequestHandler):
             form = parse_qs(self.rfile.read(length).decode("utf-8"), strict_parsing=True)
             if set(form) != {"csrf", "scenario"} or any(len(v) != 1 for v in form.values()):
                 raise ValueError("fixed scenario and token only; no outcomes accepted")
-            if not secrets.compare_digest(form["csrf"][0], self.server.csrf):
+            if (not form["csrf"][0].isascii()
+                    or not secrets.compare_digest(form["csrf"][0], self.server.csrf)):
                 self.send_body(403, "simulation token refused")
                 return
             record = self.server.simulate(form["scenario"][0])
             self.send_body(303, "", Location="/run?id=" + record["runId"])
+        except TimeoutError:
+            self.close_connection = True
+            self.send_body(408, "simulation request body timed out")
         except (ValueError, UnicodeError) as error:
             self.send_body(400, escape(str(error)))
 
