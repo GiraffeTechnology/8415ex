@@ -24,6 +24,7 @@ separate from it.
 | `decisions.py` | the open-decision register: what each one blocks, and what it does not |
 | `receipt.py` | the nine-group candidate receipt, assembled from a completed run |
 | `reuse.py` | what this package reuses, what is simulated, and what is not located yet |
+| `events.py` | the logical event contract, checked read-only over the domain's timeline |
 | `evidence_index.py` | one index from requirement to artifact over a run's own artefacts |
 | `cli.py` | one reproducible entry point |
 | `STORYBOARD.md` | the factual storyboard and presentation outline |
@@ -51,6 +52,9 @@ python3 -B -m scenarios.cli decisions
 
 # the reuse and interface map, read from the imported modules and this source
 python3 -B -m scenarios.cli reuse
+
+# the logical event contract, its conformance, and one timeline's coverage
+python3 -B -m scenarios.cli events
 
 # individual parts
 python3 -B -m scenarios.cli scenarios
@@ -219,6 +223,69 @@ names the open decision that tracks it and the owner who can answer it, so it
 reads as a dependency with an owner rather than as an unexplained hole.
 
 The subcommand exits non-zero when the map stops accounting for the source.
+
+## The logical event contract
+
+`scenarios.cli events` is the event contract of PRD section 10.2, answered from
+where this task actually stands. The recorder and the event shape belong to the
+domain and ledger surface, which this task does not own, so the contract is
+checked read-only rather than enforced, and what cannot be read is reported as
+an interface gap with its owner and the next step rather than fixed in someone
+else's file.
+
+**The vocabulary** is a conformance check. The kinds the domain records are read
+out of its own source, so a kind it adds or removes is a finding rather than an
+invisible change, and two findings are kept apart because they mean different
+things: a kind the domain records and the contract does not declare means the
+trail carries something unaccounted for, while a kind the contract declares and
+the domain does not record means an audit group that cannot be evidenced until
+someone records it. Two kinds the domain writes, minting and an observed gas
+figure, serve no group and are declared as ancillary, so they are not reported
+as undeclared and never count as coverage of something they do not evidence. The
+report says plainly that it is not an enforcement point: the recorder still
+accepts any string, and this check is the only thing that notices.
+
+**Correlation** is derived from the event as it stands, with every key present
+and `carriedByDomain` saying which were really on it. A key the domain does not
+carry is null, because an absent key and an unknown value read the same to a
+consumer and are not the same thing, and each key names where it comes from. No
+run id is invented, and no local event is ever reported as observed on chain.
+
+**Replay** needs nothing but the timeline. Two records that differ only in a
+free-form detail are one event, so a re-delivery is a counted duplicate that
+changes nothing: replaying the same events twice gives the same digest and the
+same movement count. Out-of-order delivery is reported rather than silently
+reordered, and an undeclared kind met during a replay is reported rather than
+raised, because refusing would make an unaccounted kind look like a crash in the
+reader.
+
+An attempt is not a movement. Where an attempt has its own completed counterpart
+(a refund records `segment-refunded` on success and `segment-refund-attempt`
+only when it fails), counting the attempt too would double-count the success. A
+release has no separate completion record, so its own escrow status decides, and
+a failed or unknown-outcome release is recorded as an attempt that moved nothing
+rather than as money reported paid that the adapter never confirmed.
+
+Each group gets exactly one status, so the buckets cannot overlap and a group
+cannot be read two ways at once:
+
+| status | what it means |
+| --- | --- |
+| `recorded` | every locally recordable kind in the group was observed |
+| `partly-recorded` | some were, and the group needs no chain observation |
+| `derived` | correctly read off other events, and said to be derived |
+| `awaiting-chain-observation` | part of the group needs a real chain |
+| `not-observed` | the group simply did not occur in this run |
+
+`awaiting-chain-observation` exists for the case most easily overstated. A
+transfer is submitted locally and observed on a chain; calling that group
+recorded because its local half is complete would be exactly the conflation this
+report prevents, so the group says it is waiting, with `localHalfObserved`
+showing that the local part really was recorded. The confirmed prefix advancing
+is the opposite case: the domain records no event for it, but every registration
+result carries the resulting holder index, so it is reported as derived: a
+correct reading of the trail, not an event, which a consumer told it was
+recorded would go looking for.
 
 ## The evidence index, including the artifact it lands in
 
