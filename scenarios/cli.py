@@ -35,8 +35,8 @@ import uuid
 
 from exchange.ids import canonical_json
 
-from . import (decisions, events, evidence_index, execution, handoff, manifest,
-               matrix, reuse, stages,
+from . import (decisions, dossier, events, evidence_index, execution, handoff,
+               manifest, matrix, reuse, stages,
                observations, receipt, validation)
 from .demos import DEMOS
 from .harness import report_text, run_all
@@ -126,6 +126,7 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
         "reuse": reuse.build(scenario_report, root),
         "eventContract": events.build(root=root),
         "stageMap": stages.build(root),
+        "dossier": dossier.build(scenario_report),
         "evidenceIndex": evidence_index.build(
             scenario_report, path_report, root,
             {"runId": run_id, "startedAt": started_at},
@@ -438,7 +439,7 @@ def main(argv=None):
                                             "manifest", "handoff", "validate-config",
                                             "observations", "evidence-index",
                                             "decisions", "receipt", "reuse",
-                                            "events", "stages"))
+                                            "events", "stages", "dossier"))
     parser.add_argument("--root", default=".")
     parser.add_argument("--json", action="store_true", help="print the canonical record only")
     parser.add_argument("--json-out", help="write the canonical record of this same run here")
@@ -466,6 +467,10 @@ def main(argv=None):
     if arguments.command == "decisions":
         print(canonical_json(decisions.register()))
         return 0
+    if arguments.command == "dossier":
+        built = dossier.build(run_all(list(DEMOS)))
+        print(canonical_json(built))
+        return 0 if built["allItemsCarried"] else 1
     if arguments.command == "stages":
         built = stages.build(arguments.root)
         print(canonical_json(built))

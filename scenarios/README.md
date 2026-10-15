@@ -26,6 +26,7 @@ separate from it.
 | `reuse.py` | what this package reuses, what is simulated, and what is not located yet |
 | `events.py` | the logical event contract, checked read-only over the domain's timeline |
 | `stages.py` | per stage: what is developed here, what is accepted elsewhere, what is owed |
+| `dossier.py` | per scenario: the nine items a demonstration must carry, and what did not resolve |
 | `evidence_index.py` | one index from requirement to artifact over a run's own artefacts |
 | `cli.py` | one reproducible entry point |
 | `STORYBOARD.md` | the factual storyboard and presentation outline |
@@ -59,6 +60,9 @@ python3 -B -m scenarios.cli events
 
 # the stage map: developed here, accepted elsewhere, still owed
 python3 -B -m scenarios.cli stages
+
+# per scenario: the nine items a demonstration must carry
+python3 -B -m scenarios.cli dossier
 
 # individual parts
 python3 -B -m scenarios.cli scenarios
@@ -227,6 +231,40 @@ names the open decision that tracks it and the owner who can answer it, so it
 reads as a dependency with an owner rather than as an unexplained hole.
 
 The subcommand exits non-zero when the map stops accounting for the source.
+
+## What each scenario has to carry
+
+A scenario report says what was checked. It does not say whether the scenario
+carries everything a demonstration has to present, and those are different
+questions: a run can pass every expectation while still not recording the prices
+it used or the escrow result it reached. `scenarios.cli dossier` declares the
+nine items and resolves each one from the scenario record.
+
+Three statuses do the work, and keeping them apart is the point.
+
+A **gap** is an item a local run could record and did not. That is the only
+status here that is a finding against this surface, and writing this found three
+real ones: the two rollback scenarios and the deadline scenario each reached a
+funded state, asserted things about it, and recorded no per-segment escrow
+result on any step. They record it now, so the item resolves from the record
+rather than from the wording of a check.
+
+**Resolved elsewhere** is an item the scenario does not hold but this delivery
+does, named so a reviewer follows it instead of concluding it is missing. The
+event trail is the one: it belongs to the domain and is read by `events.py`
+rather than restated inside each scenario.
+
+**NOT_RUN** is an item no local run can discharge at all - a transaction hash
+with nothing signing, a page state with no browser. It carries the evidence slot
+that will hold it and the reason it is empty, the slot is checked against the
+handoff checklist, and no local stand-in is offered: the page state stays
+NOT_RUN however completely the status pages render, and `renderedBy` names the
+renderer precisely so it is on record as not being evidence.
+
+Rules match on structure and on case identifiers, never on the wording of an
+expectation, so rephrasing a check cannot silently turn an item into a gap. A
+gap names exactly which keys were missing, and an empty report covers nothing
+rather than reading as complete.
 
 ## The stage map
 
