@@ -4,6 +4,8 @@ The text summary and the canonical JSON record are two renderings of a single
 execution, written in one invocation under one run id. Two invocations are two
 runs: their observations are never mixed, and nothing presents them as one.
 """
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -328,6 +330,86 @@ class ExitStatus(unittest.TestCase):
         cli.seal(bundle, 1)
         self.assertEqual(bundle["exitCode"], 1)
         self.assertEqual(bundle["commands"][0]["exitCode"], 1)
+
+
+class ArtifactLegSurvivesDelivery(unittest.TestCase):
+    """The delivered file must be navigable from its own root.
+
+    The index is rebuilt when the run is sealed. A rebuild that forgot the
+    declared output plan would drop the artifact leg from the only copy a
+    reviewer ever reads, so the guarantee is checked on the published file
+    rather than on the in-memory bundle.
+    """
+
+    @staticmethod
+    def _resolve(document, pointer):
+        current = document
+        for part in pointer.strip("/").split("/"):
+            current = current[int(part)] if isinstance(current, list) else current[part]
+        return current
+
+    def test_the_published_record_names_the_file_it_was_published_to(self):
+        with tempfile.TemporaryDirectory() as directory:
+            json_out = os.path.join(directory, "run.json")
+            text_out = os.path.join(directory, "run.txt")
+            cli.main(["run-all", "--root", ROOT, "--json",
+                      "--json-out", json_out, "--text-out", text_out])
+            published = json.loads(Path(json_out).read_text(encoding="utf-8"))
+        index = published["evidenceIndex"]
+        self.assertEqual([slot["path"] for slot in index["artifacts"]],
+                         [json_out, text_out])
+        self.assertEqual(published["outputDeliveryPlan"], [json_out, text_out])
+
+    def test_every_row_pointer_resolves_that_row_in_the_published_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            json_out = os.path.join(directory, "run.json")
+            cli.main(["run-all", "--root", ROOT, "--json", "--json-out", json_out])
+            published = json.loads(Path(json_out).read_text(encoding="utf-8"))
+        rows = published["evidenceIndex"]["rows"]
+        self.assertTrue(rows)
+        for row in rows:
+            reference, = row["artifactReferences"]
+            with self.subTest(case=row["case"]):
+                self.assertEqual(reference["path"], json_out)
+                resolved = self._resolve(published, reference["pointerInArtifact"])
+                self.assertEqual(resolved["case"], row["case"])
+
+    def test_the_published_record_still_does_not_claim_its_own_delivery(self):
+        with tempfile.TemporaryDirectory() as directory:
+            json_out = os.path.join(directory, "run.json")
+            cli.main(["run-all", "--root", ROOT, "--json", "--json-out", json_out])
+            published = json.loads(Path(json_out).read_text(encoding="utf-8"))
+        # The file exists, which is exactly why the record inside it must not
+        # say so: it was serialised before the write was attempted.
+        self.assertEqual(published["outputDeliveryStatus"],
+                         "NOT_CAPTURED_IN_PROCESS")
+        self.assertEqual(published["evidenceIndex"]["artifactDeliveryStatus"],
+                         "NOT_CAPTURED_IN_PROCESS")
+
+
+class ReuseMapIsPartOfTheRun(unittest.TestCase):
+
+    def test_the_bundle_carries_the_reuse_map(self):
+        bundle = cli._bundle(ROOT)
+        self.assertEqual(bundle["reuse"]["schema"], "8415ex-reuse-map/1")
+        self.assertTrue(bundle["reuse"]["allAdaptersSimulated"])
+        self.assertTrue(bundle["reuse"]["adaptersRecordedInThisRun"],
+                        "the map reads the adapters from this run's scenarios")
+
+    def test_the_subcommand_fails_when_the_map_stops_accounting_for_the_source(self):
+        from scenarios import reuse
+        original = reuse.DOMAIN_REUSE
+        reuse.DOMAIN_REUSE = tuple(entry for entry in original
+                                   if entry["module"] != "exchange.ids")
+        quiet = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(quiet):
+                incomplete = cli.main(["reuse", "--root", ROOT])
+        finally:
+            reuse.DOMAIN_REUSE = original
+        self.assertEqual(incomplete, 1)
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(cli.main(["reuse", "--root", ROOT]), 0)
 
 
 if __name__ == "__main__":

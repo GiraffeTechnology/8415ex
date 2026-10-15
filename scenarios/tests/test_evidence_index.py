@@ -44,6 +44,7 @@ class Index(unittest.TestCase):
                 self.assertIn("commit", row["sourceIdentity"])
                 self.assertIn("runId", row["runIdentity"])
                 self.assertTrue(row["localOutcome"], "observed result")
+                self.assertTrue(row["artifactReferences"], "where the row lands")
 
     def test_a_covered_case_carries_its_raw_expected_and_observed_values(self):
         row = self.rows["T-19"]
@@ -136,3 +137,70 @@ class Index(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ArtifactLeg(unittest.TestCase):
+    """The last leg: which file carries a row, and where inside it.
+
+    The index is built before the outputs are written, so the one thing these
+    tests insist on is that it never claims the writing happened.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.scenario_report = run_all(list(DEMOS))
+        cls.path_report = run_all(list(PATH_CONTRACTS))
+        cls.planned = evidence_index.build(
+            cls.scenario_report, cls.path_report, ROOT, {"runId": "artifact-test"},
+            artifacts=["/out/run.json", "/out/run.txt"])
+        cls.unplanned = evidence_index.build(
+            cls.scenario_report, cls.path_report, ROOT, {"runId": "artifact-test"})
+
+    def test_a_declared_artifact_is_never_reported_as_delivered(self):
+        self.assertEqual(self.planned["artifactDeliveryStatus"],
+                         evidence_index.ARTIFACT_NOT_OBSERVED)
+        for slot in self.planned["artifacts"]:
+            with self.subTest(path=slot["path"]):
+                self.assertEqual(slot["deliveryStatus"],
+                                 evidence_index.ARTIFACT_NOT_OBSERVED)
+                self.assertIn("outputDelivery", slot["deliveryReportedBy"])
+
+    def test_every_row_names_each_declared_artifact_once(self):
+        paths = [slot["path"] for slot in self.planned["artifacts"]]
+        self.assertEqual(paths, ["/out/run.json", "/out/run.txt"])
+        for row in self.planned["rows"]:
+            with self.subTest(case=row["case"]):
+                self.assertEqual([ref["path"] for ref in row["artifactReferences"]],
+                                 paths)
+
+    def test_a_row_pointer_resolves_this_row_inside_the_delivered_record(self):
+        for position, row in enumerate(self.planned["rows"]):
+            reference = row["artifactReferences"][0]
+            with self.subTest(case=row["case"]):
+                self.assertEqual(reference["pointerInIndex"], "#/rows/%d" % position)
+                self.assertEqual(reference["pointerInArtifact"],
+                                 "%s/rows/%d" % (evidence_index.BUNDLE_POINTER,
+                                                 position))
+
+    def test_the_text_output_does_not_claim_to_carry_the_row_verbatim(self):
+        text = self.planned["rows"][0]["artifactReferences"][1]
+        self.assertEqual(text["path"], "/out/run.txt")
+        self.assertIsNone(text["pointerInArtifact"],
+                          "a summary has no pointer to the row")
+        self.assertIn("summary", text["note"])
+
+    def test_no_declared_output_is_reported_as_no_artifact_not_as_a_failure(self):
+        self.assertEqual(self.unplanned["artifacts"], [])
+        self.assertEqual(self.unplanned["artifactCount"], 0)
+        for row in self.unplanned["rows"]:
+            with self.subTest(case=row["case"]):
+                reference, = row["artifactReferences"]
+                self.assertEqual(reference["deliveryStatus"], "NO_ARTIFACT_DECLARED")
+                self.assertIsNone(reference["path"])
+                self.assertIsNone(reference["pointerInArtifact"])
+                self.assertEqual(reference["pointerInIndex"],
+                                 "#/rows/%d" % self.unplanned["rows"].index(row))
+
+    def test_the_artifact_leg_is_a_schema_change(self):
+        self.assertEqual(self.planned["schema"], "8415ex-evidence-index/3")
+        self.assertEqual(self.planned["bundlePointer"], "/evidenceIndex")

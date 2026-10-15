@@ -23,6 +23,8 @@ separate from it.
 | `execution.py` | real command records: what ran, how it ended, or NOT_RUN |
 | `decisions.py` | the open-decision register: what each one blocks, and what it does not |
 | `receipt.py` | the nine-group candidate receipt, assembled from a completed run |
+| `reuse.py` | what this package reuses, what is simulated, and what is not located yet |
+| `evidence_index.py` | one index from requirement to artifact over a run's own artefacts |
 | `cli.py` | one reproducible entry point |
 | `STORYBOARD.md` | the factual storyboard and presentation outline |
 
@@ -47,6 +49,9 @@ python3 -B -m scenarios.cli receipt [--execute-suites]
 # the open-decision register
 python3 -B -m scenarios.cli decisions
 
+# the reuse and interface map, read from the imported modules and this source
+python3 -B -m scenarios.cli reuse
+
 # individual parts
 python3 -B -m scenarios.cli scenarios
 python3 -B -m scenarios.cli paths
@@ -55,6 +60,7 @@ python3 -B -m scenarios.cli manifest --json
 python3 -B -m scenarios.cli handoff --json
 python3 -B -m scenarios.cli validate-config
 python3 -B -m scenarios.cli observations
+python3 -B -m scenarios.cli evidence-index
 
 # this package's own tests
 PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s scenarios/tests -t . -v
@@ -183,6 +189,74 @@ It also records the defaults that must not be assumed in place of a decision: a
 pre-funded test account standing in for a gas policy, a budget deduction
 standing in for a fee mechanism, or a device or attestation setting standing in
 for an authorization model.
+
+## The reuse and interface map
+
+`scenarios.cli reuse` answers two questions that otherwise get answered from
+memory: what does this package actually consume, and what is simulated.
+
+Neither half is a hand-maintained list. The domain half declares the real
+attribute names taken from each domain module and checks them against the
+imported module, so a rename in the domain shows up as an unresolved name. It
+then reads this package's own import statements out of the source and compares
+them with the declaration, which catches the opposite drift: a module that is
+consumed but never declared. The two findings are kept apart, because they mean
+different things — an undeclared module is a gap in the map, a declared module
+with no import left is a dependency the code dropped. Imports that only the test
+suites make are reported on their own line and are not counted as package
+reuse: a suite importing a domain module to assert something about it is not
+this package consuming it.
+
+The adapter half is read from a real run rather than from the module's own list,
+so a role that stopped being exercised stops appearing. Every adapter role is
+simulated. This package connects to no real registrar, payment provider, asset
+control, collection desk or wallet, and says so wherever a result is reported.
+
+The last section is the one usually missing: the interfaces that are **not
+located yet**. An unlocated interface is neither a defect nor a simulated one —
+it is work that cannot start until someone says where the real thing is. Each
+names the open decision that tracks it and the owner who can answer it, so it
+reads as a dependency with an owner rather than as an unexplained hole.
+
+The subcommand exits non-zero when the map stops accounting for the source.
+
+## The evidence index, including the artifact it lands in
+
+`scenarios.cli evidence-index` prints one row per case, and the row is a chain a
+reviewer can walk in either direction:
+
+    approved requirement
+      -> the assertion that was actually recorded
+      -> where it is implemented, and which test covers it
+      -> the exact source and run it was observed under
+      -> what was observed, with the raw expected and observed values
+      -> which artifact carries the row, and where inside it
+      -> what real evidence is still owed, and who owns it
+
+The last-but-one leg is new, and it closes the gap that mattered: without it, a
+reviewer holding a delivered file cannot tell which rows that file is supposed
+to carry, and a row cannot say whether it reached a file at all. Each row names
+every declared output, and for the JSON output gives a pointer that resolves
+that same row inside the delivered record — the pointer is relative to the
+file's own root, because that is where a reviewer opening the file starts.
+
+It is also the leg most easily overstated, so it is deliberately understated.
+The index is built before the outputs are written, so at index time every
+artifact is **declared, not delivered**: each slot and the index as a whole
+report `NOT_CAPTURED_IN_PROCESS` and point at the delivery report that carries
+the actual per-path result. The published file says this about itself even
+though its own existence proves the write happened, because the record inside it
+was serialised before the write was attempted. A run that declared no output
+file is reported as `NO_ARTIFACT_DECLARED` — a legitimate run whose rows are
+carried by stdout only, not a delivery failure.
+
+The text summary is named as an artifact but carries no row pointer, because it
+is a summary and does not contain the row verbatim.
+
+The index is rebuilt when the run is sealed, so the declared plan is carried on
+the bundle from the moment it is declared. A rebuild without it would drop the
+artifact leg from the only copy a reviewer ever reads, which is why the
+guarantee is tested on the published file rather than on the in-memory bundle.
 
 ## Route coverage
 

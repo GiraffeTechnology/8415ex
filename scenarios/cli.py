@@ -36,6 +36,7 @@ import uuid
 from exchange.ids import canonical_json
 
 from . import (decisions, evidence_index, execution, handoff, manifest, matrix,
+               reuse,
                observations, receipt, validation)
 from .demos import DEMOS
 from .harness import report_text, run_all
@@ -82,11 +83,16 @@ def _suite_records(root, execute):
     return records
 
 
-def _bundle(root, execute_suites=False, run_id=None, started_at=None):
+def _bundle(root, execute_suites=False, run_id=None, started_at=None,
+            artifacts=None):
     """Everything this run observed, with no record of its own exit status yet.
 
     The self record cannot exist here: the exit status is not known until the
     bundle is complete. ``seal`` adds it afterwards.
+
+    ``artifacts`` is the output delivery plan, declared here so the evidence
+    index can name where each row lands. Declaring a path is not writing it:
+    the index says so, and the delivery report added later carries the result.
     """
     run_id = run_id or _run_id()
     started_at = started_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -116,9 +122,12 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None):
         "commands": commands,
         "handoff": handoff.build(acceptance),
         "openDecisions": decisions.register(),
+        "outputDeliveryPlan": [path for path in (artifacts or []) if path],
+        "reuse": reuse.build(scenario_report, root),
         "evidenceIndex": evidence_index.build(
             scenario_report, path_report, root,
-            {"runId": run_id, "startedAt": started_at}),
+            {"runId": run_id, "startedAt": started_at},
+            artifacts=artifacts),
         "configuration": {"template": validation.local_config_template(),
                           "validation": validation.validate_config(
                               validation.local_config_template())},
@@ -226,6 +235,9 @@ def seal(bundle, exit_code, finished_at=None):
     bundle["evidence"] = dict(bundle["evidence"], commands=list(bundle["commands"]),
                               finishedAt=finished_at)
     bundle["evidenceValidation"] = validation.validate_result(bundle["evidence"])
+    # The rebuilt index keeps the same declared output plan. Rebuilding it
+    # without the plan would silently drop the artifact leg from the record
+    # that actually leaves the run, which is the only copy a reviewer reads.
     bundle["evidenceIndex"] = evidence_index.build(
         bundle["scenarioReport"], bundle["pathReport"],
         bundle["source"]["requestedRoot"],
@@ -233,7 +245,8 @@ def seal(bundle, exit_code, finished_at=None):
          "finishedAt": finished_at}, commands=bundle["commands"],
         observations={key: bundle[key] for key in
                       ("secretScan", "resourceObservation", "workload")},
-        source=bundle["source"])
+        source=bundle["source"],
+        artifacts=bundle.get("outputDeliveryPlan"))
     return bundle
 
 
@@ -422,7 +435,7 @@ def main(argv=None):
     parser.add_argument("command", choices=("run-all", "scenarios", "paths", "matrix",
                                             "manifest", "handoff", "validate-config",
                                             "observations", "evidence-index",
-                                            "decisions", "receipt"))
+                                            "decisions", "receipt", "reuse"))
     parser.add_argument("--root", default=".")
     parser.add_argument("--json", action="store_true", help="print the canonical record only")
     parser.add_argument("--json-out", help="write the canonical record of this same run here")
@@ -450,6 +463,12 @@ def main(argv=None):
     if arguments.command == "decisions":
         print(canonical_json(decisions.register()))
         return 0
+    if arguments.command == "reuse":
+        # The adapter half is read from a real run, so one is performed; the
+        # domain half is read from the imported modules and the package source.
+        built = reuse.build(run_all(list(DEMOS)), arguments.root)
+        print(canonical_json(built))
+        return 0 if built["declaredCoverage"]["complete"] else 1
     if arguments.command == "receipt":
         # The receipt describes a completed run, so one is performed first and
         # then described. Nothing in the receipt is recomputed from the run.
@@ -459,6 +478,9 @@ def main(argv=None):
         print(canonical_json(built))
         return 0 if bundle["allLocalPassed"] else 1
     if arguments.command == "evidence-index":
+        # This subcommand prints and writes nothing, so it declares no
+        # artifact. The index then says so rather than naming a file that was
+        # never going to be written; ``run-all`` is where the plan is real.
         built = evidence_index.build(run_all(list(DEMOS)), run_all(list(PATH_CONTRACTS)),
                                      arguments.root, {"runId": _run_id()})
         print(canonical_json(built))
@@ -480,15 +502,17 @@ def main(argv=None):
         print(canonical_json(scan))
         return 0 if scan["clean"] else 1
 
-    bundle = _bundle(arguments.root, execute_suites=arguments.execute_suites)
+    bundle = _bundle(arguments.root, execute_suites=arguments.execute_suites,
+                     artifacts=[path for path in (arguments.json_out,
+                                                  arguments.text_out) if path])
     # The calculation's status is decided from the observations. It is not the
     # command's status: the outputs still have to be delivered, and a process
     # cannot observe its own final exit.
     calculation_passed = bundle["allLocalPassed"]
     calculation_exit = 0 if calculation_passed else 1
     bundle["calculationPassed"] = calculation_passed
-    bundle["outputDeliveryPlan"] = [path for path in (arguments.json_out,
-                                                      arguments.text_out) if path]
+    # The plan was declared when the bundle was built, so the evidence index
+    # already names it; nothing re-derives it here.
     bundle["outputDeliveryStatus"] = "NOT_CAPTURED_IN_PROCESS"
     pre_publication = manifest.snapshot(arguments.root)
     final_source = manifest.reconcile(bundle["sourceReconciliation"]["before"],
