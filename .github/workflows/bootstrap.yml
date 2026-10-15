@@ -3,7 +3,7 @@ on:
   push:
     branches: [main, bootstrap/commit-bound-ci, fix/zos-bucket-identity-20261013]
   pull_request:
-    branches: [main, bootstrap/commit-bound-ci, feat/stage1-domain-state-20261014, feat/stage2-segmented-settlement-20261014, feat/stage3-suffix-rollback-20261014, feat/stage4-deadline-exit-20261014]
+    branches: [main, bootstrap/commit-bound-ci, feat/stage1-domain-state-20261014, feat/stage2-segmented-settlement-20261014, feat/stage3-suffix-rollback-20261014, feat/stage4-deadline-exit-20261014, feat/stage5-local-delivery-20261014]
 permissions:
   contents: read
 concurrency:
@@ -49,6 +49,11 @@ jobs:
         run: |
           set -euo pipefail
           python3 -B -m unittest discover -s scenarios/tests -t . -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/stage5-preparation-tests.log"
+      - name: Run joined Stage 5 integration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s integration -t . -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/stage5-integration-tests.log"
       - name: Run the six local scenarios and the three route contracts
         shell: bash
         run: |
