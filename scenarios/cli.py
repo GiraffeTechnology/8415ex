@@ -30,13 +30,15 @@ import hashlib
 import os
 import sys
 import shutil
+import shlex
 import time
 import uuid
 
 from exchange.ids import canonical_json
 
-from . import (evidence_index, execution, handoff, manifest, matrix,
-               observations, validation)
+from . import (decisions, evidence_index, execution, handoff, manifest, matrix,
+               reuse,
+               observations, receipt, validation)
 from .demos import DEMOS
 from .harness import report_text, run_all
 from .paths import PATH_CONTRACTS, coverage_map
@@ -82,11 +84,16 @@ def _suite_records(root, execute):
     return records
 
 
-def _bundle(root, execute_suites=False, run_id=None, started_at=None):
+def _bundle(root, execute_suites=False, run_id=None, started_at=None,
+            artifacts=None):
     """Everything this run observed, with no record of its own exit status yet.
 
     The self record cannot exist here: the exit status is not known until the
     bundle is complete. ``seal`` adds it afterwards.
+
+    ``artifacts`` is the output delivery plan, declared here so the evidence
+    index can name where each row lands. Declaring a path is not writing it:
+    the index says so, and the delivery report added later carries the result.
     """
     run_id = run_id or _run_id()
     started_at = started_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -97,6 +104,7 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None):
     (scenario_report, path_report), measured = observations.measure(
         lambda: (run_all(list(DEMOS)), run_all(list(PATH_CONTRACTS))))
     source = manifest.source_identity(root)
+    source["ancestry"] = manifest.parent_identity(root, head=source["commit"])
     acceptance = matrix.build(source, {"runId": run_id, "startedAt": started_at},
                               scenario_report, path_report)
     commands = _suite_records(root, execute_suites)
@@ -115,9 +123,15 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None):
         "manifest": package,
         "commands": commands,
         "handoff": handoff.build(acceptance),
+        "openDecisions": decisions.register(),
+        "outputDeliveryPlan": [entry.get("path") if isinstance(entry, dict) else entry
+                               for entry in (artifacts or []) if entry],
+        "outputArtifacts": artifacts or [],
+        "reuse": reuse.build(scenario_report, root),
         "evidenceIndex": evidence_index.build(
             scenario_report, path_report, root,
-            {"runId": run_id, "startedAt": started_at}),
+            {"runId": run_id, "startedAt": started_at},
+            artifacts=artifacts),
         "configuration": {"template": validation.local_config_template(),
                           "validation": validation.validate_config(
                               validation.local_config_template())},
@@ -153,7 +167,9 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None):
         "notRun": [],
         "transactionHashes": "NOT_RUN",
     }
-    blocking = []
+    blocking = receipt.source_binding_errors(bundle)
+    if not bundle["reuse"]["complete"]:
+        blocking.append("the reuse map is incomplete")
     if not scenario_report["allPassed"]:
         blocking.append("a scenario did not pass")
     if not path_report["allPassed"]:
@@ -197,7 +213,7 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None):
     return bundle
 
 
-def seal(bundle, exit_code, finished_at=None):
+def seal(bundle, exit_code, finished_at=None, command="python3 -B -m scenarios.cli run-all"):
     """Attach this run's own record, once the calculation's status is known.
 
     The record covers only the completed calculation, before output publication.
@@ -206,7 +222,7 @@ def seal(bundle, exit_code, finished_at=None):
     needing external capture and `execution.capture_cli` is what captures it.
     """
     finished_at = finished_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    record = execution.self_record("python3 -B -m scenarios.cli run-all", exit_code,
+    record = execution.self_record(command, exit_code,
                                    bundle["startedAt"], finished_at)
     record["scope"] = "calculation-only-before-publication"
     record["finalProcessStatus"] = "NOT_CAPTURED_IN_PROCESS"
@@ -225,6 +241,9 @@ def seal(bundle, exit_code, finished_at=None):
     bundle["evidence"] = dict(bundle["evidence"], commands=list(bundle["commands"]),
                               finishedAt=finished_at)
     bundle["evidenceValidation"] = validation.validate_result(bundle["evidence"])
+    # The rebuilt index keeps the same declared output plan. Rebuilding it
+    # without the plan would silently drop the artifact leg from the record
+    # that actually leaves the run, which is the only copy a reviewer reads.
     bundle["evidenceIndex"] = evidence_index.build(
         bundle["scenarioReport"], bundle["pathReport"],
         bundle["source"]["requestedRoot"],
@@ -232,7 +251,8 @@ def seal(bundle, exit_code, finished_at=None):
          "finishedAt": finished_at}, commands=bundle["commands"],
         observations={key: bundle[key] for key in
                       ("secretScan", "resourceObservation", "workload")},
-        source=bundle["source"])
+        source=bundle["source"],
+        artifacts=bundle.get("outputArtifacts", bundle.get("outputDeliveryPlan")))
     return bundle
 
 
@@ -420,7 +440,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Local Stage 5 preparation for 8415ex.")
     parser.add_argument("command", choices=("run-all", "scenarios", "paths", "matrix",
                                             "manifest", "handoff", "validate-config",
-                                            "observations", "evidence-index"))
+                                            "observations", "evidence-index",
+                                            "decisions", "receipt", "reuse"))
     parser.add_argument("--root", default=".")
     parser.add_argument("--json", action="store_true", help="print the canonical record only")
     parser.add_argument("--json-out", help="write the canonical record of this same run here")
@@ -445,7 +466,48 @@ def main(argv=None):
         built = manifest.build(arguments.root, run_id=_run_id())
         print(canonical_json(built))
         return 0 if built["consistent"] else 1
+    if arguments.command in ("receipt", "decisions", "reuse") and (arguments.json_out or arguments.text_out):
+        parser.error("receipt, decisions and reuse publish JSON to stdout only; capture stdout externally")
+    if arguments.command == "decisions":
+        print(canonical_json(decisions.register()))
+        return 0
+    if arguments.command == "reuse":
+        # The adapter half is read from a real run, so one is performed; the
+        # domain half is read from the imported modules and the package source.
+        built = reuse.build(run_all(list(DEMOS)), arguments.root)
+        print(canonical_json(built))
+        return 0 if built["complete"] else 1
+    if arguments.command == "receipt":
+        bundle = _bundle(arguments.root, execute_suites=arguments.execute_suites)
+        final_source = manifest.reconcile(bundle["sourceReconciliation"]["before"],
+                                          manifest.snapshot(arguments.root))
+        if not final_source["consistent"]:
+            bundle["blocking"].append("source changed before receipt publication")
+            bundle["allLocalPassed"] = False
+        ancestry = bundle["source"].get("ancestry", {})
+        if ancestry.get("errors") or ancestry.get("head") != bundle["source"].get("commit"):
+            bundle["blocking"].append("receipt ancestry is incomplete or mismatched")
+            bundle["allLocalPassed"] = False
+        code = 0 if bundle["allLocalPassed"] else 1
+        bundle["calculationPassed"] = bundle["allLocalPassed"]
+        seal(bundle, code, command=shlex.join(
+            ["python3", "-B", "-m", "scenarios.cli"]
+            + list(argv if argv is not None else sys.argv[1:])))
+        try:
+            built = receipt.build(bundle, arguments.root)
+        except ValueError as problem:
+            print(f"receipt source binding failed: {problem}", file=sys.stderr)
+            return 1
+        try:
+            print(canonical_json(built), flush=True)
+        except OSError as problem:
+            print(f"receipt stdout delivery failed: {problem}", file=sys.stderr)
+            return 1
+        return code
     if arguments.command == "evidence-index":
+        # This subcommand prints JSON but writes no named file, so it declares no
+        # artifact. The index then says so rather than naming a file that was
+        # never going to be written; ``run-all`` is where the plan is real.
         built = evidence_index.build(run_all(list(DEMOS)), run_all(list(PATH_CONTRACTS)),
                                      arguments.root, {"runId": _run_id()})
         print(canonical_json(built))
@@ -467,15 +529,17 @@ def main(argv=None):
         print(canonical_json(scan))
         return 0 if scan["clean"] else 1
 
-    bundle = _bundle(arguments.root, execute_suites=arguments.execute_suites)
+    bundle = _bundle(arguments.root, execute_suites=arguments.execute_suites,
+                     artifacts=[{"path": path, "format": kind} for path, kind in
+                                ((arguments.json_out, "json"), (arguments.text_out, "text")) if path])
     # The calculation's status is decided from the observations. It is not the
     # command's status: the outputs still have to be delivered, and a process
     # cannot observe its own final exit.
     calculation_passed = bundle["allLocalPassed"]
     calculation_exit = 0 if calculation_passed else 1
     bundle["calculationPassed"] = calculation_passed
-    bundle["outputDeliveryPlan"] = [path for path in (arguments.json_out,
-                                                      arguments.text_out) if path]
+    # The plan was declared when the bundle was built, so the evidence index
+    # already names it; nothing re-derives it here.
     bundle["outputDeliveryStatus"] = "NOT_CAPTURED_IN_PROCESS"
     pre_publication = manifest.snapshot(arguments.root)
     final_source = manifest.reconcile(bundle["sourceReconciliation"]["before"],

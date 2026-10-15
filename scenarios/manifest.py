@@ -235,6 +235,48 @@ def source_identity(root="."):
     return identity
 
 
+def parent_identity(root=".", base=None, head=None):
+    """Pin ancestry to one immutable commit, never mix multiple HEAD reads.
+
+    An explicit base is resolved to a commit before merge-base. Without one,
+    the first parent is the documented comparison baseline (not a guessed PR
+    target). Root commits have no comparison range. Shallow/missing history is
+    reported, not interpreted as an empty successful diff.
+    """
+    resolved, error = _git("rev-parse", "--verify", (head or "HEAD") + "^{commit}",
+                           root=root)
+    identity = {"head": resolved.strip() if resolved else None, "parents": [],
+                "parentCount": 0, "base": None, "baseRef": base,
+                "basePolicy": "explicit" if base else "first-parent",
+                "mergeBase": None, "diffRange": None,
+                "errors": [error] if error else []}
+    if error or not resolved:
+        return identity
+    pinned = identity["head"]
+    raw, error = _git("cat-file", "-p", pinned, root=root)
+    if error:
+        identity["errors"].append(error)
+        return identity
+    identity["parents"] = [line.split()[1] for line in raw.split("\n\n", 1)[0].splitlines()
+                           if line.startswith("parent ")]
+    identity["parentCount"] = len(identity["parents"])
+    base = base or next(iter(identity["parents"]), None)
+    if base is None:
+        return identity
+    resolved_base, error = _git("rev-parse", "--verify", base + "^{commit}", root=root)
+    if error or not resolved_base:
+        identity["errors"].append(error or "base could not be resolved")
+        return identity
+    identity["base"] = resolved_base.strip()
+    merged, error = _git("merge-base", identity["base"], pinned, root=root)
+    if error or not merged:
+        identity["errors"].append(error or "merge base could not be resolved")
+    else:
+        identity["mergeBase"] = merged.strip()
+        identity["diffRange"] = merged.strip() + ".." + pinned
+    return identity
+
+
 def runtime_identity():
     """The runtime a run actually used."""
     return {
