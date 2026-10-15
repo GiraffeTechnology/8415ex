@@ -180,6 +180,72 @@ class EvidenceValidation(unittest.TestCase):
         outcome = validation.validate_result(self._record(transactionHashes="NOT_RUN"))
         self.assertTrue(outcome["accepted"], outcome["reasons"])
 
+    def test_an_empty_or_whitespace_identity_is_refused(self):
+        """A string is not an identity: it has to carry content."""
+        for key in validation.NON_EMPTY_IDENTITY:
+            for value in ("", "   ", "\t\n"):
+                with self.subTest(key=key, value=repr(value)):
+                    outcome = validation.validate_result(self._record(**{key: value}))
+                    self.assertFalse(outcome["accepted"])
+                    self.assertIn(f"EX_EVIDENCE_EMPTY_REFUSED:{key}", outcome["reasons"])
+
+    def test_a_shape_valid_but_impossible_instant_is_refused(self):
+        """The regex admits instants that name no real moment."""
+        for value in ("2026-13-01T04:00:00Z", "2026-10-32T04:00:00Z",
+                      "2026-10-15T25:00:00Z", "2026-10-15T04:61:00Z",
+                      "2026-10-15T04:00:61Z", "2026-02-29T04:00:00Z",
+                      "2026-00-10T04:00:00Z", "2026-10-00T04:00:00Z"):
+            with self.subTest(value=value):
+                self.assertIsNotNone(validation.UTC_INSTANT.match(value),
+                                     "the case must be shape-valid to be meaningful")
+                self.assertIsNone(validation.parse_instant(value))
+                outcome = validation.validate_result(
+                    self._record(startedAt=value, finishedAt=value))
+                self.assertFalse(outcome["accepted"])
+                self.assertIn("EX_EVIDENCE_INSTANT_REFUSED:startedAt", outcome["reasons"])
+
+    def test_a_leap_day_that_exists_is_accepted(self):
+        """2028 is a leap year, so the same shape is a real instant there."""
+        self.assertIsNotNone(validation.parse_instant("2028-02-29T04:00:00Z"))
+        outcome = validation.validate_result(
+            self._record(startedAt="2028-02-29T04:00:00Z",
+                         finishedAt="2028-02-29T04:00:01Z"))
+        self.assertTrue(outcome["accepted"], outcome["reasons"])
+
+    def test_a_run_cannot_finish_before_it_started(self):
+        outcome = validation.validate_result(
+            self._record(startedAt="2026-10-15T04:00:05Z",
+                         finishedAt="2026-10-15T04:00:01Z"))
+        self.assertFalse(outcome["accepted"])
+        self.assertIn("EX_EVIDENCE_TIME_ORDER_REFUSED", outcome["reasons"])
+
+    def test_equal_start_and_end_instants_are_accepted(self):
+        """A sub-second run is ordinary, not a time-order defect."""
+        outcome = validation.validate_result(
+            self._record(startedAt="2026-10-15T04:00:01Z",
+                         finishedAt="2026-10-15T04:00:01Z"))
+        self.assertTrue(outcome["accepted"], outcome["reasons"])
+
+    def test_a_command_cannot_finish_before_it_started(self):
+        entry = self._command(startedAt="2026-10-15T04:00:05Z",
+                              finishedAt="2026-10-15T04:00:01Z")
+        outcome = validation.validate_result(self._record(commands=[entry]))
+        self.assertFalse(outcome["accepted"])
+        self.assertIn("EX_EVIDENCE_TIME_ORDER_REFUSED", outcome["reasons"])
+
+    def test_a_command_instant_must_be_a_real_calendar_moment(self):
+        entry = self._command(startedAt="2026-02-29T04:00:00Z",
+                              finishedAt="2026-02-29T04:00:01Z")
+        outcome = validation.validate_result(self._record(commands=[entry]))
+        self.assertFalse(outcome["accepted"])
+        self.assertIn("EX_EVIDENCE_INSTANT_REFUSED:startedAt", outcome["reasons"])
+
+    def test_the_valid_control_still_passes_every_added_check(self):
+        """The added refusals must not make an honest record unusable."""
+        outcome = validation.validate_result(self._record())
+        self.assertTrue(outcome["accepted"], outcome["reasons"])
+        self.assertGreater(outcome["canonicalBytes"], 0)
+
     def test_a_malformed_not_run_list_is_refused(self):
         for value in ("none", None, [{"obligation": "T-35"}], [{"status": "NOT_RUN"}]):
             with self.subTest(value=value):
