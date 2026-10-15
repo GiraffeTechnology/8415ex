@@ -13,27 +13,90 @@ from .demos import MAIN_PATHS
 #: Identifiers only; no requirement text is reproduced here.
 CASE_REQUIREMENTS = {
     "T-01": ("EX-SCOPE-02", "EX-INV-02"), "T-02": ("EX-SCOPE-03",),
-    "T-03": ("EX-INV-01", "EX-INV-05"), "T-04": ("EX-INV-03", "EX-INV-05"),
+    "T-03": ("EX-INV-01", "EX-INV-05"), "T-04": ("EX-INV-03", "EX-INV-05", "EX-INV-09"),
     "T-05": ("EX-INV-04", "EX-INV-05"),
-    "T-06": ("EX-AUTH-01", "EX-AUTH-02", "EX-AUTH-04"),
+    "T-06": ("EX-AUTH-01", "EX-AUTH-02", "EX-AUTH-04", "EX-SCOPE-05"),
     "T-07": ("EX-INV-01", "EX-INV-06"), "T-08": ("EX-AUTH-01", "EX-AUTH-03"),
-    "T-09": ("EX-MATCH-01",), "T-10": ("EX-INV-05",),
+    "T-09": ("EX-MATCH-01", "EX-MATCH-02", "EX-MATCH-03"), "T-10": ("EX-INV-05",),
     "T-11": ("EX-SETTLE-01",), "T-12": ("EX-SETTLE-02", "EX-INV-03"),
     "T-13": ("EX-SETTLE-01", "EX-SETTLE-03"), "T-14": ("EX-INV-05", "EX-SETTLE-04"),
     "T-15": ("EX-SETTLE-04",), "T-16": ("EX-INV-04", "EX-NFR-04"),
     "T-17": ("EX-ROLLBACK-01",), "T-18": ("EX-ROLLBACK-02", "EX-INV-03"),
-    "T-19": ("EX-GAS-01", "EX-ROLLBACK-03"), "T-20": ("EX-ROLLBACK-04",),
+    "T-19": ("EX-GAS-01", "EX-ROLLBACK-03", "EX-SCOPE-06"), "T-20": ("EX-ROLLBACK-04",),
     "T-21": ("EX-GAS-02",), "T-22": ("EX-GAS-03",),
     "T-23": ("EX-INV-04", "EX-INV-07"), "T-24": ("EX-TIME-01", "EX-TIME-02"),
-    "T-25": ("EX-SCOPE-08", "EX-EXIT-01"), "T-26": ("EX-NFR-05",),
+    "T-25": ("EX-SCOPE-08", "EX-EXIT-01", "EX-INV-08"), "T-26": ("EX-NFR-05",),
     "T-27": ("EX-NFR-01", "EX-NFR-07"), "T-28": ("EX-NFR-03", "EX-NFR-04"),
-    "T-29": ("EX-SCOPE-07", "EX-NFR-10"), "T-30": ("EX-INV-10", "EX-NFR-03"),
+    "T-29": ("EX-SCOPE-07", "EX-NFR-10"), "T-30": ("EX-INV-10", "EX-NFR-03", "EX-NFR-02"),
     "T-31": ("EX-INV-04", "EX-SETTLE-03"), "T-32": ("EX-EXIT-02", "EX-EXIT-03"),
     "T-33": ("EX-EXIT-03",), "T-34": ("EX-AUTH-01", "EX-AUTH-05"),
     "T-35": ("EX-DEMO-01",), "T-36": ("EX-DEMO-02",), "T-37": ("EX-DEMO-03",),
     "T-38": ("EX-NFR-07",), "T-39": ("EX-NFR-06", "EX-NFR-09"),
     "T-40": ("EX-NFR-05", "EX-NFR-08"),
 }
+
+#: Every approved requirement identifier, so a requirement that no case claims
+#: is found by a test rather than noticed by eye. Identifiers only: no
+#: requirement text, private locator or document identity appears here.
+DECLARED_REQUIREMENTS = (
+    "EX-AUTH-01", "EX-AUTH-02", "EX-AUTH-03", "EX-AUTH-04", "EX-AUTH-05",
+    "EX-DEMO-01", "EX-DEMO-02", "EX-DEMO-03",
+    "EX-EXIT-01", "EX-EXIT-02", "EX-EXIT-03",
+    "EX-GAS-01", "EX-GAS-02", "EX-GAS-03",
+    "EX-INV-01", "EX-INV-02", "EX-INV-03", "EX-INV-04", "EX-INV-05",
+    "EX-INV-06", "EX-INV-07", "EX-INV-08", "EX-INV-09", "EX-INV-10",
+    "EX-MATCH-01", "EX-MATCH-02", "EX-MATCH-03",
+    "EX-NFR-01", "EX-NFR-02", "EX-NFR-03", "EX-NFR-04", "EX-NFR-05",
+    "EX-NFR-06", "EX-NFR-07", "EX-NFR-08", "EX-NFR-09", "EX-NFR-10",
+    "EX-ROLLBACK-01", "EX-ROLLBACK-02", "EX-ROLLBACK-03", "EX-ROLLBACK-04",
+    "EX-SCOPE-01", "EX-SCOPE-02", "EX-SCOPE-03", "EX-SCOPE-04", "EX-SCOPE-05",
+    "EX-SCOPE-06", "EX-SCOPE-07", "EX-SCOPE-08",
+    "EX-SETTLE-01", "EX-SETTLE-02", "EX-SETTLE-03", "EX-SETTLE-04",
+    "EX-TIME-01", "EX-TIME-02",
+)
+
+#: Requirements with no local test surface, and why. Stating this keeps an
+#: omission from hiding: the requirement is accounted for, as something this
+#: package cannot settle rather than as something it has shown.
+NOT_LOCALLY_TESTABLE = {
+    "EX-SCOPE-01": {
+        "reason": "a positioning statement about what the product is and is not; "
+                  "nothing in a local model run can confirm or refute it",
+        "owner": "the product owner",
+    },
+    "EX-SCOPE-04": {
+        "reason": "wallet compatibility across conforming wallets; this package "
+                  "has no wallet adapter and uses simulated authorization, so "
+                  "compatibility can only be shown against real wallets",
+        "owner": "the party that owns wallet integration acceptance",
+    },
+}
+
+
+def requirement_coverage():
+    """Which approved requirements are claimed by a case, and which are not.
+
+    ``unclaimed`` is the real answer to "is anything missing": a requirement in
+    neither a case nor the not-locally-testable record is coverage nobody has
+    accounted for.
+    """
+    claimed = {}
+    for case, requirements in CASE_REQUIREMENTS.items():
+        for requirement in requirements:
+            claimed.setdefault(requirement, []).append(case)
+    declared = set(DECLARED_REQUIREMENTS)
+    unclaimed = sorted(declared - set(claimed) - set(NOT_LOCALLY_TESTABLE))
+    unknown = sorted(set(claimed) - declared)
+    return {
+        "declared": len(declared),
+        "claimedByCases": {name: sorted(cases) for name, cases in sorted(claimed.items())},
+        "claimedCount": len(claimed),
+        "notLocallyTestable": NOT_LOCALLY_TESTABLE,
+        "unclaimed": unclaimed,
+        "unknown": unknown,
+        "complete": unclaimed == [] and unknown == [],
+    }
+
 
 #: Which stage each case is first accepted in.
 CASE_STAGE = {**{case: 1 for case in ("T-01", "T-02", "T-03", "T-04", "T-05", "T-06", "T-07",
@@ -238,6 +301,7 @@ def build(source_identity, run_identity, scenario_report=None, path_report=None)
         "paths": list(REGISTRATION_PATHS),
         "mainPathPerScenario": dict(sorted(MAIN_PATHS.items())),
         "localOutcomeCounts": _tally(rows),
+        "requirementCoverage": requirement_coverage(),
         "unsoundCases": unsound,
         "allCasesSound": unsound == [],
         "note": ("a local outcome is evidence about the model only; the cases with remaining "

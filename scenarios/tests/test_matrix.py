@@ -1,10 +1,13 @@
 """The matrix must never mark an unexecuted obligation as passed."""
 import unittest
+from pathlib import Path
 
 from scenarios import matrix
 from scenarios.demos import DEMOS
 from scenarios.harness import run_all
 from scenarios.paths import PATH_CONTRACTS
+
+ROOT = str(Path(__file__).resolve().parents[2])
 
 
 class Matrix(unittest.TestCase):
@@ -219,6 +222,97 @@ class Matrix(unittest.TestCase):
             if row["remainingRealEvidence"]:
                 self.assertNotEqual(row["localOutcome"], "passed")
 
+
+class RequirementCoverage(unittest.TestCase):
+    """Every approved requirement is accounted for, one way or the other."""
+
+    def setUp(self):
+        self.coverage = matrix.requirement_coverage()
+
+    def test_no_requirement_is_left_unaccounted_for(self):
+        self.assertEqual(self.coverage["unclaimed"], [],
+                         "a requirement no case claims and no record excuses")
+        self.assertTrue(self.coverage["complete"])
+
+    def test_no_case_claims_a_requirement_that_was_never_declared(self):
+        self.assertEqual(self.coverage["unknown"], [])
+
+    def test_the_declared_set_and_the_accounted_set_agree(self):
+        accounted = (set(self.coverage["claimedByCases"])
+                     | set(self.coverage["notLocallyTestable"]))
+        self.assertEqual(accounted, set(matrix.DECLARED_REQUIREMENTS))
+        self.assertEqual(self.coverage["declared"],
+                         len(set(matrix.DECLARED_REQUIREMENTS)))
+
+    def test_every_unproven_requirement_names_a_reason_and_an_owner(self):
+        self.assertTrue(matrix.NOT_LOCALLY_TESTABLE)
+        for name, entry in sorted(matrix.NOT_LOCALLY_TESTABLE.items()):
+            with self.subTest(requirement=name):
+                self.assertIn(name, matrix.DECLARED_REQUIREMENTS)
+                self.assertTrue(entry["reason"])
+                self.assertTrue(entry["owner"])
+                self.assertNotIn(name, self.coverage["claimedByCases"],
+                                 "it is either shown locally or it is not")
+
+    def test_each_claimed_requirement_names_the_cases_that_claim_it(self):
+        for name, cases in sorted(self.coverage["claimedByCases"].items()):
+            with self.subTest(requirement=name):
+                self.assertTrue(cases)
+                for case in cases:
+                    self.assertIn(name, matrix.CASE_REQUIREMENTS[case])
+
+    def test_the_built_matrix_carries_the_reconciliation(self):
+        built = matrix.build({}, {})
+        self.assertTrue(built["requirementCoverage"]["complete"])
+        self.assertEqual(built["requirementCoverage"]["declared"], 55)
+
+    def test_no_requirement_text_or_private_locator_is_reproduced(self):
+        """Identifiers only: the approved requirements stay private."""
+        source = Path(ROOT, "scenarios/matrix.py").read_text(encoding="utf-8")
+        self.assertTrue(all(ord(character) < 128 for character in source),
+                        "the public source stays ASCII")
+        for forbidden in ("drive.google.com", "docs.google.com", "/file/d/"):
+            self.assertNotIn(forbidden, source)
+
+
+class NoMarketMakingSurface(unittest.TestCase):
+    """EX-MATCH-02, asserted rather than assumed.
+
+    The default implementation must not carry automated market making, strategy
+    yield, platform proprietary trading or a commercial fee rate. These are
+    absences, so the test is a negative one over the domain's own surface.
+    """
+
+    FORBIDDEN = ("market_maker", "market_making", "strategy_yield", "proprietary",
+                 "fee_rate", "maker_fee", "taker_fee", "commission", "spread_bps",
+                 "platform_profit")
+
+    def test_the_domain_surface_carries_no_such_feature(self):
+        from exchange import ledger, model, settlement
+        for module in (ledger, model, settlement):
+            names = " ".join(dir(module)).lower()
+            for forbidden in self.FORBIDDEN:
+                with self.subTest(module=module.__name__, name=forbidden):
+                    self.assertNotIn(forbidden, names)
+
+    def test_the_domain_source_names_no_such_feature(self):
+        for name in ("ledger.py", "model.py", "settlement.py"):
+            source = Path(ROOT, "exchange", name).read_text(encoding="utf-8").lower()
+            for forbidden in self.FORBIDDEN:
+                with self.subTest(file=name, name=forbidden):
+                    self.assertNotIn(forbidden, source)
+
+    def test_matching_uses_deterministic_counterparties_and_test_prices(self):
+        from exchange import fixtures
+        self.assertEqual(fixtures.QUOTE_ASSET, "local-test-quote")
+        self.assertIn("NOT", fixtures.QUOTE_ASSET.upper() + " NOT A DEPLOYED TOKEN")
+        for account in (fixtures.A, fixtures.B, fixtures.C, fixtures.D):
+            with self.subTest(account=account):
+                self.assertRegex(account, r"\A0x[0-9a-f]{40}\Z")
+
+    def test_the_requirement_is_claimed_by_a_case(self):
+        self.assertIn("EX-MATCH-02",
+                      matrix.requirement_coverage()["claimedByCases"])
 
 if __name__ == "__main__":
     unittest.main()
