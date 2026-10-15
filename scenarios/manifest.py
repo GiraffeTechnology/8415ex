@@ -14,6 +14,7 @@ import hashlib
 import platform
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from .observations import tracked_files
@@ -22,6 +23,113 @@ REPOSITORY = "GiraffeTechnology/8415ex"
 
 #: The package whose location proves which source tree actually executed.
 EXECUTED_PACKAGE = "scenarios"
+
+#: Every top-level package that belongs to this project. A run is only bound to
+#: one source tree if all of them came from that tree: checking the scenarios
+#: package alone leaves the domain free to be imported from somewhere else.
+PROJECT_PACKAGES = ("scenarios", "exchange", "ci")
+
+
+def loaded_module_provenance(root="."):
+    """Where every loaded project module came from, and what it contains.
+
+    Walks the modules actually imported into this interpreter, keeps the ones
+    belonging to this project, and records each one's resolved path, byte count
+    and digest. A module loaded from outside ``root`` is foreign: the run is
+    then executing a mixture of trees, and no single commit describes it.
+    """
+    base = Path(root).resolve()
+    modules, foreign, unreadable = [], [], []
+    for name, module in sorted(sys.modules.items()):
+        if name.split(".")[0] not in PROJECT_PACKAGES:
+            continue
+        origin = getattr(module, "__file__", None)
+        if origin is None:
+            # A namespace package carries no file of its own.
+            continue
+        resolved = Path(origin).resolve()
+        entry = {"module": name, "path": str(resolved)}
+        try:
+            data = resolved.read_bytes()
+        except OSError as problem:
+            entry.update({"bytes": None, "sha256": None, "error": str(problem)})
+            unreadable.append(entry)
+            modules.append(entry)
+            continue
+        entry.update({"bytes": len(data),
+                      "sha256": hashlib.sha256(data).hexdigest(), "error": None})
+        try:
+            entry["relative"] = str(resolved.relative_to(base))
+            entry["inside"] = True
+        except ValueError:
+            entry["relative"] = None
+            entry["inside"] = False
+            foreign.append(entry)
+        modules.append(entry)
+    return {
+        "root": str(base),
+        "packages": sorted({entry["module"].split(".")[0] for entry in modules}),
+        "modules": modules,
+        "moduleCount": len(modules),
+        "foreign": foreign,
+        "unreadable": unreadable,
+        "ok": not foreign and not unreadable and modules != [],
+        "digest": hashlib.sha256(
+            "\n".join(f"{entry['module']}:{entry['sha256']}" for entry in modules)
+            .encode("utf-8")).hexdigest(),
+    }
+
+
+def snapshot(root="."):
+    """The whole source identity at one instant, for before/after comparison."""
+    source = source_identity(root)
+    inventory = file_inventory(root)
+    provenance = loaded_module_provenance(root)
+    return {
+        "takenAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "commit": source["commit"],
+        "tree": source["tree"],
+        "worktreeClean": source["worktreeClean"],
+        "dirtyFileCount": source["dirtyFileCount"],
+        "sourceOk": source["ok"],
+        "inventoryOk": inventory["ok"],
+        "fileCount": len(inventory["files"]),
+        "inventoryDigest": hashlib.sha256(
+            "\n".join(f"{entry['path']}:{entry['sha256']}"
+                       for entry in inventory["files"]).encode("utf-8")).hexdigest(),
+        "moduleDigest": provenance["digest"],
+        "moduleCount": provenance["moduleCount"],
+        "provenanceOk": provenance["ok"],
+        "foreignModules": [entry["module"] for entry in provenance["foreign"]],
+    }
+
+
+#: What must not change between the snapshots that bracket a run.
+SNAPSHOT_INVARIANTS = ("commit", "tree", "worktreeClean", "inventoryDigest",
+                       "moduleDigest", "fileCount")
+
+
+def reconcile(before, after):
+    """Compare two snapshots and report every difference.
+
+    A run is bound to one source only if the source did not move while it ran.
+    An earlier clean snapshot combined with a later, different manifest is two
+    runs reported as one, so any difference here is a failure rather than a
+    note.
+    """
+    differences = []
+    for key in SNAPSHOT_INVARIANTS:
+        if before.get(key) != after.get(key):
+            differences.append({"field": key, "before": before.get(key),
+                                "after": after.get(key)})
+    reasons = [f"{entry['field']} changed during the run" for entry in differences]
+    if not before.get("provenanceOk") or not after.get("provenanceOk"):
+        reasons.append("a loaded project module came from outside this source tree")
+    if not before.get("sourceOk") or not after.get("sourceOk"):
+        reasons.append("the source identity could not be established")
+    ordered = tuple(dict.fromkeys(reasons))
+    return {"before": before, "after": after, "differences": differences,
+            "reasons": ordered, "consistent": ordered == ()}
 
 
 def _git(*args, root="."):
@@ -97,6 +205,18 @@ def source_identity(root="."):
                           f"repository {top}")
         if top != resolved_root and resolved_root != str(Path(executed_root).resolve()):
             errors.append(f"requested root {resolved_root} is not the repository root {top}")
+    # Every loaded project module must come from this tree, not just the one
+    # this file happens to live in.
+    provenance = loaded_module_provenance(root)
+    identity["loadedModules"] = provenance["moduleCount"]
+    identity["loadedPackages"] = provenance["packages"]
+    identity["foreignModules"] = [entry["module"] for entry in provenance["foreign"]]
+    identity["moduleDigest"] = provenance["digest"]
+    for entry in provenance["foreign"]:
+        errors.append(f"module {entry['module']} was loaded from {entry['path']}, "
+                      f"outside {provenance['root']}")
+    for entry in provenance["unreadable"]:
+        errors.append(f"module {entry['module']} could not be read: {entry['error']}")
     identity["errors"] = errors
     identity["ok"] = (not errors and identity["commit"] is not None
                       and identity["tree"] is not None and clean is not None)

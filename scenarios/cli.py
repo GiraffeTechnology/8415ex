@@ -88,6 +88,10 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None):
     """
     run_id = run_id or _run_id()
     started_at = started_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    # The source is pinned before anything runs and checked again after
+    # packaging, so an earlier clean reading cannot be combined with a later,
+    # different one.
+    before = manifest.snapshot(root)
     (scenario_report, path_report), measured = observations.measure(
         lambda: (run_all(list(DEMOS)), run_all(list(PATH_CONTRACTS))))
     source = manifest.source_identity(root)
@@ -123,6 +127,9 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None):
             "requires": record["reason"]}
            for record in commands if record["outcome"] == "not-run"],
     }
+    after = manifest.snapshot(root)
+    reconciliation = manifest.reconcile(before, after)
+    bundle["sourceReconciliation"] = reconciliation
     executed = [record for record in commands if record["executed"]]
     # The evidence record is the shape the validator refuses a guess in. It is
     # built from this run and checked here, so a record that could not stand on
@@ -159,6 +166,9 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None):
         blocking.append("the reported root is not the tree this code executed from")
     if not package["inventoryOk"]:
         blocking.append(f"the file inventory is incomplete ({package['enumerationState']})")
+    if not reconciliation["consistent"]:
+        blocking.append("the source did not hold still during the run: "
+                        + "; ".join(reconciliation["reasons"]))
     for record in executed:
         if record["outcome"] != "passed":
             blocking.append(f"{record['command']} ended {record['outcome']}")
