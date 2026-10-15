@@ -121,11 +121,21 @@ class GeneratedRecordsThroughTheValidator(_WithoutNestingGuard):
         cls.generated["not-run"] = execution.not_run("later", "owner supplies it")
 
     def _record(self, commands):
-        """A record wrapper for the generated command records."""
+        """A record wrapper whose window actually brackets these commands.
+
+        The commands here really ran, so the window is taken from them. A fixed
+        window would make the record internally inconsistent, and the validator
+        would rightly refuse it for that rather than for whatever the case is
+        about.
+        """
+        instants = sorted(entry[key] for entry in commands
+                          for key in ("startedAt", "finishedAt")
+                          if isinstance(entry.get(key), str))
+        started = instants[0] if instants else "2026-10-15T10:00:00Z"
+        finished = instants[-1] if instants else "2026-10-15T10:00:05Z"
         return {"schema": "8415ex-local-delivery-evidence/1", "runId": "generated-1",
                 "commit": "a" * 40, "tree": "b" * 40, "worktreeClean": True,
-                "commands": commands, "startedAt": "2026-10-15T10:00:00Z",
-                "finishedAt": "2026-10-15T10:00:05Z",
+                "commands": commands, "startedAt": started, "finishedAt": finished,
                 "scenarioDigest": "0x" + "c" * 64, "notRun": []}
 
     def test_every_generated_record_is_structurally_valid(self):

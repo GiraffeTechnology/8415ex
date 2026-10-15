@@ -243,27 +243,47 @@ def _destination_error(path):
 def deliver_outputs(targets, run_id):
     """Write every requested output, or publish none of them.
 
-    Each destination is checked, then each file is staged beside it, and only
-    once every stage has succeeded is anything moved into place. A failure
-    anywhere leaves no partial output, no orphaned half of the pair and no
-    staging file behind, so the two outputs can never disagree about which run
-    produced them. The returned records say what actually happened to each path.
+    Each destination is checked, each file is staged beside it, and only once
+    every stage has succeeded is anything moved into place. A failure anywhere
+    publishes nothing, leaves no partial output and leaves no staging file
+    behind, so the outputs can never disagree about which run produced them.
+    The returned records say what actually happened to each path.
+
+    Two outputs may not name the same destination. They carry different
+    content, only one of them could survive there, and a report saying both
+    were delivered would be describing a file that holds one of them.
     """
     wanted = [(path, content) for path, content in targets if path]
     records = {path: None for path, _ in wanted}
-    staged = []
+    created, staged = [], []
 
     def refuse(path, error, stage):
         records[path] = {"path": path, "ok": False, "bytes": None, "sha256": None,
                          "error": error, "stage": stage}
 
     try:
+        seen = {}
+        for position, (path, _) in enumerate(wanted):
+            resolved = os.path.abspath(path)
+            if resolved in seen:
+                refuse(path, f"two outputs name the same destination as "
+                             f"{wanted[seen[resolved]][0]!r}; they carry different "
+                             f"content and only one could survive there",
+                       "destination")
+            seen.setdefault(resolved, position)
+
         for path, content in wanted:
+            if records[path] is not None:
+                continue
             error = _destination_error(path)
             if error is not None:
                 refuse(path, error, "destination")
                 continue
             staging = f"{path}.staging-{run_id}"
+            # Tracked before the write, so the cleanup below reaches it however
+            # the write ends, including a failure part of the way through and an
+            # error this function does not expect.
+            created.append(staging)
             try:
                 with open(staging, "w", encoding="utf-8") as handle:
                     handle.write(content)
@@ -293,7 +313,7 @@ def deliver_outputs(targets, run_id):
         return [records[path] for path, _ in wanted]
     finally:
         # No staging file survives this call, whatever happened above.
-        for staging, _, _ in staged:
+        for staging in created:
             if os.path.exists(staging):
                 try:
                     os.unlink(staging)

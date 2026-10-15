@@ -207,6 +207,59 @@ class TransactionalDelivery(unittest.TestCase):
             self.assertEqual(len(records), 1)
             self.assertTrue(records[0]["ok"])
 
+    def test_two_outputs_may_not_name_the_same_destination(self):
+        """They carry different content; only one could survive there."""
+        with tempfile.TemporaryDirectory() as directory:
+            same = os.path.join(directory, "both.out")
+            records = cli.deliver_outputs([(same, "JSON\n"), (same, "TEXT\n")],
+                                          "run-same")
+            self.assertFalse(any(entry["ok"] for entry in records))
+            self.assertTrue(any("same destination" in (entry["error"] or "")
+                                for entry in records))
+            # Nothing was published, so no file holds one output while the
+            # record describes two.
+            self.assertFalse(os.path.exists(same))
+            self.assertEqual([name for name in os.listdir(directory)
+                              if "staging" in name], [])
+
+    def test_the_same_destination_by_a_different_spelling_is_also_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            plain = os.path.join(directory, "a.out")
+            indirect = os.path.join(directory, ".", "a.out")
+            records = cli.deliver_outputs([(plain, "one\n"), (indirect, "two\n")],
+                                          "run-dotted")
+            self.assertFalse(any(entry["ok"] for entry in records))
+            self.assertFalse(os.path.exists(plain))
+
+    def test_a_write_that_fails_part_way_leaves_nothing_behind(self):
+        """A disk-full write, and an error the helper does not expect."""
+        class Exploding:
+            def __str__(self):
+                raise OSError(28, "No space left on device")
+
+        with tempfile.TemporaryDirectory() as directory:
+            target = os.path.join(directory, "a.json")
+            with self.assertRaises(TypeError):
+                # The content is not a string, so the write raises something
+                # deliver_outputs does not catch. The cleanup must still run.
+                cli.deliver_outputs([(target, Exploding())], "run-partial")
+            self.assertEqual([name for name in os.listdir(directory)
+                              if "staging" in name], [],
+                             "a staging file survived an unexpected failure")
+            self.assertFalse(os.path.exists(target))
+
+    def test_a_failed_staging_write_leaves_no_staging_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = os.path.join(directory, "a.json")
+            readonly = os.path.join(directory, "sub")
+            os.mkdir(readonly)
+            records = cli.deliver_outputs(
+                [(target, "one\n"), (os.path.join(readonly), "two\n")], "run-mixed")
+            self.assertFalse(any(entry["ok"] for entry in records))
+            self.assertEqual([name for name in os.listdir(directory)
+                              if "staging" in name], [])
+            self.assertFalse(os.path.exists(target))
+
     def test_publishing_replaces_an_existing_file_atomically(self):
         with tempfile.TemporaryDirectory() as directory:
             target = os.path.join(directory, "a.json")

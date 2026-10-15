@@ -351,14 +351,42 @@ def validate_result(record):
             reasons.append(f"EX_EVIDENCE_EMPTY_REFUSED:{key}")
         elif _fabricated(value):
             reasons.append(f"EX_EVIDENCE_FABRICATED:{key}")
+    commands = record.get("commands")
     started, finished = parse_instant(record.get("startedAt")), \
         parse_instant(record.get("finishedAt"))
     if started is not None and finished is not None and finished < started:
         # A run cannot finish before it started.
         reasons.append("EX_EVIDENCE_TIME_ORDER_REFUSED")
+    # A command this run executed must have run while this run was running. A
+    # record whose own commands sit outside its own window is describing work
+    # from somewhere else, however well-formed each half looks on its own.
+    #
+    # Evidence from an earlier run may still be cited, which is a different
+    # thing and has to say so: such a record names the run it came from in
+    # observedInRun, and is then checked for that identity instead of against
+    # this window. What is refused is a command silently presented as this
+    # run's own while its timing says otherwise.
+    if started is not None and finished is not None and isinstance(commands, list):
+        for entry in commands:
+            if not isinstance(entry, dict) or entry.get("outcome") in UNEXECUTED_OUTCOMES:
+                continue
+            origin = entry.get("observedInRun")
+            if origin is not None:
+                if not isinstance(origin, str) or origin.strip() == "":
+                    reasons.append("EX_EVIDENCE_REFERENCED_RUN_REFUSED")
+                elif origin == record.get("runId"):
+                    # It claims to be this run's own, so the window applies.
+                    origin = None
+                else:
+                    continue
+            began = parse_instant(entry.get("startedAt"))
+            ended = parse_instant(entry.get("finishedAt"))
+            if (began is not None and began < started) or \
+                    (ended is not None and ended > finished):
+                reasons.append("EX_EVIDENCE_COMMAND_OUTSIDE_RUN")
+                break
     if record.get("worktreeClean") is False:
         reasons.append("EX_EVIDENCE_DIRTY_WORKTREE")
-    commands = record.get("commands")
     if not isinstance(commands, list) or not commands:
         # A record with no command list, or one that is not a list at all,
         # carries no execution evidence of any kind.
@@ -371,8 +399,9 @@ def validate_result(record):
         reasons.append("EX_EVIDENCE_NOT_RUN_REFUSED")
     else:
         for entry in not_run:
+            obligation = entry.get("obligation") if isinstance(entry, dict) else None
             if not (isinstance(entry, dict) and entry.get("status") == "NOT_RUN"
-                    and isinstance(entry.get("obligation"), str)):
+                    and isinstance(obligation, str) and obligation.strip() != ""):
                 reasons.append("EX_EVIDENCE_NOT_RUN_REFUSED")
                 break
     for key in OPTIONAL_CHAIN_EVIDENCE:

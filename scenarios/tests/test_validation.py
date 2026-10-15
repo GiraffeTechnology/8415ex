@@ -221,9 +221,13 @@ class EvidenceValidation(unittest.TestCase):
     def test_a_leap_day_that_exists_is_accepted(self):
         """2028 is a leap year, so the same shape is a real instant there."""
         self.assertIsNotNone(validation.parse_instant("2028-02-29T04:00:00Z"))
-        outcome = validation.validate_result(
-            self._record(startedAt="2028-02-29T04:00:00Z",
-                         finishedAt="2028-02-29T04:00:01Z"))
+        # The command moves with the window: a record whose own command ran
+        # outside it would be refused for that instead, which is not what this
+        # case is about.
+        outcome = validation.validate_result(self._record(
+            startedAt="2028-02-29T04:00:00Z", finishedAt="2028-02-29T04:00:01Z",
+            commands=[self._command(startedAt="2028-02-29T04:00:00Z",
+                                    finishedAt="2028-02-29T04:00:01Z")]))
         self.assertTrue(outcome["accepted"], outcome["reasons"])
 
     def test_a_run_cannot_finish_before_it_started(self):
@@ -235,9 +239,10 @@ class EvidenceValidation(unittest.TestCase):
 
     def test_equal_start_and_end_instants_are_accepted(self):
         """A sub-second run is ordinary, not a time-order defect."""
-        outcome = validation.validate_result(
-            self._record(startedAt="2026-10-15T04:00:01Z",
-                         finishedAt="2026-10-15T04:00:01Z"))
+        instant = "2026-10-15T04:00:01Z"
+        outcome = validation.validate_result(self._record(
+            startedAt=instant, finishedAt=instant,
+            commands=[self._command(startedAt=instant, finishedAt=instant)]))
         self.assertTrue(outcome["accepted"], outcome["reasons"])
 
     def test_a_command_cannot_finish_before_it_started(self):
@@ -259,6 +264,72 @@ class EvidenceValidation(unittest.TestCase):
         outcome = validation.validate_result(self._record())
         self.assertTrue(outcome["accepted"], outcome["reasons"])
         self.assertGreater(outcome["canonicalBytes"], 0)
+
+    def test_a_command_must_have_run_inside_the_run_that_reports_it(self):
+        """A record whose commands sit outside its own window is not its own."""
+        for label, changes in (
+                ("years before", {"startedAt": "2020-01-01T00:00:00Z",
+                                  "finishedAt": "2020-01-01T00:00:01Z"}),
+                ("years after", {"startedAt": "2030-01-01T00:00:00Z",
+                                 "finishedAt": "2030-01-01T00:00:01Z"}),
+                ("starts too early", {"startedAt": "2026-10-14T15:59:59Z",
+                                      "finishedAt": "2026-10-14T16:00:01Z"}),
+                ("ends too late", {"startedAt": "2026-10-14T16:00:00Z",
+                                   "finishedAt": "2026-10-14T16:00:02Z"})):
+            with self.subTest(case=label):
+                entry = self._command(**changes)
+                outcome = validation.validate_result(self._record(commands=[entry]))
+                self.assertFalse(outcome["accepted"])
+                self.assertIn("EX_EVIDENCE_COMMAND_OUTSIDE_RUN", outcome["reasons"])
+
+    def test_a_command_exactly_at_the_run_bounds_is_accepted(self):
+        record = self._record()
+        entry = self._command(startedAt=record["startedAt"],
+                              finishedAt=record["finishedAt"])
+        outcome = validation.validate_result(self._record(commands=[entry]))
+        self.assertTrue(outcome["accepted"], outcome["reasons"])
+
+    def test_an_unexecuted_command_is_not_judged_against_the_window(self):
+        """It carries no timing at all, so there is nothing to compare."""
+        entry = {"command": "later", "outcome": "not-run", "exitCode": None,
+                 "startedAt": None, "finishedAt": None, "executed": False}
+        outcome = validation.validate_result(self._record(commands=[entry]))
+        self.assertTrue(outcome["accepted"], outcome["reasons"])
+
+    def test_evidence_from_an_earlier_run_may_be_cited_if_it_names_that_run(self):
+        """Citing prior evidence is allowed; passing it off as this run is not."""
+        earlier = self._command(startedAt="2026-10-01T00:00:00Z",
+                                finishedAt="2026-10-01T00:00:01Z",
+                                observedInRun="local-20261001T000000Z-aaaaaaaaaaaa")
+        outcome = validation.validate_result(self._record(commands=[earlier]))
+        self.assertTrue(outcome["accepted"], outcome["reasons"])
+
+    def test_a_citation_that_names_this_run_is_held_to_this_window(self):
+        record = self._record()
+        earlier = self._command(startedAt="2026-10-01T00:00:00Z",
+                                finishedAt="2026-10-01T00:00:01Z",
+                                observedInRun=record["runId"])
+        outcome = validation.validate_result(self._record(commands=[earlier]))
+        self.assertFalse(outcome["accepted"])
+        self.assertIn("EX_EVIDENCE_COMMAND_OUTSIDE_RUN", outcome["reasons"])
+
+    def test_a_citation_without_a_run_identity_is_refused(self):
+        for origin in ("", "   ", 5, True, []):
+            with self.subTest(origin=origin):
+                earlier = self._command(startedAt="2026-10-01T00:00:00Z",
+                                        finishedAt="2026-10-01T00:00:01Z",
+                                        observedInRun=origin)
+                outcome = validation.validate_result(self._record(commands=[earlier]))
+                self.assertFalse(outcome["accepted"])
+                self.assertIn("EX_EVIDENCE_REFERENCED_RUN_REFUSED", outcome["reasons"])
+
+    def test_an_obligation_name_must_carry_content(self):
+        for blank in ("", "   ", "\t"):
+            with self.subTest(obligation=repr(blank)):
+                outcome = validation.validate_result(
+                    self._record(notRun=[{"obligation": blank, "status": "NOT_RUN"}]))
+                self.assertFalse(outcome["accepted"])
+                self.assertIn("EX_EVIDENCE_NOT_RUN_REFUSED", outcome["reasons"])
 
     def test_a_malformed_not_run_list_is_refused(self):
         for value in ("none", None, [{"obligation": "T-35"}], [{"status": "NOT_RUN"}]):
