@@ -15,6 +15,7 @@ covered across the six scenarios and separately by the path contract tests in
 ``scenarios.paths``; success on one path never stands in for another.
 """
 from exchange import fixtures as F
+from exchange import audit_projection
 from exchange.exit import exit_step_key
 
 from .harness import Scenario
@@ -211,6 +212,8 @@ def demo_01(recorder):
                      "deskSimulated": exchange.voucher_desk.simulated})
     recorder.note("payment movements: " + str(exchange.payments.movements))
     _not_run_chain(recorder)
+    recorder.step("recorded audit timeline", auditTimeline=exchange.receipt_timeline(RECEIPT),
+                  auditBusinessView=audit_projection.live(exchange, RECEIPT))
 
 
 # ---------------------------------------------------------------- DEMO-02
@@ -290,6 +293,8 @@ def demo_02(recorder):
     recorder.expect("one payment movement per segment", ("T-13", "T-28"),
                     3, exchange.payments.movements)
     _not_run_chain(recorder)
+    recorder.step("recorded audit timeline", auditTimeline=exchange.receipt_timeline(RECEIPT),
+                  auditBusinessView=audit_projection.live(exchange, RECEIPT))
 
 
 # ---------------------------------------------------------------- DEMO-03
@@ -314,6 +319,7 @@ def demo_03(recorder):
     exchange.begin_rollback(RECEIPT, 0, F.rollback_authority(exchange, 0, "rb-1"))
     report = exchange.advance_rollback(RECEIPT)
     recorder.step("rollback advanced", state=report["state"], complete=report["complete"],
+                  segmentFunds=_segment_funds(exchange),
                   affectedLegs=report["affectedLegs"], boundary=report["returnBoundaryAccount"],
                   **_positions(exchange))
     recorder.expect("every unfinished segment is in the interval", ("T-17",),
@@ -380,6 +386,8 @@ def demo_03(recorder):
     recorder.expect("a shared operation cannot be charged in full twice", ("T-21",),
                     "EX_GAS_DOUBLE_CHARGE_REFUSED", double)
     _not_run_chain(recorder)
+    recorder.step("recorded audit timeline", auditTimeline=exchange.receipt_timeline(RECEIPT),
+                  auditBusinessView=audit_projection.live(exchange, RECEIPT))
 
 
 # ---------------------------------------------------------------- DEMO-04
@@ -401,6 +409,7 @@ def demo_04(recorder):
     exchange.begin_rollback(RECEIPT, 1, F.rollback_authority(exchange, 1, "rb-2"))
     report = exchange.advance_rollback(RECEIPT)
     recorder.step("rollback advanced", affectedLegs=report["affectedLegs"],
+                  segmentFunds=_segment_funds(exchange),
                   boundary=report["returnBoundaryAccount"], complete=report["complete"],
                   **_positions(exchange))
     recorder.expect("only the later two segments unwind", ("T-18",),
@@ -435,6 +444,8 @@ def demo_04(recorder):
     recorder.expect("one release and two refunds, nothing more", ("T-29",),
                     3, exchange.payments.movements)
     _not_run_chain(recorder)
+    recorder.step("recorded audit timeline", auditTimeline=exchange.receipt_timeline(RECEIPT),
+                  auditBusinessView=audit_projection.live(exchange, RECEIPT))
 
 
 # ---------------------------------------------------------------- DEMO-05
@@ -480,7 +491,8 @@ def demo_05(recorder):
     exchange._budgets[F.D] = 100_000
     second = exchange.advance_rollback(RECEIPT)
     recorder.step("rollback resumed once the budget allowed", state=second["state"],
-                  complete=second["complete"], **_positions(exchange))
+                  complete=second["complete"], segmentFunds=_segment_funds(exchange),
+                  **_positions(exchange))
     recorder.expect("the rollback resumes and completes", ("T-23",),
                     {"complete": True, "owner": F.A}, 
                     {"complete": second["complete"], "owner": exchange.owner_of(RECEIPT)})
@@ -501,6 +513,8 @@ def demo_05(recorder):
                     {0: F.B, 1: F.C, 2: F.D},
                     {entry["legIndex"]: entry["gasBorneBy"] for entry in second["funds"]})
     _not_run_chain(recorder)
+    recorder.step("recorded audit timeline", auditTimeline=exchange.receipt_timeline(RECEIPT),
+                  auditBusinessView=audit_projection.live(exchange, RECEIPT))
 
 
 # ---------------------------------------------------------------- DEMO-06
@@ -547,7 +561,8 @@ def demo_06(recorder):
                     1, exchange.recorded_legs(RECEIPT))
 
     F.confirm(exchange, request, "res-ab")
-    recorder.step("the in-flight registration completed after the cutoff", **_positions(exchange))
+    recorder.step("the in-flight registration completed after the cutoff",
+                  segmentFunds=_segment_funds(exchange), **_positions(exchange))
     recorder.expect("in-flight registration continues under its own rules", ("T-24",),
                     {"holderPosition": 1, "holder": F.B},
                     {"holderPosition": exchange.holder_index(RECEIPT),
@@ -595,6 +610,8 @@ def demo_06(recorder):
                      "exitOrderingReported": bool(report["undefinedOrdering"])},
                     detail="; ".join(after["undefinedOrdering"] + report["undefinedOrdering"]))
     _not_run_chain(recorder)
+    recorder.step("recorded audit timeline", auditTimeline=exchange.receipt_timeline(RECEIPT),
+                  auditBusinessView=audit_projection.live(exchange, RECEIPT))
 
 
 DEMOS = (

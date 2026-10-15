@@ -24,6 +24,9 @@ separate from it.
 | `decisions.py` | the open-decision register: what each one blocks, and what it does not |
 | `receipt.py` | the nine-group candidate receipt, assembled from a completed run |
 | `reuse.py` | what this package reuses, what is simulated, and what is not located yet |
+| `events.py` | the logical event contract, checked read-only over the domain's timeline |
+| `stages.py` | per stage: what is developed here, what is accepted elsewhere, what is owed |
+| `dossier.py` | per scenario: the nine items a demonstration must carry, and what did not resolve |
 | `evidence_index.py` | one index from requirement to artifact over a run's own artefacts |
 | `cli.py` | one reproducible entry point |
 | `STORYBOARD.md` | the factual storyboard and presentation outline |
@@ -51,6 +54,15 @@ python3 -B -m scenarios.cli decisions
 
 # the reuse and interface map, read from the imported modules and this source
 python3 -B -m scenarios.cli reuse
+
+# the logical event contract, its conformance, and one timeline's coverage
+python3 -B -m scenarios.cli events
+
+# the stage map: developed here, accepted elsewhere, still owed
+python3 -B -m scenarios.cli stages
+
+# per scenario: the nine items a demonstration must carry
+python3 -B -m scenarios.cli dossier
 
 # individual parts
 python3 -B -m scenarios.cli scenarios
@@ -221,6 +233,100 @@ names the open decision that tracks it and the owner who can answer it, so it
 reads as a dependency with an owner rather than as an unexplained hole.
 
 The subcommand exits non-zero when the map stops accounting for the source.
+
+## What each scenario has to carry
+
+A scenario report says what was checked. It does not say whether the scenario
+carries everything a demonstration has to present, and those are different
+questions: a run can pass every expectation while still not recording the prices
+it used or the escrow result it reached. `scenarios.cli dossier` declares the
+nine items and resolves each one from the scenario record.
+
+Three statuses do the work, and keeping them apart is the point.
+
+A **gap** is an item a local run could record and did not. That is the only
+status here that is a finding against this surface, and writing this found three
+real ones: the two rollback scenarios and the deadline scenario each reached a
+funded state, asserted things about it, and recorded no per-segment escrow
+result on any step. They record it now, so the item resolves from the record
+rather than from the wording of a check.
+
+The recorded-events item is backed by the actual receipt timeline captured in
+each scenario's final step. A module path or case identifier alone is not event
+or escrow evidence. Missing or invalid local facts remain gaps.
+
+**NOT_RUN** is an item no local run can discharge at all - a transaction hash
+with nothing signing, a page state with no browser. It carries the evidence slot
+that will hold it and the reason it is empty, the slot is checked against the
+handoff checklist, and no local stand-in is offered: the page state stays
+NOT_RUN however completely the status pages render, and `renderedBy` names the
+renderer precisely so it is on record as not being evidence.
+
+Rules match on structure and on case identifiers, never on the wording of an
+expectation, so rephrasing a check cannot silently turn an item into a gap. A
+gap names exactly which keys were missing, and an empty report covers nothing
+rather than reading as complete.
+
+## The stage map
+
+The acceptance matrix says which case belongs to which stage. It does not say
+who does the rest, and that is what `scenarios.cli stages` answers: per stage,
+what this surface develops, what is tested and accepted by whoever owns that,
+and what genuine real-world input stays with its existing owner.
+
+Three things keep it checkable rather than decorative. Every deliverable names a
+path and the path is checked against the disk, so a deliverable claiming a module
+that is not there is a finding instead of prose nobody re-reads. Every stage's
+case list is read from the matrix rather than restated, so the two cannot
+disagree without this module reporting it. And every dependency names its owner,
+the scope it genuinely blocks, the scope it does **not** block, and the next
+step, pointing at a slot that really exists in the handoff checklist.
+
+That "does not block" column is the one that earns its place. A dependency
+stated without it reads as blocking everything, and authorized work stops for a
+question it does not depend on: a missing deployment target blocks every
+real-chain obligation and blocks none of the local delivery, and an undecided
+refund fee blocks the fee figure in a real refund and not the refund model that
+deducts nothing and says so.
+
+The map claims nothing about completion. A stage being developed here says
+nothing about it being accepted, every stage carries `localHalfOnly`, and the
+two cases that belong to every stage rather than one are named as such rather
+than dropped.
+
+## The logical event contract
+
+`scenarios.cli events` is the single CLI entry point for the logical audit
+contract. The scenario reader is read-only; recorder support is maintained in
+the domain layer. `exchange.audit` supplies the shared vocabulary, correlation
+validation and replay engine. `exchange.audit_projection` supplies the bounded
+business read model and an independent live-state comparison. There is no
+second scenario replay algorithm or domain audit CLI.
+
+Conformance inspects the current recorder capabilities and declared kinds;
+missing capabilities are reported as owned interface gaps rather than assumed
+from a historical event shape. Recorded correlation values take precedence over
+reader-supplied context. Unknown values stay null, and provenance distinguishes
+values carried by the domain from values resolved by the reader.
+
+Replay ignores exact duplicate payloads and rejects conflicting duplicates,
+mixed streams and receipt-correlation contradictions. A partial or reordered
+trail cannot pass complete business reconstruction. The digest includes economic
+payloads, and the reconstructed owner/holder, leg statuses, escrow amounts and
+payment state, rollback boundary, and exit steps are compared to live state.
+This is a bounded read model of existing implemented behavior, not restoration
+of a command-capable Exchange or a decision on unresolved product policies.
+
+A settled payment enquiry records the original payment once. A zero-operation
+return updates the logical boundary without claiming physical movement. Unknown
+outcomes remain unconfirmed, not proof that nothing moved. Projection itself
+executes no external asset or payment operations.
+
+Each coverage group has one status. Actual prefix events are reported as
+recorded; legacy result-derived prefixes remain explicitly derived. Transfer
+observation and reorganisation coverage stays `awaiting-chain-observation`.
+Complete caller-supplied chain fields establish syntax only: they remain
+unverified and `NOT_RUN`, never independently observed chain evidence.
 
 ## The evidence index, including the artifact it lands in
 

@@ -27,6 +27,18 @@ from . import decisions
 #: list is checked against the package's own import statements, so neither can
 #: drift from what the code does without a test failing.
 DOMAIN_REUSE = (
+    {"module": "exchange.audit",
+     "uses": ("AUDIT_GROUPS", "ANCILLARY_KINDS", "EVENT_KINDS", "MOVEMENT_KINDS",
+              "CONDITIONAL_MOVEMENT_KINDS", "CORRELATION_KEYS", "CHAIN_KEYS",
+              "contract", "coverage", "event_identity", "rebuilt_identically", "replay"),
+     "purpose": "the single event vocabulary and deterministic replay engine",
+     "kind": "domain contract", "simulated": False},
+    {"module": "exchange.audit_projection", "uses": ("project", "live"),
+     "purpose": "event-derived business view and independent live-state comparison",
+     "kind": "domain contract", "simulated": False},
+    {"module": "exchange.errors", "uses": ("DomainError",),
+     "purpose": "surface invalid audit records without claiming valid replay",
+     "kind": "domain contract", "simulated": False},
     {
         "module": "exchange.ids",
         "uses": ("canonical_json", "digest"),

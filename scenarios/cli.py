@@ -36,8 +36,8 @@ import uuid
 
 from exchange.ids import canonical_json
 
-from . import (decisions, evidence_index, execution, handoff, manifest, matrix,
-               reuse,
+from . import (decisions, dossier, events, evidence_index, execution, handoff, manifest, matrix,
+               reuse, stages,
                observations, receipt, validation)
 from .demos import DEMOS
 from .harness import report_text, run_all
@@ -128,6 +128,9 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
                                for entry in (artifacts or []) if entry],
         "outputArtifacts": artifacts or [],
         "reuse": reuse.build(scenario_report, root),
+        "eventContract": events.build(root=root),
+        "stageMap": stages.build(root),
+        "dossier": dossier.build(scenario_report),
         "evidenceIndex": evidence_index.build(
             scenario_report, path_report, root,
             {"runId": run_id, "startedAt": started_at},
@@ -168,6 +171,12 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
         "transactionHashes": "NOT_RUN",
     }
     blocking = receipt.source_binding_errors(bundle)
+    if not bundle["eventContract"]["conformance"]["localContractComplete"]:
+        blocking.append("the event vocabulary conformance is incomplete")
+    if not bundle["stageMap"]["agreesWithMatrix"]:
+        blocking.append("the stage map disagrees with the matrix or delivery paths")
+    if not bundle["dossier"]["allItemsCarried"]:
+        blocking.append("the demonstration dossier has missing local facts")
     if not bundle["reuse"]["complete"]:
         blocking.append("the reuse map is incomplete")
     if not scenario_report["allPassed"]:
@@ -441,7 +450,7 @@ def main(argv=None):
     parser.add_argument("command", choices=("run-all", "scenarios", "paths", "matrix",
                                             "manifest", "handoff", "validate-config",
                                             "observations", "evidence-index",
-                                            "decisions", "receipt", "reuse"))
+                                            "decisions", "receipt", "reuse", "events", "stages", "dossier"))
     parser.add_argument("--root", default=".")
     parser.add_argument("--json", action="store_true", help="print the canonical record only")
     parser.add_argument("--json-out", help="write the canonical record of this same run here")
@@ -466,11 +475,24 @@ def main(argv=None):
         built = manifest.build(arguments.root, run_id=_run_id())
         print(canonical_json(built))
         return 0 if built["consistent"] else 1
-    if arguments.command in ("receipt", "decisions", "reuse") and (arguments.json_out or arguments.text_out):
-        parser.error("receipt, decisions and reuse publish JSON to stdout only; capture stdout externally")
+    if arguments.command in ("receipt", "decisions", "reuse", "events", "stages", "dossier") and (arguments.json_out or arguments.text_out):
+        parser.error("receipt, decisions, reuse, events, stages and dossier publish JSON to stdout only; capture stdout externally")
     if arguments.command == "decisions":
         print(canonical_json(decisions.register()))
         return 0
+    if arguments.command == "dossier":
+        built = dossier.build(run_all(list(DEMOS)))
+        print(canonical_json(built))
+        return 0 if built["allItemsCarried"] else 1
+    if arguments.command == "stages":
+        built = stages.build(arguments.root)
+        print(canonical_json(built))
+        return 0 if built["agreesWithMatrix"] else 1
+    if arguments.command == "events":
+        exchange, receipt_id = events.demonstration_timeline()
+        built = events.build(exchange, receipt_id, arguments.root, _run_id())
+        print(canonical_json(built))
+        return 0 if built["conformance"]["localContractComplete"] and built.get("validReplay", False) else 1
     if arguments.command == "reuse":
         # The adapter half is read from a real run, so one is performed; the
         # domain half is read from the imported modules and the package source.

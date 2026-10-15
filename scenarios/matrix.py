@@ -142,7 +142,9 @@ CASE_IMPLEMENTATION = {
     "T-28": ("exchange/settlement.py, exchange/ledger.py",
              "exchange/tests/test_settlement.py, exchange/tests/test_payment_binding.py"),
     "T-29": ("exchange/ledger.py", "exchange/tests/test_rollback.py"),
-    "T-30": ("exchange/ledger.py", "exchange/tests/test_rollback.py"),
+    "T-30": ("exchange/ledger.py, exchange/audit.py, exchange/audit_projection.py, scenarios/events.py",
+             "exchange/tests/test_rollback.py, exchange/tests/test_audit_boundaries.py, "
+             "exchange/tests/test_audit_projection.py, scenarios/tests/test_events.py"),
     "T-31": ("exchange/settlement.py, exchange/ledger.py", "exchange/tests/test_settlement.py"),
     "T-32": ("exchange/exit.py, exchange/ledger.py",
              "exchange/tests/test_exit.py, exchange/tests/test_voucher_recovery.py"),
