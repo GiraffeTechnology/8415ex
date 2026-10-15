@@ -82,8 +82,12 @@ DEVELOPED_HERE = {
          "where": "scenarios/observations.py"},
         {"deliverable": "the execution checklist with every real-evidence slot unfilled",
          "where": "scenarios/handoff.py"},
+        {"deliverable": "per scenario, the nine items a demonstration must carry",
+         "where": "scenarios/dossier.py"},
         {"deliverable": "the factual storyboard and presentation outline",
          "where": "scenarios/STORYBOARD.md"},
+        {"deliverable": "the check that keeps the outline describing the code",
+         "where": "scenarios/storyboard.py"},
     ),
 }
 

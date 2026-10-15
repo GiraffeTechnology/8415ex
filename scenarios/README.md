@@ -27,6 +27,7 @@ separate from it.
 | `events.py` | the logical event contract, checked read-only over the domain's timeline |
 | `stages.py` | per stage: what is developed here, what is accepted elsewhere, what is owed |
 | `dossier.py` | per scenario: the nine items a demonstration must carry, and what did not resolve |
+| `storyboard.py` | the presentation outline, parsed and checked against the code it describes |
 | `evidence_index.py` | one index from requirement to artifact over a run's own artefacts |
 | `cli.py` | one reproducible entry point |
 | `STORYBOARD.md` | the factual storyboard and presentation outline |
@@ -63,6 +64,9 @@ python3 -B -m scenarios.cli stages
 
 # per scenario: the nine items a demonstration must carry
 python3 -B -m scenarios.cli dossier
+
+# whether the presentation outline still describes the code
+python3 -B -m scenarios.cli storyboard
 
 # individual parts
 python3 -B -m scenarios.cli scenarios
@@ -231,6 +235,32 @@ names the open decision that tracks it and the owner who can answer it, so it
 reads as a dependency with an owner rather than as an unexplained hole.
 
 The subcommand exits non-zero when the map stops accounting for the source.
+
+## Keeping the outline from going stale
+
+`STORYBOARD.md` is the part of this delivery most likely to go stale and least
+likely to be noticed doing it. A scenario can change route, a case can stop
+owing real evidence, a panel can describe a scenario that no longer exists, and
+nothing fails: the document just becomes wrong while still reading as
+authoritative to the audience it was written for.
+
+So `scenarios.cli storyboard` parses it and checks it. Every panel must name a
+scenario that exists and the route that scenario really runs; all six must
+appear exactly once; every case a panel says is still owed must be a real case
+that genuinely still owes real evidence, so a panel can neither invent an
+obligation nor keep claiming a discharged one. The video segments may name only
+scenarios that exist and must each require on-screen labelling, and five claims
+the outline has to carry - that a local run is labelled as one, that it is not a
+public test network result, that a rendered page is not interface acceptance,
+that no cooperation is implied, and that the routes are simulated roles - are
+checked as present, because dropping one is how a factual outline becomes a
+misleading one.
+
+The checks are one-directional about wording on purpose. They verify the
+identifiers, the routes and the obligations and say nothing about the prose: a
+test that policed the prose would be a test nobody could edit the document past.
+Every finding has its own negative control in the suite, so the check is known
+to fail when the outline drifts rather than only known to pass today.
 
 ## What each scenario has to carry
 
