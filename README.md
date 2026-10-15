@@ -14,8 +14,19 @@ BOOTSTRAP_TEST_ROOT="$APPROVED_TEST_ROOT" python3 -B -m unittest discover -s ci/
 
 See [the bootstrap guide](ci/README.md) for the smoke command, output manifest and result contract.
 
-Stage 1 domain checks:
+Domain checks:
 
 ```sh
 PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s exchange/tests -t . -v
 ```
+
+Local scenario preparation, covering the six scenarios and the three registrar
+routes, with every unexecuted real obligation reported as `NOT_RUN`:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s scenarios/tests -t . -v
+PYTHONDONTWRITEBYTECODE=1 python3 -B -m scenarios.cli run-all
+```
+
+See [the local preparation guide](scenarios/README.md). It performs no
+deployment and sends no transaction.
