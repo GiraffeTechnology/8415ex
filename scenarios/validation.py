@@ -15,6 +15,7 @@ unverified. The declared network name must agree with the declared chain.
 The evidence validator refuses a record that lacks its own identity, carries a
 fabricated hash, or claims a success whose execution was not established.
 """
+import datetime
 import re
 
 from exchange.ids import canonical_json
@@ -48,6 +49,28 @@ ADDRESS = re.compile(r"\A0x[0-9a-fA-F]{40}\Z")
 COMMIT = re.compile(r"\A[0-9a-f]{40}\Z")
 DIGEST = re.compile(r"\A0x[0-9a-f]{64}\Z")
 UTC_INSTANT = re.compile(r"\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\Z")
+
+#: Identity fields that must carry real content. An empty or whitespace-only
+#: value is not an identity, and it must not pass merely by being a string.
+NON_EMPTY_IDENTITY = ("schema", "runId")
+
+
+def parse_instant(value):
+    """A UTC instant, or ``None`` when it is not one.
+
+    The shape regex is not enough: ``2026-13-01T00:00:00Z`` and
+    ``2026-02-29T00:00:00Z`` both match it while naming no real moment. The
+    value is parsed as an actual calendar date so an impossible instant is
+    refused, and the parsed value is returned so two instants can be ordered.
+    """
+    if not isinstance(value, str) or UTC_INSTANT.match(value) is None:
+        return None
+    try:
+        return datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=datetime.timezone.utc)
+    except ValueError:
+        # A shape-valid but impossible calendar instant.
+        return None
 
 #: Patterns that betray a fabricated or placeholder value.
 FABRICATED = (re.compile(r"\A0x0+\Z"), re.compile(r"(?i)\A(todo|tbd|placeholder|example|xxx)"),
@@ -246,6 +269,12 @@ def validate_command_record(entry):
             value = entry.get(key)
             if not isinstance(value, str) or UTC_INSTANT.match(value) is None:
                 reasons.append(f"EX_EVIDENCE_COMMAND_REFUSED:{key}")
+            elif parse_instant(value) is None:
+                reasons.append(f"EX_EVIDENCE_INSTANT_REFUSED:{key}")
+        began, ended = parse_instant(entry.get("startedAt")), \
+            parse_instant(entry.get("finishedAt"))
+        if began is not None and ended is not None and ended < began:
+            reasons.append("EX_EVIDENCE_TIME_ORDER_REFUSED")
     return tuple(dict.fromkeys(reasons))
 
 
@@ -272,8 +301,18 @@ def validate_result(record):
             continue
         if pattern is not None and pattern.match(value) is None:
             reasons.append(f"EX_EVIDENCE_IDENTITY_REFUSED:{key}")
+        elif pattern is UTC_INSTANT and parse_instant(value) is None:
+            # Shape-valid but not a real calendar instant.
+            reasons.append(f"EX_EVIDENCE_INSTANT_REFUSED:{key}")
+        elif key in NON_EMPTY_IDENTITY and value.strip() == "":
+            reasons.append(f"EX_EVIDENCE_EMPTY_REFUSED:{key}")
         elif _fabricated(value):
             reasons.append(f"EX_EVIDENCE_FABRICATED:{key}")
+    started, finished = parse_instant(record.get("startedAt")), \
+        parse_instant(record.get("finishedAt"))
+    if started is not None and finished is not None and finished < started:
+        # A run cannot finish before it started.
+        reasons.append("EX_EVIDENCE_TIME_ORDER_REFUSED")
     if record.get("worktreeClean") is False:
         reasons.append("EX_EVIDENCE_DIRTY_WORKTREE")
     commands = record.get("commands")
