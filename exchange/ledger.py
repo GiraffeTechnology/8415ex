@@ -14,6 +14,7 @@ value of an address.
 """
 from dataclasses import dataclass, field, replace
 
+from . import audit
 from .errors import DomainError, require
 from .ids import address, amount, digest, identifier, instant
 from .model import WHOLE_RECEIPT_UNITS, Asset, AuthorizationReference, TradeIntent, WarehouseReceipt
@@ -96,7 +97,7 @@ class Exchange:
 
     def __init__(self, clock, payment_adapter=None, release_sources=(), funding_required=False,
                  asset_control=None, rollback_sources=(), gas_budgets=None,
-                 voucher_desk=None):
+                 voucher_desk=None, run_id=None):
         """``funding_required`` turns on the Stage 2 rule that a leg only forms
         once its own buyer's money is in escrow. Stage 1 leaves it off and
         records funding as not modelled rather than implying a payment.
@@ -104,9 +105,16 @@ class Exchange:
         ``release_sources`` is the set of sources whose evidence may release a
         segment. It is supplied by the caller from verified configuration; this
         layer never widens it and has no default member.
+
+        ``run_id`` correlates every event this instance records with the run
+        that produced it. It is not invented: when the caller does not supply
+        one, the correlation says the run is unknown rather than naming a run
+        that does not exist.
         """
         require(callable(clock), "EX_CLOCK_REFUSED", "a clock function is required")
         self._clock = clock
+        self.run_id = (None if run_id is None
+                       else identifier(run_id, "EX_RUN_ID_REFUSED"))
         self.payments = payment_adapter
         self.funding_required = bool(funding_required)
         self._release_sources = frozenset(identifier(s, "EX_RELEASE_SOURCE_REFUSED")
@@ -310,6 +318,33 @@ class Exchange:
                 "signedTermsDigest": intent.digest, "units": intent.units,
                 "executable": ordered == (), "reasons": ordered,
                 "authorization": auth_state, "observedAt": now}
+
+    def decide_intent(self, intent_id, now=None):
+        """Validate an intent and record the decision as an audit event.
+
+        ``validate_intent`` stays a read: it answers and changes nothing, which
+        is what a view needs. Recording the decision is a separate, deliberate
+        act, so a page refreshing its view does not append to the audit trail.
+
+        The timeline is per receipt, so an intent naming an asset this exchange
+        does not hold has nowhere to be recorded. That is reported as unrecorded
+        with the reason rather than written to an invented bucket or dropped.
+        """
+        decision = self.validate_intent(intent_id, now)
+        intent = self.intent(intent_id)
+        receipt_id = self._asset_keys.get(intent.asset.key)
+        if receipt_id is None:
+            return dict(decision, recorded=False,
+                        notRecordedBecause="EX_ASSET_UNKNOWN: no receipt timeline "
+                                           "holds this asset")
+        self._record(receipt_id, "intent-accepted" if decision["executable"]
+                     else "intent-refused", {
+            "intentId": intent.intent_id, "side": intent.side, "signer": intent.signer,
+            "signedTermsDigest": intent.digest,
+            "executable": decision["executable"],
+            "reasons": list(decision["reasons"]),
+            "observedAt": decision["observedAt"]})
+        return dict(decision, recorded=True, notRecordedBecause=None)
 
     def match_intents(self, sell_intent_id, buy_intent_id, now=None):
         """Deterministically pair two explicitly paired intents.
@@ -600,7 +635,17 @@ class Exchange:
 
     def _confirm(self, receipt_id, evidence):
         self._replace_leg(receipt_id, evidence.leg_index, registration_status="confirmed")
+        before = self._holder_index[receipt_id]
         self._holder_index[receipt_id] = evidence.leg_index + 1
+        # The confirmed prefix advancing is its own audit fact. It is recorded
+        # here rather than beside each result, so a prefix that moved by
+        # draining buffered results is recorded on the same terms as one that
+        # moved directly.
+        self._record(receipt_id, "final-prefix-advanced", {
+            "from": before, "to": self._holder_index[receipt_id],
+            "legIndex": evidence.leg_index, "resultId": evidence.result_id,
+            "requestId": evidence.request_id},
+            transfer_id=evidence.transfer_id, request_id=evidence.request_id)
 
     def _drain_deferred(self, receipt_id):
         """Apply buffered results that the filled gap has now made contiguous."""
@@ -1594,9 +1639,55 @@ class Exchange:
         self.receipt(receipt_id)
         return tuple(self._events[receipt_id])
 
-    def _record(self, receipt_id, kind, detail):
-        self._events[receipt_id].append({"sequence": len(self._events[receipt_id]), "kind": kind,
-                                         "receiptId": receipt_id, "detail": detail})
+    def _record(self, receipt_id, kind, detail, transfer_id=None, request_id=None,
+                chain=None):
+        """Append one declared event with its full correlation block.
+
+        The kind is checked against the declared vocabulary, so a typo is a
+        refusal rather than a silent new kind that nobody is watching. Where the
+        detail already names the transfer or the request, the correlation lifts
+        it, so a consumer correlates without parsing a free-form detail; an
+        explicit argument always wins over the detail.
+        """
+        audit.declared_kind(kind)
+        receipt = self._receipts.get(receipt_id)
+        events = self._events[receipt_id]
+        correlation = audit.correlation(
+            receipt_id=receipt_id,
+            asset_key=receipt.asset.key if receipt is not None else None,
+            transfer_id=transfer_id if transfer_id is not None else detail.get("transferId"),
+            request_id=request_id if request_id is not None else detail.get("requestId"),
+            run_id=self.run_id, chain=chain)
+        events.append({"sequence": len(events), "kind": kind,
+                       "receiptId": receipt_id, "correlation": correlation,
+                       "detail": detail})
+
+    def record_chain_observation(self, receipt_id, kind, chain, detail=None):
+        """Record that something was really seen on a chain.
+
+        This is the only way a chain observation enters the timeline, and it
+        refuses an incomplete chain position: without the chain id, transaction
+        hash, block hash and log index there is nothing to have observed, and a
+        record that looked like an observation without them would be the exact
+        confusion the audit coverage report exists to prevent. Nothing local can
+        satisfy it, which is why those audit groups stay unevidenced here.
+        """
+        self.receipt(receipt_id)
+        require(kind in ("transfer-observed", "chain-reorg-observed"),
+                "EX_EVENT_KIND_REFUSED", kind)
+        position = audit.correlation(chain=chain)
+        require(position["observedOnChain"], "EX_CHAIN_OBSERVATION_INCOMPLETE",
+                "an observation needs chainId, txHash, blockHash and logIndex")
+        self._record(receipt_id, kind, dict(detail or {}), chain=chain)
+        return position
+
+    def audit_coverage(self, receipt_id):
+        """Which audit groups this receipt's timeline evidenced, and which not."""
+        return audit.coverage(self.receipt_timeline(receipt_id))
+
+    def audit_replay(self, receipt_id):
+        """Rebuild this receipt's index from its own events, twice."""
+        return audit.rebuilt_identically(self.receipt_timeline(receipt_id))
 
     def _now(self, now):
         return instant(self._clock() if now is None else now, "EX_INSTANT_REFUSED")

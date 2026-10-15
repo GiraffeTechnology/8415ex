@@ -119,6 +119,13 @@ Linux, Python 3.10+, standard library only, no third-party dependency.
 # Stage 1 domain tests
 PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s exchange/tests -t . -v
 
+# the declared event contract, with no run
+python3 -B -m exchange.cli audit-contract
+
+# which audit groups a run evidenced, and which need a real chain
+python3 -B -m exchange.cli audit-coverage
+python3 -B -m exchange.cli audit-replay
+
 # diagnostic state dump
 python3 -B -m exchange.cli view
 python3 -B -m exchange.cli timeline
@@ -130,6 +137,54 @@ python3 -B -m exchange.webui --host 127.0.0.1 --port 8415
 
 A served origin is scheme, host **and** port. Which address an environment
 serves on belongs in that environment's deployment document, not here.
+
+## The logical event contract
+
+`audit.py` holds the event contract of PRD section 10.2, and the three things an
+audit trail has to supply before it is worth keeping.
+
+**A declared vocabulary.** A free-form kind means a typo becomes a new kind and
+nobody notices that a group of events stopped being recorded. Every kind is
+declared and grouped by the coverage it serves; `_record` refuses an undeclared
+one. Two kinds the domain records serve no section 10.2 group - minting and an
+observed gas figure - and are declared as ancillary so recording them is allowed
+but they never count as coverage of something they do not evidence.
+
+**Correlation.** Every event carries the asset, transfer, request and run it
+belongs to, plus the chain id, transaction hash, block hash and log index. A key
+that is not known for that event is present and null, because an absent key and
+an unknown value read the same to a consumer and are not the same thing. The run
+id is not invented: with none supplied the correlation says the run is unknown.
+A chain key is validated if given and otherwise stays null - never zero, never
+an empty string - and a position counts as observed only when all four are
+there.
+
+**Replay.** `audit.replay` rebuilds the index from the events, and
+`audit.rebuilt_identically` replays the same events twice. Two records that
+differ only in a free-form detail are the same event, so a re-delivery is
+counted as a duplicate and changes nothing: repeated consumption rebuilds the
+same index and moves no asset and no money a second time. Out-of-order delivery
+is reported rather than silently reordered.
+
+An attempt is not a movement. Where an attempt has its own completed
+counterpart - a refund records `segment-refunded` on success and
+`segment-refund-attempt` only when it fails - counting the attempt too would
+double-count the success. A release is the one kind with no separate completion
+record, so its own escrow status decides: a failed or unknown-outcome release is
+recorded as an attempt that moved nothing, because reporting it as a movement
+would report money as paid that the adapter never confirmed.
+
+Two of the eight groups cannot be evidenced here at all: a transfer observed on
+chain, and a chain reorganisation. `record_chain_observation` is the only path
+that writes one and it refuses an incomplete position, so nothing local can
+satisfy it. The coverage report names both groups with the reason instead of
+counting a simulated record as an observation.
+
+`validate_intent` stays a read and records nothing, so a page refreshing a view
+does not append to the audit trail. `decide_intent` is the deliberate act that
+records the decision. The timeline is per receipt, so an intent naming an asset
+this exchange does not hold is reported as unrecorded with the reason rather
+than written to an invented bucket.
 
 ## Requirement and test traceability
 
