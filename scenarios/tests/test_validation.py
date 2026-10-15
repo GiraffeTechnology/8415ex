@@ -159,15 +159,29 @@ class EvidenceValidation(unittest.TestCase):
                 self.assertIn("EX_EVIDENCE_COMMAND_REFUSED:exitCode", outcome["reasons"])
 
     def test_failure_shapes_stay_distinguishable(self):
-        """error, timeout and signalled are not collapsed into failed."""
-        for status in ("error", "timeout", "signalled"):
+        """error, timeout and signalled are not collapsed into failed.
+
+        Each one also carries the exit status its real process actually had: a
+        launch error and a timeout never reported one, so the truthful record is
+        null, and a signalled process reports a negative status whose magnitude
+        is the signal.
+        """
+        for status in validation.NO_EXIT_OUTCOMES:
             with self.subTest(outcome=status):
-                entry = self._command(outcome=status, exitCode=124)
+                entry = self._command(outcome=status, exitCode=None)
                 outcome = validation.validate_result(self._record(commands=[entry]))
                 self.assertTrue(outcome["accepted"], outcome["reasons"])
+                self.assertFalse(outcome["runPassed"])
+        signalled = self._command(outcome="signalled", exitCode=-15, signal=15)
+        outcome = validation.validate_result(self._record(commands=[signalled]))
+        self.assertTrue(outcome["accepted"], outcome["reasons"])
+        self.assertFalse(outcome["runPassed"])
         self.assertEqual(sorted(validation.COMMAND_OUTCOMES),
                          sorted(validation.EXECUTED_OUTCOMES
                                 + validation.UNEXECUTED_OUTCOMES))
+        self.assertEqual(sorted(validation.EXECUTED_OUTCOMES),
+                         sorted(validation.NO_EXIT_OUTCOMES
+                                + validation.EXIT_CODE_OUTCOMES))
 
     def test_a_fabricated_transaction_hash_is_refused(self):
         for value in (["0x" + "00" * 32], ["0xdeadbeef"], "all good", ["not-a-hash"]):

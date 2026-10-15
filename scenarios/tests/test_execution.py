@@ -75,6 +75,148 @@ class RealExecution(unittest.TestCase):
                               execution.not_run("x", "y")["outcome"]}), 4)
 
 
+class GeneratedRecordsThroughTheValidator(unittest.TestCase):
+    """Item 2: real process records, not hand-written fixtures, validated.
+
+    Every record in this class comes from an actual subprocess, or from an
+    actual refusal to launch one. The point is that what the runner really
+    produces is what the validator really accepts, and that a genuine failure
+    stays a failure all the way through.
+    """
+
+    PROGRAMS = {
+        "passed": ("python3", "-c", "import sys; print('ok'); sys.exit(0)"),
+        "failed": ("python3", "-c", "import sys; print('bad', file=sys.stderr); sys.exit(7)"),
+        "error": ("no-such-binary-for-this-test",),
+        "timeout": ("python3", "-c", "import time; time.sleep(30)"),
+        "signalled": ("python3", "-c",
+                      "import os, signal; os.kill(os.getpid(), signal.SIGTERM)"),
+    }
+
+    @classmethod
+    def setUpClass(cls):
+        cls.generated = {}
+        for outcome, argv in cls.PROGRAMS.items():
+            cls.generated[outcome] = execution.run_command(
+                argv, timeout=1 if outcome == "timeout" else 60)
+        cls.generated["pending"] = execution.pending("later", "queued")
+        cls.generated["not-run"] = execution.not_run("later", "owner supplies it")
+
+    def _record(self, commands):
+        return {"schema": "8415ex-local-delivery-evidence/1", "runId": "generated-1",
+                "commit": "a" * 40, "tree": "b" * 40, "worktreeClean": True,
+                "commands": commands, "startedAt": "2026-10-15T10:00:00Z",
+                "finishedAt": "2026-10-15T10:00:05Z",
+                "scenarioDigest": "0x" + "c" * 64, "notRun": []}
+
+    def test_every_generated_record_is_structurally_valid(self):
+        for outcome, entry in sorted(self.generated.items()):
+            with self.subTest(outcome=outcome):
+                self.assertEqual(entry["outcome"], outcome)
+                self.assertEqual(validation.validate_command_record(entry), (),
+                                 f"the runner produced a record its own validator "
+                                 f"rejects: {entry}")
+                self.assertTrue(
+                    validation.validate_result(self._record([entry]))["accepted"])
+
+    def test_a_process_with_no_exit_status_keeps_a_null_exit_code(self):
+        """A launch failure and a timeout never reported an exit status."""
+        for outcome in validation.NO_EXIT_OUTCOMES:
+            with self.subTest(outcome=outcome):
+                self.assertIsNone(self.generated[outcome]["exitCode"])
+                self.assertEqual(validation.validate_command_record(
+                    self.generated[outcome]), ())
+
+    def test_an_invented_exit_code_is_refused_for_those_outcomes(self):
+        """124 is a shell convention, not something the process reported."""
+        for outcome in validation.NO_EXIT_OUTCOMES:
+            for invented in (124, 0, 1):
+                with self.subTest(outcome=outcome, exitCode=invented):
+                    forged = dict(self.generated[outcome], exitCode=invented)
+                    self.assertIn("EX_EVIDENCE_INVENTED_EXIT_CODE",
+                                  validation.validate_command_record(forged))
+
+    def test_the_real_exit_codes_match_their_outcomes(self):
+        self.assertEqual(self.generated["passed"]["exitCode"], 0)
+        self.assertEqual(self.generated["failed"]["exitCode"], 7)
+        self.assertLess(self.generated["signalled"]["exitCode"], 0)
+
+    def test_the_signal_field_matches_the_real_process_result(self):
+        signalled = self.generated["signalled"]
+        self.assertEqual(signalled["signal"], -signalled["exitCode"])
+        self.assertEqual(signalled["signal"], 15)
+        for forged, expected in (
+                (dict(signalled, signal=None), "EX_EVIDENCE_SIGNAL_REFUSED"),
+                (dict(signalled, signal=9), "EX_EVIDENCE_SIGNAL_MISMATCH"),
+                (dict(self.generated["failed"], signal=9),
+                 "EX_EVIDENCE_SIGNAL_REFUSED")):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, validation.validate_command_record(forged))
+
+    def test_executed_false_cannot_substantiate_a_pass(self):
+        for outcome in validation.UNEXECUTED_OUTCOMES:
+            with self.subTest(outcome=outcome):
+                forged = dict(self.generated[outcome], outcome="passed", exitCode=0,
+                              startedAt="2026-10-15T10:00:00Z",
+                              finishedAt="2026-10-15T10:00:01Z")
+                self.assertIn("EX_EVIDENCE_EXECUTED_MISMATCH",
+                              validation.validate_command_record(forged))
+
+    def test_an_executed_record_cannot_claim_nothing_ran(self):
+        forged = dict(self.generated["failed"], executed=False)
+        self.assertIn("EX_EVIDENCE_EXECUTED_MISMATCH",
+                      validation.validate_command_record(forged))
+
+    def test_valid_failure_evidence_never_makes_the_run_pass(self):
+        """Structural validity is not the result."""
+        for outcome in ("failed", "error", "timeout", "signalled"):
+            with self.subTest(outcome=outcome):
+                checked = validation.validate_result(
+                    self._record([self.generated["passed"], self.generated[outcome]]))
+                self.assertTrue(checked["accepted"], checked["reasons"])
+                self.assertFalse(checked["runPassed"])
+                self.assertTrue(any(outcome in reason
+                                    for reason in checked["notPassing"]))
+
+    def test_a_pending_command_also_stops_the_run_from_passing(self):
+        checked = validation.validate_result(
+            self._record([self.generated["passed"], self.generated["pending"]]))
+        self.assertTrue(checked["accepted"])
+        self.assertFalse(checked["runPassed"])
+
+    def test_a_not_run_obligation_does_not_stop_the_run_from_passing(self):
+        """NOT_RUN is an owned obligation, reported, never counted as a pass."""
+        checked = validation.validate_result(
+            self._record([self.generated["passed"], self.generated["not-run"]]))
+        self.assertTrue(checked["accepted"])
+        self.assertTrue(checked["runPassed"], checked["notPassing"])
+
+    def test_an_all_passed_run_passes(self):
+        checked = validation.validate_result(
+            self._record([self.generated["passed"]]))
+        self.assertTrue(checked["accepted"])
+        self.assertTrue(checked["runPassed"])
+        self.assertEqual(checked["notPassing"], ())
+
+    def test_the_bundle_blocks_on_a_real_command_failure(self):
+        original = cli.UNIT_SUITES
+        cli.UNIT_SUITES = (("failing stand-in", self.PROGRAMS["failed"]),)
+        try:
+            bundle = cli._bundle(ROOT, execute_suites=True)
+        finally:
+            cli.UNIT_SUITES = original
+        self.assertFalse(bundle["allLocalPassed"])
+        self.assertFalse(bundle["evidenceValidation"]["runPassed"])
+        self.assertTrue(any("ended failed" in reason for reason in bundle["blocking"]))
+        # The failure record itself is valid evidence: nothing about the command
+        # record was refused. A dirty worktree may legitimately be refused here
+        # when this suite runs against uncommitted work, so only command-record
+        # reasons are asserted against.
+        self.assertEqual([reason for reason in bundle["evidenceValidation"]["reasons"]
+                          if "COMMAND" in reason or "SIGNAL" in reason
+                          or "EXECUTED" in reason or "EXIT" in reason], [])
+
+
 class UnexecutedRecords(unittest.TestCase):
 
     def test_a_not_run_record_carries_no_result_at_all(self):

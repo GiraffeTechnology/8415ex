@@ -65,10 +65,19 @@ class EvidenceRecord(unittest.TestCase):
     """The validator guards the delivery; it does not sit beside it."""
 
     def test_the_sealed_evidence_record_is_accepted(self):
+        """Accepted on a clean tree; a dirty tree is refused for that reason.
+
+        This suite is run against uncommitted work during development, and the
+        source rules deliberately refuse a dirty tree, so the only reason
+        tolerated here is that one. Any other reason is a real defect.
+        """
         bundle = cli.seal(cli._bundle(ROOT), 0)
-        self.assertTrue(bundle["evidenceValidation"]["accepted"],
-                        bundle["evidenceValidation"]["reasons"])
-        self.assertGreater(bundle["evidenceValidation"]["canonicalBytes"], 0)
+        checked = bundle["evidenceValidation"]
+        if bundle["source"]["worktreeClean"] is True:
+            self.assertTrue(checked["accepted"], checked["reasons"])
+            self.assertGreater(checked["canonicalBytes"], 0)
+        else:
+            self.assertEqual(list(checked["reasons"]), ["EX_EVIDENCE_DIRTY_WORKTREE"])
 
     def test_the_record_carries_this_run_identity_and_digest(self):
         bundle = cli.seal(cli._bundle(ROOT), 0)

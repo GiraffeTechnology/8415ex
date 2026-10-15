@@ -168,6 +168,11 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None):
     bundle["evidenceValidation"] = checked
     if not checked["accepted"]:
         blocking.append("the evidence record was refused: " + ", ".join(checked["reasons"]))
+    # Valid evidence of a real failure is still evidence that this run did not
+    # pass. Structural validity never stands in for the result.
+    for reason in checked["notPassing"]:
+        if reason not in blocking:
+            blocking.append(reason)
     bundle["blocking"] = blocking
     bundle["allLocalPassed"] = blocking == []
     bundle["meaning"] = ("every local expectation passed over a confirmed source tree; it is "

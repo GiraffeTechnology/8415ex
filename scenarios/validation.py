@@ -103,6 +103,22 @@ COMMAND_OUTCOMES = ("passed", "failed", "pending", "not-run", "error", "timeout"
 EXECUTED_OUTCOMES = ("passed", "failed", "error", "timeout", "signalled")
 UNEXECUTED_OUTCOMES = ("pending", "not-run")
 
+#: Outcomes where a process was started but never reported an exit status: it
+#: could not be launched, or it was stopped before exiting. A null exit code is
+#: the truthful record for these, and any number here would be invented. 124 in
+#: particular is a shell convention, not something the process reported.
+NO_EXIT_OUTCOMES = ("error", "timeout")
+
+#: Outcomes that must carry a real integer exit status.
+EXIT_CODE_OUTCOMES = ("passed", "failed", "signalled")
+
+#: The only outcome that may name a signal.
+SIGNALLED_OUTCOME = "signalled"
+
+#: An outcome is a pass only here. Everything else, however structurally valid
+#: the record is, means the run that contains it did not pass.
+PASSING_OUTCOME = "passed"
+
 
 def _fabricated(value):
     return isinstance(value, str) and any(pattern.search(value) for pattern in FABRICATED)
@@ -250,6 +266,14 @@ def validate_command_record(entry):
         reasons.append("EX_EVIDENCE_COMMAND_REFUSED:outcome")
         return tuple(dict.fromkeys(reasons))
     exit_code = entry.get("exitCode")
+    executed = entry.get("executed")
+    if executed is not None:
+        if not _typed(executed, bool):
+            reasons.append("EX_EVIDENCE_COMMAND_REFUSED:executed")
+        elif executed is not (outcome in EXECUTED_OUTCOMES):
+            # A record cannot say nothing ran and then report a result, nor say
+            # it ran and report no result at all.
+            reasons.append("EX_EVIDENCE_EXECUTED_MISMATCH")
     if outcome in UNEXECUTED_OUTCOMES:
         # Nothing ran, so there is no exit code to report. A success code here
         # would be invented evidence.
@@ -259,12 +283,31 @@ def validate_command_record(entry):
             if entry.get(key) is not None:
                 reasons.append("EX_EVIDENCE_UNEXECUTED_TIMING")
     else:
-        if not _typed(exit_code, int):
+        if outcome in NO_EXIT_OUTCOMES:
+            # The process never reported an exit status. Null is the truthful
+            # record; a number here is invented, including the 124 a shell
+            # would substitute for a timeout.
+            if exit_code is not None:
+                reasons.append("EX_EVIDENCE_INVENTED_EXIT_CODE")
+        elif not _typed(exit_code, int):
             reasons.append("EX_EVIDENCE_COMMAND_REFUSED:exitCode")
         elif outcome == "passed" and exit_code != 0:
             reasons.append("EX_EVIDENCE_OUTCOME_MISMATCH")
-        elif outcome == "failed" and exit_code == 0:
+        elif outcome == "failed" and exit_code <= 0:
+            # A failure reports a positive status; a negative one is a signal.
             reasons.append("EX_EVIDENCE_OUTCOME_MISMATCH")
+        elif outcome == SIGNALLED_OUTCOME and exit_code >= 0:
+            reasons.append("EX_EVIDENCE_OUTCOME_MISMATCH")
+        # The signal field must agree with the real process result: present and
+        # matching for a signalled process, absent for every other outcome.
+        signal = entry.get("signal")
+        if outcome == SIGNALLED_OUTCOME:
+            if not _typed(signal, int) or signal <= 0:
+                reasons.append("EX_EVIDENCE_SIGNAL_REFUSED")
+            elif _typed(exit_code, int) and signal != -exit_code:
+                reasons.append("EX_EVIDENCE_SIGNAL_MISMATCH")
+        elif signal is not None:
+            reasons.append("EX_EVIDENCE_SIGNAL_REFUSED")
         for key in ("startedAt", "finishedAt"):
             value = entry.get(key)
             if not isinstance(value, str) or UTC_INSTANT.match(value) is None:
@@ -346,6 +389,25 @@ def validate_result(record):
                 reasons.append(f"EX_EVIDENCE_FABRICATED:{key}")
                 break
     ordered = tuple(dict.fromkeys(reasons))
+    # Structural validity and "the run passed" are two different questions. A
+    # genuine failure, timeout, start error or signal record is perfectly valid
+    # evidence, and it must still stop the run it belongs to from being read as
+    # a pass. ``accepted`` answers the first question only.
+    not_passing = []
+    if isinstance(commands, list):
+        for entry in commands:
+            if not isinstance(entry, dict):
+                continue
+            outcome = entry.get("outcome")
+            if outcome in EXECUTED_OUTCOMES and outcome != PASSING_OUTCOME:
+                not_passing.append(f"{entry.get('command')} ended {outcome}")
+            elif outcome == "pending":
+                not_passing.append(f"{entry.get('command')} is still pending")
     return {"accepted": ordered == (), "reasons": ordered,
+            "commandOutcomes": [entry.get("outcome") for entry in commands
+                                if isinstance(entry, dict)]
+            if isinstance(commands, list) else [],
+            "notPassing": tuple(not_passing),
+            "runPassed": ordered == () and not_passing == [],
             "canonicalBytes": len(canonical_json(record).encode("ascii"))
             if ordered == () else None}
