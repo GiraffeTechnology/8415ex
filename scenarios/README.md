@@ -461,13 +461,34 @@ delivery can take. It is accounted for with that reason, and the three
 overriding versions are each entered.
 
 It is a measurement, not a source scan: a name appearing in a file proves
-nothing about being called. Two things it cannot observe are named with their
-reasons rather than left as an unexplained narrower count. A module-level
-function is invisible to it, because a caller that wrote `from .errors import
-require` holds the original and replacing the module attribute observes nothing
-- every such function would read as unentered. An inherited method is invisible
-too, because wrapping it sets the wrapper on the subclass and shadows the base,
-so only methods a class defines itself are counted. The instrumented execution is a second run of the
+nothing about being called.
+
+Module-level functions were outside the report at first, for a real reason: a
+caller that wrote `from exchange.ids import digest` holds the original, so
+replacing the attribute on the defining module observes nothing. That is a
+reason to look in the right place rather than to leave twelve domain functions
+uncounted. The call reaches the function through the name the *caller's* module
+holds, so every binding of the object in this project's own modules is replaced
+- 58 of them for those twelve functions - and all twelve turn out to be
+entered. The search is restricted to the `exchange`, `scenarios` and
+`integration` namespaces, because nothing outside them can call into the domain
+in this run and a search over every loaded module would also reach the
+measurement's own bookkeeping. Counted names are now 80: 68 methods and 12
+functions, of which 79 are entered.
+
+What remains unobservable is named with its reason rather than narrowing the
+count silently. An inherited method is invisible, because wrapping it sets the
+wrapper on the subclass and shadows the base, so only methods a class defines
+itself are counted and an override is counted on the class that defines it. A
+function held somewhere other than a module global - in a list, a dict, a
+default argument or a local alias taken before the run - is invisible too. The
+record classes and the fixtures are not counted at all, being data and
+scaffolding rather than behaviour this delivery has to demonstrate.
+
+One detail worth keeping in view: a contract that enters no domain method still
+enters `digest`, `canonical_json` and `require`, because the runner digests its
+own report. The negative control names those three rather than asserting an
+empty set, so anything else entered is the contract's doing. The instrumented execution is a second run of the
 same groups and says so - the reported digest and the resource observation come
 from the primary run, and the instrumented run's own scenario results are
 discarded, though it still has to pass, because a scenario that stopped early

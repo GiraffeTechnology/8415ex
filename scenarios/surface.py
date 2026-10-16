@@ -25,12 +25,13 @@ would set the wrapper on the subclass, shadowing the base and making the base
 look unentered while the subclass's own entry looked covered - a measurement
 artifact rather than a fact about the delivery.
 
-Module-level functions are deliberately not measured this way, and the reason is
-worth stating rather than leaving as an unexplained absence: a caller that wrote
-``from .errors import require`` holds the original function, so replacing the
-module attribute observes nothing and every such function would read as
-unentered. A measurement that cannot be made is reported as not attempted, never
-as a result.
+Module-level functions were once outside this report, because a caller that
+wrote ``from .errors import require`` holds the original function and replacing
+the defining module's attribute observes nothing. That is a reason to look in
+the right place, not a reason to leave twelve domain functions uncounted: the
+call reaches the function through the name the *caller's* module holds, so every
+binding of it in the project's own modules is replaced. All of them are, and all
+twelve are entered.
 
 This is a second, instrumented execution of the same groups. Its scenario
 results are discarded: the reported run, its digest and its resource observation
@@ -45,6 +46,7 @@ case.
 import functools
 import importlib
 import inspect
+import sys
 
 from exchange.exit import SimulatedVoucherDesk
 from exchange.ledger import Exchange
@@ -68,6 +70,23 @@ SUBJECTS = (
     "exchange.exit.SimulatedVoucherDesk",
 )
 
+#: Domain modules whose own public functions are counted. A function is reached
+#: through the name its caller holds, so these are the modules the functions are
+#: defined in, not the modules that call them.
+FUNCTION_MODULES = (
+    "exchange.ids",
+    "exchange.errors",
+    "exchange.settlement",
+    "exchange.rollback",
+    "exchange.registration",
+    "exchange.exit",
+)
+
+#: Top-level packages whose modules may hold a binding that matters. A call from
+#: outside the project cannot reach the domain in this run, and searching every
+#: loaded module would also reach this measurement's own bookkeeping.
+BINDING_NAMESPACES = ("exchange", "scenarios", "integration")
+
 #: Imported so the reuse map sees these dependencies rather than having them
 #: hidden behind a string. The names resolved below are these same classes.
 _IMPORTED = (Exchange, SimulatedPaymentAdapter, SimulatedAssetControl,
@@ -77,13 +96,18 @@ _IMPORTED = (Exchange, SimulatedPaymentAdapter, SimulatedAssetControl,
 #: What this measurement cannot observe, and why. Stated so the absence is a
 #: known limit rather than a silently narrower count.
 NOT_MEASURED = {
-    "module-level functions": "a caller that imported the function by name holds "
-                              "the original, so replacing the module attribute "
-                              "observes nothing and every such function would read "
-                              "as unentered",
     "inherited methods": "wrapping one sets the wrapper on the subclass and shadows "
                          "the base, so the base would read as unentered whatever the "
-                         "delivery did",
+                         "delivery did; only methods a class defines itself are "
+                         "counted, and an override is counted on the class that "
+                         "defines it",
+    "a function held somewhere other than a module global": "a reference taken into "
+        "a list, a dict, a default argument or a local alias before the run is not "
+        "reached by replacing module bindings, so a function called only that way "
+        "would read as unentered",
+    "anything outside the counted subjects and modules": "the domain's record "
+        "classes and the fixtures are not counted, because they are scaffolding or "
+        "data rather than behaviour this delivery has to demonstrate",
 }
 
 #: Methods this delivery does not enter, with the reason. An unentered method is
@@ -115,17 +139,39 @@ def methods():
     return tuple(found)
 
 
-def _instrumented(groups, runner):
-    """Run the groups with every counted method recording that it was entered.
+def functions():
+    """Every own public function of every counted module, with the object."""
+    found = []
+    for path in FUNCTION_MODULES:
+        module = importlib.import_module(path)
+        for name, value in sorted(vars(module).items()):
+            if name.startswith("_") or not inspect.isfunction(value):
+                continue
+            if value.__module__ != path:
+                continue
+            found.append(("%s.%s" % (path, name), value))
+    return tuple(found)
 
-    The classes are restored whatever happens. Leaving one wrapped would make
+
+def _binding_holders():
+    """Project modules that may hold a reference to a counted function."""
+    return [module for name, module in list(sys.modules.items())
+            if module is not None
+            and name.split(".")[0] in BINDING_NAMESPACES]
+
+
+def _instrumented(groups, runner):
+    """Run the groups with every counted name recording that it was entered.
+
+    Everything is restored whatever happens. Leaving one wrapped would make
     every later report in the same process describe an instrumented domain
     rather than the real one.
     """
-    counted = methods()
+    counted_methods = methods()
+    counted_functions = functions()
     entered = set()
     restore = [(subject, name, subject.__dict__[name])
-               for _, subject, name in counted]
+               for _, subject, name in counted_methods]
 
     def wrap(label, original):
         @functools.wraps(original)
@@ -136,14 +182,25 @@ def _instrumented(groups, runner):
 
     reports = []
     try:
-        for label, subject, name in counted:
+        for label, subject, name in counted_methods:
             setattr(subject, name, wrap(label, subject.__dict__[name]))
+        # A function is reached through the name its caller holds, so every
+        # binding of the object in the project's own modules is replaced,
+        # including the one in the module that defines it.
+        for label, original in counted_functions:
+            replacement = wrap(label, original)
+            for module in _binding_holders():
+                for name, value in list(vars(module).items()):
+                    if value is original:
+                        restore.append((module, name, original))
+                        setattr(module, name, replacement)
         for group in groups:
             reports.append(runner(list(group)))
     finally:
-        for subject, name, original in restore:
-            setattr(subject, name, original)
-    return [label for label, _, _ in counted], entered, reports
+        for holder, name, original in restore:
+            setattr(holder, name, original)
+    return ([label for label, _, _ in counted_methods],
+            [label for label, _ in counted_functions], entered, reports)
 
 
 def coverage(groups, runner):
@@ -153,7 +210,8 @@ def coverage(groups, runner):
     both passed in rather than imported, so this module does not import the
     command line's own dependencies back and load them twice.
     """
-    names, entered, reports = _instrumented(groups, runner)
+    method_names, function_names, entered, reports = _instrumented(groups, runner)
+    names = method_names + function_names
     unexercised = [name for name in names if name not in entered]
     unaccounted = [name for name in unexercised
                    if name not in NOT_EXERCISED_LOCALLY]
@@ -164,20 +222,28 @@ def coverage(groups, runner):
     # a scenario that stopped early never reaches the methods it would have.
     all_passed = all(report["allPassed"] for report in reports) and bool(reports)
     per_subject = []
-    for path in SUBJECTS:
-        own = [name for name in names if name.startswith(path + ".")]
+    for path in SUBJECTS + FUNCTION_MODULES:
+        own = [name for name in names if name.startswith(path + ".")
+               and name.count(".") == path.count(".") + 1]
         per_subject.append({
             "subject": path,
+            "kind": "class" if path in SUBJECTS else "module",
             "methodCount": len(own),
             "exercisedCount": sum(1 for name in own if name in entered),
             "notExercised": [name for name in own if name not in entered],
         })
     return {
-        "schema": "8415ex-domain-surface-coverage/2",
+        "schema": "8415ex-domain-surface-coverage/3",
         "subjects": list(SUBJECTS),
+        "functionModules": list(FUNCTION_MODULES),
+        "bindingNamespaces": list(BINDING_NAMESPACES),
         "perSubject": per_subject,
-        "methods": names,
-        "methodCount": len(names),
+        "counted": names,
+        "countedCount": len(names),
+        "methods": method_names,
+        "methodCount": len(method_names),
+        "functions": function_names,
+        "functionCount": len(function_names),
         "exercised": sorted(entered),
         "exercisedCount": len(entered),
         "notExercised": unexercised,
@@ -199,8 +265,9 @@ def coverage(groups, runner):
             "observation come from the primary execution",
             "not a correctness claim: entering a method says nothing about what it "
             "then did, which is the acceptance matrix's question, per case",
-            "not a count over everything the domain exposes: module-level functions "
-            "and inherited methods cannot be observed this way, and each is named in "
-            "notMeasured with the reason rather than quietly left out",
+            "not a count over everything the domain exposes: the record classes, "
+            "the fixtures, inherited methods and a function held outside a module "
+            "global are not counted, and each limit is named in notMeasured with "
+            "the reason rather than quietly left out",
         ],
     }
