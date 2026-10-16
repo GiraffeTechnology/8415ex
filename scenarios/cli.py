@@ -39,7 +39,7 @@ from exchange.ids import canonical_json
 from .commands import COMMANDS, STDOUT_ONLY
 from . import (completion, decisions, docs, dossier, events, evidence_index,
                execution, handoff, manifest, matrix, observations, operations,
-               prd, receipt, reuse, stages, storyboard, validation)
+               prd, receipt, reuse, stages, storyboard, surface, validation)
 from .demos import DEMOS
 from .harness import report_text, run_all
 from .guarantees import GUARANTEE_CONTRACTS
@@ -103,6 +103,9 @@ CONSISTENCY_CHECKS = (
      "reason": "the stage map disagrees with the acceptance matrix"},
     {"key": "stageMap", "flag": ("everyShippedModuleIsClaimed",), "blocks": True,
      "reason": "a module is shipped and no stage says it is developed here"},
+    {"key": "domainSurface", "flag": ("everyMethodAccountedFor",), "blocks": True,
+     "reason": "a public domain method is entered by nothing in this delivery and "
+               "is accounted for nowhere"},
     {"key": "eventContract", "flag": ("conformance", "accountedFor"), "blocks": True,
      "reason": "the event vocabulary does not account for what the domain records"},
     {"key": "dossier", "flag": ("allItemsCarried",), "blocks": True,
@@ -199,6 +202,8 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
         "guaranteeReport": guarantee_report,
         "coverage": coverage_map(),
         "guaranteeCoverage": guarantee_coverage(),
+        "domainSurface": surface.coverage(
+            (DEMOS, PATH_CONTRACTS, GUARANTEE_CONTRACTS), run_all),
         "matrix": acceptance,
         "manifest": package,
         "commands": commands,
@@ -569,6 +574,10 @@ def main(argv=None):
         report = run_all(list(GUARANTEE_CONTRACTS))
         print(canonical_json(report) if arguments.json else report_text(report))
         return 0 if report["allPassed"] else 1
+    if arguments.command == "surface":
+        built = surface.coverage((DEMOS, PATH_CONTRACTS, GUARANTEE_CONTRACTS), run_all)
+        print(canonical_json(built))
+        return 0 if built["everyMethodAccountedFor"] else 1
     if arguments.command == "matrix":
         built = matrix.build(manifest.source_identity(arguments.root), {"runId": _run_id()})
         print(canonical_json(built))

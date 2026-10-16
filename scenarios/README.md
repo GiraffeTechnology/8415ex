@@ -63,6 +63,9 @@ python3 -B -m scenarios.cli run-all --root .
 # domain's own suite to point at
 python3 -B -m scenarios.cli guarantees
 
+# the measured share of the domain's own public API this delivery enters
+python3 -B -m scenarios.cli surface
+
 # the nine-group candidate receipt for a completed run
 python3 -B -m scenarios.cli receipt [--execute-suites]
 
@@ -418,6 +421,33 @@ existing, a module that stopped existing, a file that cannot be parsed, a name
 bound only inside a function or a class body (importable from neither, so
 counting it would make a missing name look present), and an undecidable name.
 A surface that depends on nothing is not a finding.
+
+## How much of the domain this delivery actually enters
+
+The acceptance matrix answers coverage per requirement. Nothing answered the
+other question: of the methods the domain exposes, which has this delivery ever
+called? Measuring it - by wrapping each public method of `exchange.ledger.Exchange`
+and running the groups - found five that nothing had ever entered: batch
+settlement, a restart's payment enquiry, a late registration conflict, the
+deadline boundary and redemption readiness. Four of the five were recovery and
+boundary behaviour, which is the part of a system a reviewer most wants
+demonstrated, and all five had passing cases in the matrix because the domain's
+own suite covered them.
+
+So an eighth contract exercises them, and the measurement is now a gated report:
+51 of 51 public methods entered. A method that stops being entered has to be
+accounted for in `NOT_EXERCISED_LOCALLY` with a reason, or the run blocks. A
+stale exemption - one naming a method that is exercised after all, or a method
+that no longer exists - blocks too, so the record cannot rot into a list of
+excuses.
+
+It is a measurement, not a source scan: a name appearing in a file proves
+nothing about being called. The instrumented execution is a second run of the
+same groups and says so - the reported digest and the resource observation come
+from the primary run, and the instrumented run's own scenario results are
+discarded, though it still has to pass, because a scenario that stopped early
+never reaches the methods it would have. Entering a method is also not a
+correctness claim; what it then recorded is the matrix's question, per case.
 
 ## What the stage map is checked against
 

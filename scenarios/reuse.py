@@ -56,6 +56,15 @@ DOMAIN_REUSE = (
         "simulated": False,
     },
     {
+        "module": "exchange.rollback",
+        "uses": ("rollback_binding",),
+        "purpose": "the rollback binding the domain itself computes, so a contract "
+                   "that triggers a deadline rollback builds the authority the "
+                   "domain expects rather than a parallel shape",
+        "kind": "domain contract",
+        "simulated": False,
+    },
+    {
         "module": "exchange.errors",
         "uses": ("DomainError",),
         "purpose": "the domain's own error type, so a contract records the code the "

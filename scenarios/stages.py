@@ -64,6 +64,9 @@ DEVELOPED_HERE = {
         {"deliverable": "this stage map itself, cross-checked against the matrix and "
                         "against the modules on disk in both directions",
          "where": "scenarios/stages.py"},
+        {"deliverable": "the measured share of the domain's own public API that this "
+                        "delivery enters, with any unexercised method accounted for",
+         "where": "scenarios/surface.py"},
     ),
     1: (
         {"deliverable": "the six scenarios as recorded expectations over the domain",

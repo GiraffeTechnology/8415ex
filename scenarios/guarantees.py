@@ -19,6 +19,7 @@ from exchange import fixtures as F
 from exchange.errors import DomainError
 from exchange.ids import canonical_json, digest
 from exchange.model import Asset, TradeIntent, WHOLE_RECEIPT_UNITS, WarehouseReceipt
+from exchange.rollback import rollback_binding
 
 from .harness import Scenario
 
@@ -702,6 +703,175 @@ def _idempotence(recorder):
                   "happened, never with a second movement")
 
 
+# ------------------- recovery, the deadline boundary and redemption readiness
+
+def _recovery_and_exit(recorder):
+    """The five domain methods nothing in this delivery had ever called.
+
+    Measuring which domain methods a run actually reaches turned up five that no
+    scenario, route contract or guarantee touched. Four of them are recovery and
+    boundary behaviour - exactly the paths a reviewer most wants demonstrated -
+    so they are exercised here rather than written off.
+    """
+    batch, _ = F.funded_chain_to_d(registration_path=CONTRACT_PATH)
+    requests = F.submit_all(batch)
+    recorder.describe_setup(
+        path=CONTRACT_PATH, accounts={"A": F.A, "B": F.B, "C": F.C, "D": F.D},
+        prices={"AB": F.PRICE_AB, "BC": F.PRICE_BC, "CD": F.PRICE_CD},
+        quoteAsset=F.QUOTE_ASSET,
+        simulatedAdapters={"payment": "SimulatedPaymentAdapter",
+                           "assetControl": "SimulatedAssetControl",
+                           "registrar": batch.registrars[CONTRACT_PATH].label})
+
+    waiting = batch.settle_eligible_segments(RECEIPT, {})
+    recorder.step("settlement is asked for before anything is confirmed",
+                  reported=[entry["legIndex"] for entry in waiting],
+                  reasons=list(waiting[0]["reasons"]))
+    recorder.expect("before confirmation the batch says why, not that authority is "
+                    "missing", ("T-14",),
+                    {"released": False, "movements": 0,
+                     "reasons": ["EX_HOLDER_POSITION_NOT_REACHED",
+                                 "EX_SEGMENT_REGISTRATION_NOT_CONFIRMED"]},
+                    {"released": bool(waiting[0].get("released")),
+                     "movements": batch.payments.movements,
+                     "reasons": sorted(waiting[0]["reasons"])},
+                    detail="asking for a batch release is not an instruction to pay, and "
+                           "the reason it cannot is the registration, not the authority")
+
+    unauthorized, _ = F.funded_chain_to_d(registration_path=CONTRACT_PATH)
+    unauthorized_requests = F.submit_all(unauthorized)
+    F.confirm(unauthorized, unauthorized_requests[0], "res-ab")
+    missing = unauthorized.settle_eligible_segments(RECEIPT, {})
+    recorder.step("AB is confirmed but no release authority is offered",
+                  reasons=list(missing[0]["reasons"]))
+    recorder.expect("a confirmed segment with no authority is reported, not released",
+                    ("T-14",),
+                    {"released": False, "authorityMissing": True, "movements": 0},
+                    {"released": bool(missing[0].get("released")),
+                     "authorityMissing": "EX_RELEASE_AUTHORITY_MISSING"
+                                         in missing[0]["reasons"],
+                     "movements": unauthorized.payments.movements})
+
+    released_each_round = []
+    for index, result in enumerate(("res-ab", "res-bc", "res-cd")):
+        F.confirm(batch, requests[index], result)
+        authorities = {leg: F.release_authority(batch, leg, "auth-%d" % leg)
+                       for leg in range(index + 1)}
+        outcomes = batch.settle_eligible_segments(RECEIPT, authorities)
+        released_each_round.append([entry["legIndex"] for entry in outcomes
+                                    if entry.get("released")])
+    recorder.step("each hop is confirmed in turn and the batch is asked again",
+                  releasedPerRound=released_each_round,
+                  movements=batch.payments.movements)
+    recorder.expect("the registration prefix releases each segment exactly once",
+                    ("T-13",), [[0], [1], [2]], released_each_round,
+                    detail="an authority offered again for an already released segment "
+                           "releases nothing more")
+    recorder.expect("every segment ends released, with one movement each", ("T-13",),
+                    {"statuses": ["released"] * 3, "movements": 3},
+                    {"statuses": [batch.escrow_for_leg(RECEIPT, leg).status
+                                  for leg in range(3)],
+                     "movements": batch.payments.movements})
+
+    unknown, _ = F.funded_chain_to_d(registration_path=CONTRACT_PATH,
+                                     outcomes={"release:escrow-ab": "unknown"})
+    unknown_requests = F.submit_all(unknown)
+    F.confirm(unknown, unknown_requests[0], "res-ab")
+    unknown.release_segment(RECEIPT, 0, F.release_authority(unknown, 0, "auth-0"))
+    enquiry = unknown.resume_payments(RECEIPT)
+    recorder.step("a restart asks what already happened", enquiry=enquiry[0])
+    recorder.expect("a restart enquires and sends no second payment", ("T-16", "T-28"),
+                    {"paymentStatus": "unknown", "saysNoSecondPayment": True,
+                     "movements": 0},
+                    {"paymentStatus": enquiry[0]["paymentStatus"],
+                     "saysNoSecondPayment": "no second payment" in enquiry[0]["action"],
+                     "movements": unknown.payments.movements})
+    unknown.payments.resolve_unknown("release:escrow-ab", "settled")
+    resolved = unknown.resume_payments(RECEIPT)
+    recorder.expect("once the outcome is known the enquiry records it rather than paying",
+                    ("T-16", "T-28"),
+                    {"paymentStatus": "settled", "escrow": "released", "movements": 0},
+                    {"paymentStatus": resolved[0]["paymentStatus"],
+                     "escrow": unknown.escrow_for_leg(RECEIPT, 0).status,
+                     "movements": unknown.payments.movements},
+                    detail="the enquiry recorded the result; it sent nothing")
+
+    late, _ = F.rollback_chain_to_d(registration_path=CONTRACT_PATH)
+    late_requests = F.submit_all(late)
+    F.refuse(late, late_requests[0], "res-ab-refused")
+    late.begin_rollback(RECEIPT, 0, F.rollback_authority(late, 0, "rb-1"))
+    late.advance_rollback(RECEIPT)
+    _, conflict = F.confirm(late, late_requests[1], "res-bc-late")
+    recorder.step("a success arrives after the suffix was already unwound",
+                  disposition=conflict["disposition"])
+    recorder.expect("a late success revives nothing and pays nothing again", ("T-23",),
+                    {"disposition": "late-conflict", "legRevived": False,
+                     "fundsReleasedAgain": False, "holderIndex": 0,
+                     "escrow": "refunded", "movements": 3},
+                    {"disposition": conflict["disposition"],
+                     "legRevived": conflict["legRevived"],
+                     "fundsReleasedAgain": conflict["fundsReleasedAgain"],
+                     "holderIndex": late.holder_index(RECEIPT),
+                     "escrow": late.escrow_for_leg(RECEIPT, 1).status,
+                     "movements": late.payments.movements})
+    report = late.rollback_report(RECEIPT)
+    recorder.expect("the conflicting evidence is kept for investigation", ("T-23",),
+                    {"count": 1, "resultId": "res-bc-late"},
+                    {"count": len(report["conflicts"]),
+                     "resultId": report["conflicts"][0]["resultId"]},
+                    detail="discarded evidence is the one thing an investigation "
+                           "cannot recover")
+
+    deadline, deadline_clock = F.rollback_chain_to_d(registration_path=CONTRACT_PATH)
+    deadline_requests = F.submit_all(deadline)
+    F.confirm(deadline, deadline_requests[0], "res-ab")
+    deadline_clock.now = deadline.receipt(RECEIPT).trade_stop_at
+    state = deadline.evaluate_deadline(RECEIPT)
+    boundary = deadline.deadline_boundary(RECEIPT)
+    recorder.step("the deadline is reached with an unfinished suffix",
+                  returnsTo=state["unfinishedSuffixReturnsTo"], boundary=dict(boundary))
+    recorder.expect("the boundary is the end of the settled prefix, named exactly",
+                    ("T-24",),
+                    {"boundaryIndex": 1, "boundaryAccount": F.B, "returnsTo": F.B},
+                    {"boundaryIndex": boundary["boundaryIndex"],
+                     "boundaryAccount": boundary["boundaryAccount"],
+                     "returnsTo": state["unfinishedSuffixReturnsTo"]},
+                    detail="not the origin and not the current owner: the confirmed holder")
+    authority = F.rollback_authority(
+        deadline, 1, "rb-deadline", boundary_account=F.B,
+        binding=rollback_binding(deadline.receipt(RECEIPT).asset, RECEIPT, 1, F.B, (1, 2)))
+    deadline.begin_rollback(RECEIPT, 1, authority, trigger="deadline")
+    deadline_report = deadline.advance_rollback(RECEIPT)
+    recorder.expect("only the unfinished suffix is unwound, to that boundary", ("T-24",),
+                    {"complete": True, "affectedLegs": [1, 2], "owner": F.B},
+                    {"complete": deadline_report["complete"],
+                     "affectedLegs": list(deadline_report["affectedLegs"]),
+                     "owner": deadline.owner_of(RECEIPT)})
+
+    ready, _ = F.minted(registration_path=CONTRACT_PATH)
+    agreed = ready.redemption_readiness(RECEIPT, F.A)
+    recorder.expect("owner equal to holder is necessary and never sufficient", ("T-02",),
+                    {"ownerEqualsHolder": True, "necessary": True, "redeemable": False,
+                     "namesAFurtherCheck": True},
+                    {"ownerEqualsHolder": agreed["ownerEqualsHolder"],
+                     "necessary": agreed["necessaryConditionMet"],
+                     "redeemable": agreed["redeemable"],
+                     "namesAFurtherCheck": "rights-holder-verification"
+                                           in agreed["furtherChecksNotPerformedHere"]},
+                    detail="this package never reports a receipt as redeemable")
+    diverged, _ = F.chain_to_d(registration_path=CONTRACT_PATH)
+    split = diverged.redemption_readiness(RECEIPT, F.D)
+    recorder.expect("a diverged owner and holder blocks the necessary condition", ("T-02",),
+                    {"ownerEqualsHolder": False, "diverged": True},
+                    {"ownerEqualsHolder": split["ownerEqualsHolder"],
+                     "diverged": "EX_OWNER_HOLDER_DIVERGED" in split["blockingReasons"]})
+    recorder.note("every recovery path here answers with what already happened rather "
+                  "than with a second movement")
+    recorder.not_run("real redemption and real deadline enforcement", ("T-37", "T-38"),
+                     "redemption needs rights-holder verification and the deadline needs a "
+                     "real clock and a real registrar; neither exists in a local model run")
+
+
 GUARANTEE_CONTRACTS = (
     Scenario("GUARANTEE-WHOLE-RECEIPT", "one NFT is one whole receipt, indivisibly",
              ("T-01",), CONTRACT_PATH, _whole_receipt),
@@ -722,6 +892,11 @@ GUARANTEE_CONTRACTS = (
     Scenario("GUARANTEE-IDEMPOTENCE",
              "a repeated or re-ordered observation moves nothing twice",
              ("T-30",), CONTRACT_PATH, _idempotence),
+    Scenario("GUARANTEE-RECOVERY-AND-EXIT",
+             "batch settlement, a restart's enquiry, a late success, the deadline "
+             "boundary and redemption readiness",
+             ("T-02", "T-13", "T-14", "T-16", "T-23", "T-24", "T-28"), CONTRACT_PATH,
+             _recovery_and_exit),
 )
 
 #: The cases these contracts exist to cover: the ten the matrix reported as
@@ -730,6 +905,11 @@ GUARANTEE_CONTRACTS = (
 COVERED_CASES = ("T-01", "T-06", "T-07", "T-08", "T-09", "T-15", "T-16", "T-27",
                  "T-30", "T-34")
 
+#: Cases the recovery contract also records, which already had scenario evidence.
+#: They are listed apart from ``COVERED_CASES`` because the contract exists to
+#: reach five domain methods nothing called, not to close a matrix gap.
+ALSO_RECORDED_CASES = ("T-02", "T-13", "T-14", "T-23", "T-24", "T-28")
+
 
 def coverage_map():
     """Which contract covers which case, and what these contracts are not."""
@@ -737,6 +917,7 @@ def coverage_map():
         "schema": "8415ex-guarantee-coverage/1",
         "path": CONTRACT_PATH,
         "coveredCases": list(COVERED_CASES),
+        "alsoRecordedCases": list(ALSO_RECORDED_CASES),
         "contracts": [{"scenarioId": contract.scenario_id, "title": contract.title,
                        "cases": list(contract.cases)}
                       for contract in GUARANTEE_CONTRACTS],
