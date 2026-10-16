@@ -156,6 +156,13 @@ ADAPTER_ROLES = (
         "realInterface": "not located; see D-07",
     },
     {
+        "role": "matching",
+        "simulated": True,
+        "standsFor": "a local explicit-pairing fixture, with no external matcher "
+                     "or order book",
+        "realInterface": "not located; no real matching integration is exercised",
+    },
+    {
         "role": "wallet",
         "simulated": True,
         "standsFor": "a wallet authorization this package reads and checks, with "
@@ -239,10 +246,10 @@ def source_imports(root="."):
             for where, entries in found.items()}
 
 
-#: Surfaces outside this package that depend on it. Their own code is not this
-#: package's to declare, so nothing here is hand-maintained: the dependency is
-#: read from their source and the names are resolved against the live modules.
-CONSUMER_SURFACES = ("integration",)
+#: Surfaces outside this package that depend on it, including the shipped
+#: exchange demos as well as the joined integration suite. Their imports are
+#: read from source rather than maintained as a separate dependency list.
+CONSUMER_SURFACES = ("integration", "exchange")
 
 
 def _spec(module):
@@ -431,7 +438,8 @@ def consumers(root="."):
         "unreadableFiles": unreadable,
         "unresolvedNames": sorted(unresolved),
         "undecidedNames": sorted(undecided),
-        "consistent": not unresolved and not unreadable and not undecided,
+        "consistent": (not unresolved and not unreadable and not undecided
+                       and not any(entry["error"] for entry in depended)),
         "meaning": ("these are the names another surface would break on if this "
                     "package renamed or removed them"),
     }
@@ -486,25 +494,33 @@ def declared_coverage(root="."):
     }
 
 
-def adapters_recorded_by(scenario_report):
-    """The adapter roles the scenarios actually recorded, read from a report.
+def adapters_recorded_by(scenario_report, path_report=None, guarantee_report=None):
+    """The adapter roles recorded by every supplied execution group.
 
     Taken from the runs rather than from this module's own list, so a role that
     stopped being exercised stops appearing.
     """
     seen = {}
-    for scenario in (scenario_report or {}).get("scenarios", []):
-        adapters = scenario.get("setup", {}).get("simulatedAdapters", {})
-        for role, label in adapters.items():
-            if label is None:
-                continue
-            seen.setdefault(role, set()).add(label)
+    for report in (scenario_report, path_report, guarantee_report):
+        for scenario in (report or {}).get("scenarios", []):
+            adapters = scenario.get("setup", {}).get("simulatedAdapters", {})
+            for role, label in adapters.items():
+                if label is None:
+                    continue
+                seen.setdefault(role, set()).add(label)
     return {role: sorted(labels) for role, labels in sorted(seen.items())}
 
 
-def build(scenario_report=None, root="."):
+def build(scenario_report=None, root=".", *, path_report=None, guarantee_report=None):
     """The reuse map: what is consumed, what is simulated, what is unlocated."""
-    recorded = adapters_recorded_by(scenario_report)
+    recorded = adapters_recorded_by(scenario_report, path_report, guarantee_report)
+    declared_roles = {entry["role"] for entry in ADAPTER_ROLES}
+    undeclared_roles = sorted(set(recorded) - declared_roles)
+    non_simulated = {role: [label for label in labels if "simulated" not in label.lower()]
+                     for role, labels in recorded.items()}
+    non_simulated = {role: labels for role, labels in non_simulated.items() if labels}
+    all_simulated = (not undeclared_roles and not non_simulated
+                     and all(entry["simulated"] for entry in ADAPTER_ROLES))
     register = {entry["id"]: entry for entry in decisions.OPEN_DECISIONS}
     unlocated = [dict(entry,
                       decision=register.get(entry["trackedBy"], {}).get("undecided"),
@@ -517,7 +533,7 @@ def build(scenario_report=None, root="."):
         # The consuming direction is folded into the same verdict rather than
         # added beside it, so the rule that already acts on this map covers it
         # too. A verdict nobody reads is worse than no verdict.
-        "complete": coverage["complete"] and depending["consistent"] and all(
+        "complete": all_simulated and coverage["complete"] and depending["consistent"] and all(
             not row["error"] and not row["unresolvedNames"] for row in domain),
         "schema": "8415ex-reuse-map/2",
         "consumers": depending,
@@ -525,7 +541,9 @@ def build(scenario_report=None, root="."):
         "declaredCoverage": coverage,
         "adapterRoles": [dict(entry) for entry in ADAPTER_ROLES],
         "adaptersRecordedInThisRun": recorded,
-        "allAdaptersSimulated": all(entry["simulated"] for entry in ADAPTER_ROLES),
+        "undeclaredAdapterRoles": undeclared_roles,
+        "nonSimulatedAdapterLabels": non_simulated,
+        "allAdaptersSimulated": all_simulated,
         "unlocatedInterfaces": unlocated,
         "unlocatedCount": len(unlocated),
         "meaning": ("every adapter role is simulated: this package connects to no "
