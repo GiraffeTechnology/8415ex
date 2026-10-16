@@ -16,6 +16,7 @@ Nothing here is evidence that a real component was exercised. A simulated
 adapter is labelled simulated wherever it appears.
 """
 import importlib
+import importlib.util
 import pathlib
 import ast
 import sys
@@ -36,18 +37,31 @@ DOMAIN_REUSE = (
         "simulated": False,
     },
     {
-        "module": "exchange.exit",
-        "uses": ("exit_step_key",),
-        "purpose": "the exit step key, so a scenario names a step the same way the "
-                   "domain does rather than inventing a parallel key",
+        "module": "exchange.model",
+        "uses": ("REGISTRATION_PATHS", "Asset", "WHOLE_RECEIPT_UNITS",
+                 "WarehouseReceipt", "TradeIntent"),
+        "purpose": "the three registrar route identifiers, the asset type, the "
+                   "whole-receipt unit count and the two records a guarantee "
+                   "contract has to build directly, taken from the domain so "
+                   "neither the route list nor a record shape can drift from it",
         "kind": "domain contract",
         "simulated": False,
     },
     {
-        "module": "exchange.model",
-        "uses": ("REGISTRATION_PATHS", "Asset"),
-        "purpose": "the three registrar route identifiers and the asset type, taken "
-                   "from the domain so the route list cannot drift from it",
+        "module": "exchange.rollback",
+        "uses": ("rollback_binding", "SimulatedAssetControl"),
+        "purpose": "the rollback binding the domain itself computes, so a contract "
+                   "that triggers a deadline rollback builds the authority the "
+                   "domain expects rather than a parallel shape, and the simulated "
+                   "asset-return role, so the surface report counts its own methods",
+        "kind": "domain contract",
+        "simulated": False,
+    },
+    {
+        "module": "exchange.errors",
+        "uses": ("DomainError",),
+        "purpose": "the domain's own error type, so a contract records the code the "
+                   "domain raised instead of matching on the text of a message",
         "kind": "domain contract",
         "simulated": False,
     },
@@ -62,9 +76,29 @@ DOMAIN_REUSE = (
     },
     {
         "module": "exchange.registration",
-        "uses": ("RegistrationEvidence",),
+        "uses": ("RegistrationEvidence", "SimulatedRegistrar", "DirectRegistrar",
+                 "ElectronicRegistrar", "IntermediaryRegistrar"),
         "purpose": "the registration evidence record, so a path scenario reports "
-                   "what the domain records rather than a parallel shape",
+                   "what the domain records rather than a parallel shape, and the "
+                   "four registrar roles themselves, so the surface report counts "
+                   "the methods the domain defines rather than a list of names",
+        "kind": "domain contract",
+        "simulated": False,
+    },
+    {
+        "module": "exchange.settlement",
+        "uses": ("SimulatedPaymentAdapter",),
+        "purpose": "the simulated payment role, so the surface report counts the "
+                   "methods it really defines, its enquiry surface included",
+        "kind": "local fixture",
+        "simulated": True,
+    },
+    {
+        "module": "exchange.exit",
+        "uses": ("exit_step_key", "SimulatedVoucherDesk"),
+        "purpose": "the exit step key and the simulated collection desk, so a "
+                   "contract names a step the way the domain does and the surface "
+                   "report counts the desk's own methods",
         "kind": "domain contract",
         "simulated": False,
     },
@@ -120,6 +154,13 @@ ADAPTER_ROLES = (
         "standsFor": "a desk that issues a voucher, confirms its hand-over and "
                      "records the burn as separate steps with their own instants",
         "realInterface": "not located; see D-07",
+    },
+    {
+        "role": "matching",
+        "simulated": True,
+        "standsFor": "a local explicit-pairing fixture, with no external matcher "
+                     "or order book",
+        "realInterface": "not located; no real matching integration is exercised",
     },
     {
         "role": "wallet",
@@ -205,6 +246,205 @@ def source_imports(root="."):
             for where, entries in found.items()}
 
 
+#: Surfaces outside this package that depend on it, including the shipped
+#: exchange demos as well as the joined integration suite. Their imports are
+#: read from source rather than maintained as a separate dependency list.
+CONSUMER_SURFACES = ("integration", "exchange")
+
+
+def _spec(module):
+    """Whether a module exists, without importing it.
+
+    A missing parent raises rather than returning None, and a module that is
+    not there is the answer this is asked for, so both become None.
+    """
+    try:
+        return importlib.util.find_spec(module)
+    except (ImportError, AttributeError, ValueError):
+        return None
+
+
+def _bound_names(tree):
+    """The names a module body binds at its top level.
+
+    Only the module body is walked. A name bound inside a function or a class
+    is not importable from the module, so counting it would make a missing name
+    look present.
+    """
+    names = set()
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(node.name)
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                names.update(_targets(target))
+        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+            names.update(_targets(node.target))
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            for alias in node.names:
+                if alias.name == "*":
+                    continue
+                names.add(alias.asname or alias.name.split(".")[0])
+        elif isinstance(node, (ast.For, ast.AsyncFor)):
+            names.update(_targets(node.target))
+        elif isinstance(node, (ast.With, ast.AsyncWith)):
+            for item in node.items:
+                if item.optional_vars is not None:
+                    names.update(_targets(item.optional_vars))
+    return names
+
+
+def _targets(node):
+    """The plain names an assignment target binds."""
+    if isinstance(node, ast.Name):
+        return {node.id}
+    if isinstance(node, (ast.Tuple, ast.List)):
+        bound = set()
+        for element in node.elts:
+            bound.update(_targets(element))
+        return bound
+    if isinstance(node, ast.Starred):
+        return _targets(node.value)
+    return set()
+
+
+def _reads_star(tree):
+    """Whether the module body re-exports an unknown set of names."""
+    return any(isinstance(node, ast.ImportFrom)
+               and any(alias.name == "*" for alias in node.names)
+               for node in tree.body)
+
+
+def _surface(module):
+    """What a module offers, read from its source rather than by importing it.
+
+    Returns the bound top-level names and whether a star import makes that set
+    incomplete. An unreadable or absent source is reported as incomplete too,
+    so a name is never called missing on the strength of a file that was not
+    read.
+    """
+    spec = _spec(module)
+    origin = getattr(spec, "origin", None) if spec is not None else None
+    if not origin or not origin.endswith(".py"):
+        return set(), True
+    try:
+        tree = ast.parse(pathlib.Path(origin).read_text(encoding="utf-8"),
+                         filename=origin)
+    except (OSError, SyntaxError):
+        return set(), True
+    return _bound_names(tree), _reads_star(tree)
+
+
+def consumers(root="."):
+    """What depends on this package, and on which of its names.
+
+    The declared half of this map answers what this package consumes. This is
+    the other direction, and it was missing: another surface imports seven of
+    these modules and nothing said so, which is exactly the dependency a rename
+    here would break silently.
+
+    A name that does not resolve on the module it is imported from is a finding:
+    this package and that surface have drifted apart. Python syntax is parsed
+    rather than matched, so a comment or a string literal cannot pose as an
+    import.
+    """
+    base = pathlib.Path(root)
+    found = {}
+    unreadable = []
+    for surface in CONSUMER_SURFACES:
+        folder = base / surface
+        if not folder.is_dir():
+            continue
+        for path in sorted(folder.rglob("*.py")):
+            try:
+                parsed = ast.parse(path.read_text(encoding="utf-8"),
+                                   filename=str(path))
+            except (OSError, SyntaxError) as problem:
+                unreadable.append({"path": path.relative_to(base).as_posix(),
+                                   "error": "%s: %s" % (type(problem).__name__,
+                                                        problem)})
+                continue
+            where = path.relative_to(base).as_posix()
+            for node in ast.walk(parsed):
+                if isinstance(node, ast.ImportFrom) and node.level == 0:
+                    module = node.module or ""
+                    if module == "scenarios" or module.startswith("scenarios."):
+                        entry = found.setdefault(module, {"names": set(),
+                                                          "importedBy": set()})
+                        entry["names"].update(alias.name for alias in node.names)
+                        entry["importedBy"].add(where)
+                elif isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if (alias.name == "scenarios"
+                                or alias.name.startswith("scenarios.")):
+                            entry = found.setdefault(alias.name,
+                                                     {"names": set(),
+                                                      "importedBy": set()})
+                            entry["importedBy"].add(where)
+
+    depended = []
+    unresolved = []
+    undecided = []
+    for module, entry in sorted(found.items()):
+        resolved, missing, unknown, error = [], [], [], None
+        # Nothing is imported to answer this. Importing a module that this run
+        # had not already loaded would change the set of loaded modules, and
+        # the provenance snapshot reports that - correctly - as the source
+        # moving during the run. So a module's own source is parsed for the
+        # names it binds, which gives the same answer as an import for every
+        # name written in the file, and gives it whether or not this run
+        # happened to have the module loaded already.
+        loaded = sys.modules.get(module)
+        exists = loaded is not None or _spec(module) is not None
+        if not exists:
+            error = "no module named %r" % module
+            missing = sorted(entry["names"])
+        else:
+            offered, incomplete = _surface(module)
+            for name in sorted(entry["names"]):
+                # A name imported from a package root may be a submodule rather
+                # than an attribute, so both count.
+                if name in offered:
+                    resolved.append(name)
+                elif loaded is not None and hasattr(loaded, name):
+                    resolved.append(name)
+                elif _spec("%s.%s" % (module, name)) is not None:
+                    resolved.append(name)
+                elif incomplete:
+                    # The module's own names could not be read in full, so this
+                    # name is neither located nor missing. Calling it either
+                    # would be a guess.
+                    unknown.append(name)
+                else:
+                    missing.append(name)
+        depended.append({
+            "module": module,
+            "names": sorted(entry["names"]),
+            "importedBy": sorted(entry["importedBy"]),
+            "resolvedNames": resolved,
+            "unresolvedNames": missing,
+            "undecidedNames": unknown,
+            "error": error,
+        })
+        for name in missing:
+            unresolved.append("%s.%s" % (module, name))
+        for name in unknown:
+            undecided.append("%s.%s" % (module, name))
+
+    return {
+        "surfaces": list(CONSUMER_SURFACES),
+        "dependedOn": depended,
+        "moduleCount": len(depended),
+        "unreadableFiles": unreadable,
+        "unresolvedNames": sorted(unresolved),
+        "undecidedNames": sorted(undecided),
+        "consistent": (not unresolved and not unreadable and not undecided
+                       and not any(entry["error"] for entry in depended)),
+        "meaning": ("these are the names another surface would break on if this "
+                    "package renamed or removed them"),
+    }
+
+
 def _attribute(imported, declared):
     """Attribute a submodule import to the submodule it names, where declared."""
     attributed = {}
@@ -254,25 +494,33 @@ def declared_coverage(root="."):
     }
 
 
-def adapters_recorded_by(scenario_report):
-    """The adapter roles the scenarios actually recorded, read from a report.
+def adapters_recorded_by(scenario_report, path_report=None, guarantee_report=None):
+    """The adapter roles recorded by every supplied execution group.
 
     Taken from the runs rather than from this module's own list, so a role that
     stopped being exercised stops appearing.
     """
     seen = {}
-    for scenario in (scenario_report or {}).get("scenarios", []):
-        adapters = scenario.get("setup", {}).get("simulatedAdapters", {})
-        for role, label in adapters.items():
-            if label is None:
-                continue
-            seen.setdefault(role, set()).add(label)
+    for report in (scenario_report, path_report, guarantee_report):
+        for scenario in (report or {}).get("scenarios", []):
+            adapters = scenario.get("setup", {}).get("simulatedAdapters", {})
+            for role, label in adapters.items():
+                if label is None:
+                    continue
+                seen.setdefault(role, set()).add(label)
     return {role: sorted(labels) for role, labels in sorted(seen.items())}
 
 
-def build(scenario_report=None, root="."):
+def build(scenario_report=None, root=".", *, path_report=None, guarantee_report=None):
     """The reuse map: what is consumed, what is simulated, what is unlocated."""
-    recorded = adapters_recorded_by(scenario_report)
+    recorded = adapters_recorded_by(scenario_report, path_report, guarantee_report)
+    declared_roles = {entry["role"] for entry in ADAPTER_ROLES}
+    undeclared_roles = sorted(set(recorded) - declared_roles)
+    non_simulated = {role: [label for label in labels if "simulated" not in label.lower()]
+                     for role, labels in recorded.items()}
+    non_simulated = {role: labels for role, labels in non_simulated.items() if labels}
+    all_simulated = (not undeclared_roles and not non_simulated
+                     and all(entry["simulated"] for entry in ADAPTER_ROLES))
     register = {entry["id"]: entry for entry in decisions.OPEN_DECISIONS}
     unlocated = [dict(entry,
                       decision=register.get(entry["trackedBy"], {}).get("undecided"),
@@ -280,15 +528,22 @@ def build(scenario_report=None, root="."):
                  for entry in UNLOCATED_INTERFACES]
     domain = observed_domain_modules()
     coverage = declared_coverage(root)
+    depending = consumers(root)
     return {
-        "complete": coverage["complete"] and all(
+        # The consuming direction is folded into the same verdict rather than
+        # added beside it, so the rule that already acts on this map covers it
+        # too. A verdict nobody reads is worse than no verdict.
+        "complete": all_simulated and coverage["complete"] and depending["consistent"] and all(
             not row["error"] and not row["unresolvedNames"] for row in domain),
-        "schema": "8415ex-reuse-map/1",
+        "schema": "8415ex-reuse-map/2",
+        "consumers": depending,
         "domainReuse": domain,
         "declaredCoverage": coverage,
         "adapterRoles": [dict(entry) for entry in ADAPTER_ROLES],
         "adaptersRecordedInThisRun": recorded,
-        "allAdaptersSimulated": all(entry["simulated"] for entry in ADAPTER_ROLES),
+        "undeclaredAdapterRoles": undeclared_roles,
+        "nonSimulatedAdapterLabels": non_simulated,
+        "allAdaptersSimulated": all_simulated,
         "unlocatedInterfaces": unlocated,
         "unlocatedCount": len(unlocated),
         "meaning": ("every adapter role is simulated: this package connects to no "

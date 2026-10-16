@@ -52,6 +52,20 @@ python3 -B -m scenarios.cli run-all --json-out /tmp/ex-run.json --text-out /tmp/
 # also really execute the two unit suites and record their true status
 python3 -B -m scenarios.cli run-all --execute-suites
 
+# name the source tree every report resolves against: its git identity, its
+# file inventory and its secret scan. It defaults to the working directory, and
+# it has to be the tree this code is executing from - a root pointing at any
+# other checkout is refused, because the reported source would not be the
+# source that ran
+python3 -B -m scenarios.cli run-all --root .
+
+# the seven domain-guarantee contracts: the cases the matrix had only the
+# domain's own suite to point at
+python3 -B -m scenarios.cli guarantees
+
+# the measured share of the domain's own public API this delivery enters
+python3 -B -m scenarios.cli surface
+
 # the nine-group candidate receipt for a completed run
 python3 -B -m scenarios.cli receipt [--execute-suites]
 
@@ -368,6 +382,203 @@ snapshot correctly reported the loaded source changing mid-run. The list now
 lives in `commands.py`, which imports nothing, so one list serves both and
 nothing loads twice.
 
+## What depends on this package
+
+The reuse map answers what this package consumes. It did not answer the other
+direction, and by the time everything was merged another surface had come to
+depend on seven of these modules with nothing saying so. A rename here would
+have broken the joined integration suite, and no report would have named the
+dependency beforehand.
+
+So the map now reads that direction too, out of the depending surface's own
+source. Nothing is hand-maintained: that code is not this package's to declare,
+so the dependency is parsed from its imports and each name is resolved against
+the module it is imported from. A name that no longer resolves, a module that
+no longer exists, or a file that cannot be parsed is a finding - this package
+and that surface have drifted apart.
+
+Resolution reads the named module's own source rather than importing it. The
+first attempt imported, and the provenance snapshot immediately reported the
+set of loaded modules changing mid-run - the same defect this machinery had
+already caught in the command list. Reading the source also removes a worse
+problem the import hid: resolving through the loaded module gave a different
+answer in the test suite, which imports everything, than in the `reuse`
+subcommand, which imports almost nothing, so one module attribute was reported
+missing in the subcommand and present in the suite. A check whose verdict
+depends on who is asking is worse than no check, and a test now pins the two
+answers to be identical.
+
+Where a module's names cannot be read in full - no source to parse, or a
+star import re-exporting an unknown set - the name is neither resolved nor
+called missing. It goes to `undecidedNames`, which blocks like a finding
+because an undecided name is not a pass, and stays distinct from one because
+nothing here establishes the name is gone.
+
+The verdict is folded into the same `complete` flag the existing rule already
+acts on, rather than added beside it, because a verdict nobody reads is worse
+than no verdict. The negative controls hold it honest: a name that stopped
+existing, a module that stopped existing, a file that cannot be parsed, a name
+bound only inside a function or a class body (importable from neither, so
+counting it would make a missing name look present), and an undecidable name.
+A surface that depends on nothing is not a finding.
+
+## How much of the domain this delivery actually enters
+
+The acceptance matrix answers coverage per requirement. Nothing answered the
+other question: of the methods the domain exposes, which has this delivery ever
+called? Measuring it - by wrapping each public method of `exchange.ledger.Exchange`
+and running the groups - found five that nothing had ever entered: batch
+settlement, a restart's payment enquiry, a late registration conflict, the
+deadline boundary and redemption readiness. Four of the five were recovery and
+boundary behaviour, which is the part of a system a reviewer most wants
+demonstrated, and all five had passing cases in the matrix because the domain's
+own suite covered them.
+
+So an eighth contract exercises them, and the measurement is now a gated report:
+51 of 51 public methods entered. A method that stops being entered has to be
+accounted for in `NOT_EXERCISED_LOCALLY` with a reason, or the run blocks. A
+stale exemption - one naming a method that is exercised after all, or a method
+that no longer exists - blocks too, so the record cannot rot into a list of
+excuses.
+
+Widening the same measurement to the simulated adapters found four more, and
+they were the same kind of thing: the enquiry surface. Every adapter role stands
+in for an interface whose defining property is that it can be *asked* what
+happened, and nothing here had ever asked one - no history was read, and an
+unknown asset return or voucher outcome was never resolved. A ninth contract
+exercises that: the payment adapter keeps both attempts of a failed-then-retried
+release and its own count agrees with the ledger's; an unknown asset return is
+not re-sent while it stays unknown and the rollback completes on the enquiry's
+answer; an unknown burn blocks the exit, is not retried until the enquiry
+resolves it, and the resolution is its own record between the two attempts.
+Reading a history moves nothing, resolving twice is refused, and a key the
+adapter never saw is refused rather than invented. Coverage is 67 of 68 counted
+methods.
+
+The one method left is `SimulatedRegistrar.handover_record`: all three concrete
+registrars define their own, so the base class's default is on no path this
+delivery can take. It is accounted for with that reason, and the three
+overriding versions are each entered.
+
+It is a measurement, not a source scan: a name appearing in a file proves
+nothing about being called. Two things it cannot observe are named with their
+reasons rather than left as an unexplained narrower count. A module-level
+function is invisible to it, because a caller that wrote `from .errors import
+require` holds the original and replacing the module attribute observes nothing
+- every such function would read as unentered. An inherited method is invisible
+too, because wrapping it sets the wrapper on the subclass and shadows the base,
+so only methods a class defines itself are counted. The instrumented execution is a second run of the
+same groups and says so - the reported digest and the resource observation come
+from the primary run, and the instrumented run's own scenario results are
+discarded, though it still has to pass, because a scenario that stopped early
+never reaches the methods it would have. Entering a method is also not a
+correctness claim; what it then recorded is the matrix's question, per case.
+
+## What the stage map is checked against
+
+Every deliverable in the stage map names a path, and the path was checked
+against the disk. That caught a map pointing at a module that is not there and
+said nothing about the opposite: a module that is there and claimed by nothing.
+Three shipped modules were missing from the map that way - `commands.py`,
+`stages.py` and `guarantees.py`, the last a whole contract group added in this
+same round - while the map still read as "what is developed here".
+
+Both directions are checked now. The package's modules are read off the disk,
+and a module no stage claims is a finding with its own gate, because it is a gap
+in the map rather than in the code. The verdict is acted on rather than
+reported: a test asserts there is a blocking check reading it, and that two
+checks on one report do not collapse into one.
+
+Test modules are not deliverables - a test is the check on one - and
+`__init__.py` is exempt with its reason recorded in `notADeliverable`, where an
+exemption can be argued with instead of being invisible. An unreadable package
+fails the gate rather than passing it, since finding no modules is not the same
+as every module being claimed.
+
+## The domain guarantees the six scenarios never asserted
+
+Ten acceptance cases reached the matrix as `unit-suite-only`: the domain's own
+suite exercised them and no local scenario did, so the delivery report said
+nothing about them. That was not a defect in the domain, and the matrix was
+right to name it rather than let a reader assume the six scenarios covered
+everything - but a reader of the delivery report had no local evidence for a
+quarter of the cases.
+
+`guarantees.py` adds seven contracts, in the same shape as the three route
+contracts: the whole-receipt rule, the wallet grant and its bounds, the pairing
+rule, the single valid head, each segment's own settlement evidence,
+reproducibility, and idempotence under repeated or re-ordered observations.
+Each drives the real domain API with the same labelled synthetic fixtures and
+records what the domain reports, so the acceptance matrix now reads 34 cases
+passed and 2 `unit-suite-only` - T-39 and T-40, which are this package's own
+scan and observations and are not scenario-shaped.
+
+None of them re-implements or relaxes a domain rule. A refusal is recorded as
+the code the domain raised, and `accepted` is recorded when nothing was refused,
+so an expectation that wanted a refusal fails loudly rather than passing because
+an exception happened to carry no code. They are exactly as limited as the
+scenarios: no deployment, no chain transaction, no real wallet, registrar or
+payment provider, and the two obligations that need real execution are recorded
+as `NOT_RUN` rather than glossed.
+
+Adding them was itself caught by two of the checks in this package: the reuse
+map refused the run until the three new domain names and the domain error type
+were declared, and the usage check refused it until the new subcommand was
+documented here. Neither was noticed by eye.
+
+## What the documented options are checked against
+
+The usage check knew the subcommands and nothing about what they accept. A
+subcommand existing says nothing about its options: rename one and every
+documented instruction carrying it is broken, with nothing going red. So the
+options shown on a documented invocation are now compared with the options the
+command line's own source accepts, in both directions.
+
+The comparison found one of each kind worth looking at on its first run.
+`--root` was accepted and shown in no guide, and documenting it turned up a
+second thing: it cannot name another checkout, because the provenance rule
+refuses a reported source that is not the tree the code executed from. The
+guide now says that, which is the opposite of what an undocumented option
+invites a reader to assume.
+
+An invocation is read as a logical line, with a backslash continuation joined
+to what continues it, because the options of a multi-line invocation are
+written on their own lines and reading physical lines would attribute none of
+them. An option appearing in prose, on a line with no invocation on it, is not
+attributed to any tool.
+
+The domain command line's options are reported but not gated here. Its guide
+is not written from this package, so `--registration-path` being undocumented
+is recorded as an observation with that reason attached, rather than asserted
+as this package's defect or dropped from the report - which would be the quiet
+version of the same mistake.
+
+## What the secret scan reads
+
+The scan decided what was text by file suffix, which exempted exactly the
+names a credential is most likely to carry. A `.env`, an extensionless
+`credentials` file, a `Dockerfile` or a `key.pem` was skipped with a tidy
+recorded reason, and the run still reported `clean` - over the files most
+worth reading. Only one file in this tree was skipped, so the exemption cost
+nothing yet; it was a clean result that did not depend on the content of
+anything it declined to read.
+
+The bytes decide now. A file is read when it decodes as UTF-8 and carries no
+NUL byte, and anything else is binary, where a text pattern certifies nothing
+and a skip is the honest answer. Coverage went from 110 of 111 tracked files
+to 111 of 111.
+
+A file too large to read in full is kept apart from a binary skip, in
+`notReadInFull`, and refuses a clean result the way an unreadable file does: a
+tracked file nobody read is a hole in the coverage, not a reason. Nothing in
+this tree reaches the limit, so a test lowers it to prove the branch fails
+closed rather than leaving it to be discovered later.
+
+The non-English rule was applied to `.py`, `.md` and `.yml`. The rule is not
+three suffixes - it is that no non-English prose reaches this public source -
+so every file that is read is checked, which is where a `.json`, a shell
+script or a `NOTICE` had sat outside it.
+
 ## Keeping the instructions true
 
 Usage documentation drifts the same way an outline does, with worse
@@ -387,6 +598,27 @@ parser and the check cannot disagree. The domain commands are read out of the
 domain's own source, because that module belongs to another surface and is not
 edited from here to make a check easier - the same approach `events.py` takes to
 the event kinds.
+
+**Both the guides and the entry points are discovered, not listed.** That
+matters because the earlier version of this check was green for the wrong
+reason. It read four guides and knew two command lines, and reported itself
+consistent while saying nothing about most of the delivery: of the eight
+runnable modules in the repository, four are documented only under `docs/`, a
+folder it never opened. Nothing was actually undocumented - the check simply was
+not looking, and a check that is green because it is not looking is worse than
+no check.
+
+So the guide set now includes that folder, and the runnable modules are read out
+of the source: a module counts when it carries a main guard, and whether it also
+builds an argument parser only decides whether it has subcommands to check, not
+whether it must be documented. A test module is skipped in both layouts, a tests
+folder and a `test_` file beside the code, because a test is run by the suite
+rather than followed out of a guide. An entry point no guide shows is a finding,
+and so is a guide invoking a project module that is not runnable; the test
+runner and other modules this project does not own are allowed by name.
+
+The regression is itself a test: delete the guide folder from a copy of the tree
+and the four modules documented only there become findings.
 
 ## Keeping the outline from going stale
 

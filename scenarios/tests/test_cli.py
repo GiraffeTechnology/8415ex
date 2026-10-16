@@ -391,7 +391,7 @@ class ReuseMapIsPartOfTheRun(unittest.TestCase):
 
     def test_the_bundle_carries_the_reuse_map(self):
         bundle = cli._bundle(ROOT)
-        self.assertEqual(bundle["reuse"]["schema"], "8415ex-reuse-map/1")
+        self.assertEqual(bundle["reuse"]["schema"], "8415ex-reuse-map/2")
         self.assertTrue(bundle["reuse"]["allAdaptersSimulated"])
         self.assertTrue(bundle["reuse"]["adaptersRecordedInThisRun"],
                         "the map reads the adapters from this run's scenarios")
@@ -425,11 +425,18 @@ class EveryVerdictIsActedOn(unittest.TestCase):
         cls.bundle = cli._bundle(ROOT)
 
     def test_every_declared_check_is_present_and_passing(self):
-        checks = {entry["key"]: entry for entry in self.bundle["consistencyChecks"]}
+        # Keyed by report and flag, not by report alone: one report may carry
+        # more than one verdict, and keying by the report would collapse them
+        # and hide a check instead of asserting it.
+        checks = {(entry["key"], tuple(entry["flag"])): entry
+                  for entry in self.bundle["consistencyChecks"]}
+        self.assertEqual(len(checks), len(cli.CONSISTENCY_CHECKS),
+                         "two checks must not collapse into one")
         self.assertEqual(sorted(checks),
-                         sorted(entry["key"] for entry in cli.CONSISTENCY_CHECKS))
-        for key, entry in sorted(checks.items()):
-            with self.subTest(check=key):
+                         sorted((entry["key"], tuple(entry["flag"]))
+                                for entry in cli.CONSISTENCY_CHECKS))
+        for (key, flag), entry in sorted(checks.items()):
+            with self.subTest(check=key, flag=flag):
                 self.assertIn(key, self.bundle, "the report it reads must exist")
                 self.assertTrue(entry["blocks"])
                 self.assertTrue(entry["reason"])

@@ -19,10 +19,28 @@ matrix is worse than no stage map, because it reads as authoritative.
 A dependency is named with its owner, the scope it genuinely blocks and the next
 step. A stage is never marked complete because its local half is done, and never
 dropped because its real-world half belongs to someone else.
+
+The path check was one-directional and that was not enough. It caught a
+deliverable claiming a module that is not there, and said nothing about a module
+that is there and claimed by nothing: three shipped modules were missing from the
+map, one of them a whole new contract group. A map that reads as "what is
+developed here" while omitting part of what is shipped is the same failure as a
+map pointing at files that do not exist, so both directions are now checked.
 """
 import pathlib
 
 from . import matrix
+
+#: The package this map speaks for. Modules of other surfaces are not this
+#: map's to claim.
+PACKAGE = "scenarios"
+
+#: Files in this package that are not deliverables, with the reason. An
+#: exemption is stated rather than skipped, so it can be argued with.
+NOT_A_DELIVERABLE = {
+    "scenarios/__init__.py": "the package marker: it states what the package is and "
+                             "declares no deliverable of its own",
+}
 
 #: What this surface develops per stage, with the path that holds it. The path
 #: is checked, so a deliverable cannot claim a module that does not exist.
@@ -40,6 +58,15 @@ DEVELOPED_HERE = {
          "where": "scenarios/decisions.py"},
         {"deliverable": "the candidate receipt, with the chain and deployment groups NOT_RUN",
          "where": "scenarios/receipt.py"},
+        {"deliverable": "the one subcommand list the parser and the usage check both "
+                        "read, so neither can drift from the other",
+         "where": "scenarios/commands.py"},
+        {"deliverable": "this stage map itself, cross-checked against the matrix and "
+                        "against the modules on disk in both directions",
+         "where": "scenarios/stages.py"},
+        {"deliverable": "the measured share of the domain's own public API that this "
+                        "delivery enters, with any unexercised method accounted for",
+         "where": "scenarios/surface.py"},
     ),
     1: (
         {"deliverable": "the six scenarios as recorded expectations over the domain",
@@ -52,6 +79,10 @@ DEVELOPED_HERE = {
          "where": "scenarios/events.py"},
         {"deliverable": "the logical operations, resolved onto the real methods",
          "where": "scenarios/operations.py"},
+        {"deliverable": "the domain guarantees the six scenarios never asserted: the "
+                        "whole-receipt rule, the wallet grant and its bounds, the "
+                        "pairing rule, the single valid head and reproducibility",
+         "where": "scenarios/guarantees.py"},
     ),
     2: (
         {"deliverable": "the segmented-funding scenarios, with principal, amount, asset "
@@ -59,6 +90,10 @@ DEVELOPED_HERE = {
          "where": "scenarios/demos.py"},
         {"deliverable": "the replay check that repeated consumption settles nothing twice",
          "where": "scenarios/events.py"},
+        {"deliverable": "the contract that each segment settles on its own evidence, "
+                        "and that a failed or unknown payment is not a registration "
+                        "refusal",
+         "where": "scenarios/guarantees.py"},
     ),
     3: (
         {"deliverable": "the suffix-rollback and buyer-gas scenarios, including the "
@@ -67,6 +102,9 @@ DEVELOPED_HERE = {
         {"deliverable": "the gas unit separation, so a gas count is never netted against "
                         "a quote-asset principal",
          "where": "scenarios/demos.py"},
+        {"deliverable": "the contract that a repeated or re-ordered observation moves "
+                        "nothing twice",
+         "where": "scenarios/guarantees.py"},
     ),
     4: (
         {"deliverable": "the deadline, exit and voucher scenarios, with the non-atomic "
@@ -218,6 +256,27 @@ def cases_by_stage():
     return {stage: sorted(cases) for stage, cases in sorted(grouped.items())}
 
 
+def shipped_modules(root="."):
+    """Every module this package ships, read from the disk rather than listed.
+
+    Test modules are left out: a test is the check on a deliverable, not a
+    deliverable a stage develops. An unreadable package is reported as such,
+    because an empty module list would make every claim look accounted for.
+    """
+    base = pathlib.Path(root)
+    folder = base / PACKAGE
+    if not folder.is_dir():
+        return {"package": PACKAGE, "readable": False, "modules": [],
+                "error": "EX_PACKAGE_UNREADABLE"}
+    found = []
+    for path in sorted(folder.rglob("*.py")):
+        parts = path.relative_to(base).parts
+        if "tests" in parts or parts[-1].startswith("test_"):
+            continue
+        found.append(path.relative_to(base).as_posix())
+    return {"package": PACKAGE, "readable": True, "modules": found, "error": None}
+
+
 def _deliverables(stage, root):
     """One stage's deliverables, with each path checked against the disk."""
     checked = []
@@ -253,6 +312,13 @@ def build(root="."):
         })
     unassigned = sorted(set(matrix.CASE_REQUIREMENTS) - every_stage_case)
     invented = sorted(every_stage_case - set(matrix.CASE_REQUIREMENTS))
+    # The other direction of the path check: a module that is shipped and that
+    # no stage claims is a gap in the map, not in the code.
+    shipped = shipped_modules(root)
+    claimed = {entry["where"] for entries in DEVELOPED_HERE.values()
+               for entry in entries}
+    unclaimed = sorted(name for name in shipped["modules"]
+                       if name not in claimed and name not in NOT_A_DELIVERABLE)
     all_stage_cases = [case for stage in sorted(DEVELOPED_HERE)
                        for case in by_stage.get(str(stage), [])]
     return {
@@ -268,6 +334,14 @@ def build(root="."):
         "duplicatedCases": sorted({case for case in all_stage_cases
                                    if all_stage_cases.count(case) > 1}),
         "missingDeliverablePaths": sorted(set(missing_paths)),
+        "shippedModules": shipped["modules"],
+        "shippedModuleCount": len(shipped["modules"]),
+        "packageReadable": shipped["readable"],
+        "packageError": shipped["error"],
+        "claimedPaths": sorted(claimed),
+        "shippedButClaimedByNoStage": unclaimed,
+        "notADeliverable": dict(NOT_A_DELIVERABLE),
+        "everyShippedModuleIsClaimed": shipped["readable"] and not unclaimed,
         "agreesWithMatrix": not unassigned and not invented and not missing_paths,
         "slotsDependedOn": sorted({entry["slot"] for entry in REAL_WORLD_DEPENDENCIES}),
         "isNot": [
@@ -276,5 +350,8 @@ def build(root="."):
             "not a completion claim: every stage's local half is all this surface "
             "delivers, and each dependency names the scope it still blocks",
             "not a reassignment: a dependency names the owner it already has",
+            "not a claim about other surfaces: only this package's own modules are "
+            "checked for being claimed, because a stage map here cannot speak for "
+            "the domain or the CI surface",
         ],
     }

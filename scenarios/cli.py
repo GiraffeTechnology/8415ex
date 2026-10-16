@@ -39,9 +39,11 @@ from exchange.ids import canonical_json
 from .commands import COMMANDS, STDOUT_ONLY
 from . import (completion, decisions, docs, dossier, events, evidence_index,
                execution, handoff, manifest, matrix, observations, operations,
-               prd, receipt, reuse, stages, storyboard, validation)
+               prd, receipt, reuse, stages, storyboard, surface, validation)
 from .demos import DEMOS
 from .harness import report_text, run_all
+from .guarantees import GUARANTEE_CONTRACTS
+from .guarantees import coverage_map as guarantee_coverage
 from .paths import PATH_CONTRACTS, coverage_map
 
 #: The suites whose real status this bundle can carry, and the case they serve.
@@ -99,6 +101,11 @@ CONSISTENCY_CHECKS = (
      "reason": "a logical operation does not resolve, or a read moved something"},
     {"key": "stageMap", "flag": ("agreesWithMatrix",), "blocks": True,
      "reason": "the stage map disagrees with the acceptance matrix"},
+    {"key": "stageMap", "flag": ("everyShippedModuleIsClaimed",), "blocks": True,
+     "reason": "a module is shipped and no stage says it is developed here"},
+    {"key": "domainSurface", "flag": ("everyMethodAccountedFor",), "blocks": True,
+     "reason": "a public domain method is entered by nothing in this delivery and "
+               "is accounted for nowhere"},
     {"key": "eventContract", "flag": ("conformance", "accountedFor"), "blocks": True,
      "reason": "the event vocabulary does not account for what the domain records"},
     {"key": "dossier", "flag": ("allItemsCarried",), "blocks": True,
@@ -174,12 +181,13 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
     # packaging, so an earlier clean reading cannot be combined with a later,
     # different one.
     before = manifest.snapshot(root)
-    (scenario_report, path_report), measured = observations.measure(
-        lambda: (run_all(list(DEMOS)), run_all(list(PATH_CONTRACTS))))
+    (scenario_report, path_report, guarantee_report), measured = observations.measure(
+        lambda: (run_all(list(DEMOS)), run_all(list(PATH_CONTRACTS)),
+                 run_all(list(GUARANTEE_CONTRACTS))))
     source = manifest.source_identity(root)
     source["ancestry"] = manifest.parent_identity(root, head=source["commit"])
     acceptance = matrix.build(source, {"runId": run_id, "startedAt": started_at},
-                              scenario_report, path_report)
+                              scenario_report, path_report, guarantee_report)
     commands = _suite_records(root, execute_suites)
     scan = observations.secret_scan(root)
     package = manifest.build(root, commands=commands, run_id=run_id)
@@ -191,7 +199,11 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
         "runtime": manifest.runtime_identity(),
         "scenarioReport": scenario_report,
         "pathReport": path_report,
+        "guaranteeReport": guarantee_report,
         "coverage": coverage_map(),
+        "guaranteeCoverage": guarantee_coverage(),
+        "domainSurface": surface.coverage(
+            (DEMOS, PATH_CONTRACTS, GUARANTEE_CONTRACTS), run_all),
         "matrix": acceptance,
         "manifest": package,
         "commands": commands,
@@ -200,7 +212,8 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
         "outputDeliveryPlan": [entry.get("path") if isinstance(entry, dict) else entry
                                for entry in (artifacts or []) if entry],
         "outputArtifacts": artifacts or [],
-        "reuse": reuse.build(scenario_report, root),
+        "reuse": reuse.build(scenario_report, root, path_report=path_report,
+                             guarantee_report=guarantee_report),
         "eventContract": events.build(root=root),
         "stageMap": stages.build(root),
         "dossier": dossier.build(scenario_report),
@@ -211,14 +224,15 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
         "evidenceIndex": evidence_index.build(
             scenario_report, path_report, root,
             {"runId": run_id, "startedAt": started_at},
-            artifacts=artifacts),
+            artifacts=artifacts, guarantee_report=guarantee_report),
         "configuration": {"template": validation.local_config_template(),
                           "validation": validation.validate_config(
                               validation.local_config_template())},
         "secretScan": scan,
         "resourceObservation": measured,
         "workload": {"scenarios": observations.workload_observation(scenario_report),
-                     "paths": observations.workload_observation(path_report)},
+                     "paths": observations.workload_observation(path_report),
+                     "guarantees": observations.workload_observation(guarantee_report)},
         "notRun": [{"obligation": row["case"], "status": "NOT_RUN",
                     "requires": row["remainingRealEvidence"]}
                    for row in acceptance["rows"] if row.get("remainingRealEvidence")]
@@ -259,6 +273,8 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
         blocking.append("a scenario did not pass")
     if not path_report["allPassed"]:
         blocking.append("a path contract did not pass")
+    if not guarantee_report["allPassed"]:
+        blocking.append("a domain guarantee contract did not pass")
     if not scan["clean"]:
         blocking.append(f"the secret scan is not clean ({scan['enumerationState']})")
     if not acceptance["allCasesSound"]:
@@ -351,7 +367,8 @@ def seal(bundle, exit_code, finished_at=None, command="python3 -B -m scenarios.c
         observations={key: bundle[key] for key in
                       ("secretScan", "resourceObservation", "workload")},
         source=bundle["source"],
-        artifacts=bundle.get("outputArtifacts", bundle.get("outputDeliveryPlan")))
+        artifacts=bundle.get("outputArtifacts", bundle.get("outputDeliveryPlan")),
+        guarantee_report=bundle.get("guaranteeReport"))
     return bundle
 
 
@@ -505,6 +522,7 @@ def summary_text(bundle):
     scan = bundle["secretScan"]
     lines = [report_text(bundle["scenarioReport"]), "",
              report_text(bundle["pathReport"]), "",
+             report_text(bundle["guaranteeReport"]), "",
              f"run id: {bundle['runId']}",
              f"acceptance matrix: {bundle['matrix']['localOutcomeCounts']}",
              f"secret scan: {'clean' if scan['clean'] else 'FINDINGS'} over "
@@ -546,6 +564,10 @@ def main(argv=None):
                         help="really execute the two unit suites and record their true status")
     arguments = parser.parse_args(argv)
 
+    if arguments.command in STDOUT_ONLY and (arguments.json_out or arguments.text_out):
+        parser.error("%s publish JSON to stdout only; capture stdout externally"
+                     % ", ".join(sorted(STDOUT_ONLY)))
+
     if arguments.command == "scenarios":
         report = run_all(list(DEMOS))
         print(canonical_json(report) if arguments.json else report_text(report))
@@ -554,6 +576,14 @@ def main(argv=None):
         report = run_all(list(PATH_CONTRACTS))
         print(canonical_json(report) if arguments.json else report_text(report))
         return 0 if report["allPassed"] else 1
+    if arguments.command == "guarantees":
+        report = run_all(list(GUARANTEE_CONTRACTS))
+        print(canonical_json(report) if arguments.json else report_text(report))
+        return 0 if report["allPassed"] else 1
+    if arguments.command == "surface":
+        built = surface.coverage((DEMOS, PATH_CONTRACTS, GUARANTEE_CONTRACTS), run_all)
+        print(canonical_json(built))
+        return 0 if built["everyMethodAccountedFor"] else 1
     if arguments.command == "matrix":
         built = matrix.build(manifest.source_identity(arguments.root), {"runId": _run_id()})
         print(canonical_json(built))
@@ -562,9 +592,6 @@ def main(argv=None):
         built = manifest.build(arguments.root, run_id=_run_id())
         print(canonical_json(built))
         return 0 if built["consistent"] else 1
-    if arguments.command in STDOUT_ONLY and (arguments.json_out or arguments.text_out):
-        parser.error("%s publish JSON to stdout only; capture stdout externally"
-                     % ", ".join(sorted(STDOUT_ONLY)))
     if arguments.command == "decisions":
         print(canonical_json(decisions.register()))
         return 0
@@ -608,7 +635,9 @@ def main(argv=None):
     if arguments.command == "reuse":
         # The adapter half is read from a real run, so one is performed; the
         # domain half is read from the imported modules and the package source.
-        built = reuse.build(run_all(list(DEMOS)), arguments.root)
+        built = reuse.build(run_all(list(DEMOS)), arguments.root,
+                            path_report=run_all(list(PATH_CONTRACTS)),
+                            guarantee_report=run_all(list(GUARANTEE_CONTRACTS)))
         print(canonical_json(built))
         return 0 if built["complete"] else 1
     if arguments.command == "receipt":
@@ -643,7 +672,8 @@ def main(argv=None):
         # artifact. The index then says so rather than naming a file that was
         # never going to be written; ``run-all`` is where the plan is real.
         built = evidence_index.build(run_all(list(DEMOS)), run_all(list(PATH_CONTRACTS)),
-                                     arguments.root, {"runId": _run_id()})
+                                     arguments.root, {"runId": _run_id()},
+                                     guarantee_report=run_all(list(GUARANTEE_CONTRACTS)))
         print(canonical_json(built))
         return 0 if built["allCasesSound"] else 1
     if arguments.command == "handoff":

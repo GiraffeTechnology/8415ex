@@ -8,6 +8,7 @@ import os
 import subprocess
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from scenarios import observations
 from scenarios.demos import DEMOS
@@ -41,6 +42,14 @@ def _sample(kind):
     if kind == "internal operational path":
         return "/srv" + "/somewhere/private"
     raise AssertionError(kind)
+
+
+def _repository(name):
+    """An empty repository under /tmp, rebuilt from nothing on every call."""
+    root = "/tmp/" + name
+    subprocess.run(("rm", "-rf", root), check=False)
+    subprocess.run(("git", "init", "--quiet", root), check=False)
+    return root
 
 
 class Enumeration(unittest.TestCase):
@@ -109,7 +118,8 @@ class ScanIntegrity(unittest.TestCase):
             self.assertTrue(entry["reason"])
         self.assertEqual(coverage["enumerated"],
                          coverage["scanned"] + len(coverage["skipped"])
-                         + len(coverage["unreadable"]))
+                         + len(coverage["unreadable"])
+                         + len(coverage["notReadInFull"]))
 
     def test_the_scanners_own_source_is_scanned(self):
         """There is no self-exemption: this file and the scanner are both read."""
@@ -211,6 +221,8 @@ class ScanIntegrity(unittest.TestCase):
         self.assertEqual(statement["scannedCount"], coverage["scanned"])
         self.assertEqual(statement["skippedCount"], len(coverage["skipped"]))
         self.assertEqual(statement["unreadableCount"], len(coverage["unreadable"]))
+        self.assertEqual(statement["notReadInFullCount"],
+                         len(coverage["notReadInFull"]))
         self.assertTrue(statement["accountedFor"])
         self.assertEqual(statement["enumerationState"], "enumerated")
         # Re-reading must produce the same counts for the same tree, and they
@@ -219,12 +231,87 @@ class ScanIntegrity(unittest.TestCase):
         self.assertEqual(again["inventoryTotal"], statement["inventoryTotal"])
         self.assertGreater(statement["inventoryTotal"], 0)
 
+    def test_a_credential_in_a_file_with_no_suffix_is_read(self):
+        """The gap this closes: the names a credential uses were exempt.
+
+        While text was decided by file name, a ``.env`` and an extensionless
+        key file were skipped with a tidy reason and the scan still reported
+        clean - over the two files most likely to hold the thing being looked
+        for.
+        """
+        for name in (".env", "credentials", "Dockerfile", "key.pem"):
+            with self.subTest(name=name):
+                root = _repository("ex-unsuffixed-repo-for-this-test")
+                (Path(root) / name).write_text(
+                    _sample("password assignment") + "\n", encoding="utf-8")
+                subprocess.run(("git", "-C", root, "add", "--", name), check=False)
+                scan = observations.secret_scan(root)
+                self.assertTrue(scan["ok"])
+                self.assertEqual(scan["coverage"]["scanned"], 1)
+                self.assertFalse(scan["clean"])
+                self.assertEqual({finding["path"] for finding in scan["findings"]},
+                                 {name})
+
+    def test_non_english_prose_is_caught_in_every_file_read(self):
+        """It used to be checked in three suffixes, and the rule is not three."""
+        for name in ("notes.json", "notes.txt", "run.sh", "NOTICE"):
+            with self.subTest(name=name):
+                root = _repository("ex-prose-repo-for-this-test")
+                (Path(root) / name).write_text(
+                    "a line with %s in it\n" % chr(0x4E2D), encoding="utf-8")
+                subprocess.run(("git", "-C", root, "add", "--", name), check=False)
+                scan = observations.secret_scan(root)
+                self.assertFalse(scan["clean"])
+                self.assertEqual([finding["kind"] for finding in scan["findings"]],
+                                 ["non-english"])
+
+    def test_a_binary_file_is_skipped_as_binary_and_is_not_a_finding(self):
+        root = _repository("ex-binary-repo-for-this-test")
+        (Path(root) / "blob.bin").write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00")
+        (Path(root) / "notes.md").write_text("english text\n", encoding="utf-8")
+        subprocess.run(("git", "-C", root, "add", "--", "blob.bin", "notes.md"),
+                       check=False)
+        scan = observations.secret_scan(root)
+        self.assertTrue(scan["ok"])
+        self.assertEqual(scan["coverage"]["scanned"], 1)
+        skipped, = scan["coverage"]["skipped"]
+        self.assertEqual(skipped["path"], "blob.bin")
+        self.assertIn("binary", skipped["reason"])
+        self.assertTrue(scan["clean"],
+                        "a text pattern certifies nothing over binary, so "
+                        "skipping it is not a finding")
+
+    def test_a_file_that_is_not_read_in_full_prevents_a_clean_result(self):
+        """The negative control for the one skip that is a hole, not a reason."""
+        root = _repository("ex-oversized-repo-for-this-test")
+        (Path(root) / "large.md").write_text("english text\n" * 40, encoding="utf-8")
+        subprocess.run(("git", "-C", root, "add", "--", "large.md"), check=False)
+        with patch.object(observations, "SCAN_BYTE_LIMIT", 8):
+            scan = observations.secret_scan(root)
+        self.assertTrue(scan["ok"])
+        self.assertEqual(scan["coverage"]["scanned"], 0)
+        self.assertEqual(scan["coverage"]["skipped"], [])
+        entry, = scan["coverage"]["notReadInFull"]
+        self.assertEqual(entry["path"], "large.md")
+        self.assertIn("scan limit", entry["reason"])
+        self.assertFalse(scan["clean"], "an unread tracked file is not a pass")
+        self.assertTrue(scan["coverageStatement"]["accountedFor"])
+
+    def test_the_report_says_the_bytes_decided_not_the_name(self):
+        coverage = self.scan["coverage"]
+        self.assertIn("utf-8", coverage["textDecidedBy"])
+        self.assertIn("never by file name", coverage["textDecidedBy"])
+        self.assertEqual(coverage["byteLimit"], observations.SCAN_BYTE_LIMIT)
+
     def test_every_skip_is_named_with_its_reason(self):
         for entry in self.scan["coverage"]["skipped"]:
             with self.subTest(path=entry["path"]):
                 self.assertTrue(entry["path"])
                 self.assertTrue(entry["reason"])
         for entry in self.scan["coverage"]["unreadable"]:
+            with self.subTest(path=entry["path"]):
+                self.assertTrue(entry["reason"])
+        for entry in self.scan["coverage"]["notReadInFull"]:
             with self.subTest(path=entry["path"]):
                 self.assertTrue(entry["reason"])
 

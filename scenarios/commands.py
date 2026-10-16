@@ -9,7 +9,8 @@ with no dependencies of its own avoids both.
 """
 
 #: Every subcommand of ``python3 -B -m scenarios.cli``.
-COMMANDS = ("run-all", "scenarios", "paths", "matrix", "manifest", "handoff",
+COMMANDS = ("run-all", "scenarios", "paths", "guarantees", "surface", "matrix",
+            "manifest", "handoff",
             "validate-config", "observations", "evidence-index", "decisions",
             "receipt", "reuse", "events", "stages", "dossier", "storyboard",
             "operations", "usage", "completion", "sections")
