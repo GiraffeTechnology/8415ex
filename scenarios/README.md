@@ -388,6 +388,27 @@ domain's own source, because that module belongs to another surface and is not
 edited from here to make a check easier - the same approach `events.py` takes to
 the event kinds.
 
+**Both the guides and the entry points are discovered, not listed.** That
+matters because the earlier version of this check was green for the wrong
+reason. It read four guides and knew two command lines, and reported itself
+consistent while saying nothing about most of the delivery: of the eight
+runnable modules in the repository, four are documented only under `docs/`, a
+folder it never opened. Nothing was actually undocumented - the check simply was
+not looking, and a check that is green because it is not looking is worse than
+no check.
+
+So the guide set now includes that folder, and the runnable modules are read out
+of the source: a module counts when it carries a main guard, and whether it also
+builds an argument parser only decides whether it has subcommands to check, not
+whether it must be documented. A test module is skipped in both layouts, a tests
+folder and a `test_` file beside the code, because a test is run by the suite
+rather than followed out of a guide. An entry point no guide shows is a finding,
+and so is a guide invoking a project module that is not runnable; the test
+runner and other modules this project does not own are allowed by name.
+
+The regression is itself a test: delete the guide folder from a copy of the tree
+and the four modules documented only there become findings.
+
 ## Keeping the outline from going stale
 
 `STORYBOARD.md` is the part of this delivery most likely to go stale and least

@@ -16,15 +16,22 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class _Copy:
-    """A throwaway tree holding the guides and the domain command line."""
+    """A throwaway tree holding everything the check reads.
+
+    That is every guide it discovers, the domain command line it parses, and
+    each runnable module it finds, so a copy behaves like the real tree instead
+    of like a subset that happens to pass.
+    """
 
     def __enter__(self):
         self.directory = Path(tempfile.mkdtemp())
-        for guide in docs.GUIDES + (docs.DOMAIN_CLI,):
-            source = ROOT / guide
-            target = self.directory / guide
+        wanted = set(docs.guides(str(ROOT))["read"])
+        wanted.add(docs.DOMAIN_CLI)
+        wanted.update(entry["path"] for entry in docs.entry_points(str(ROOT)))
+        for name in sorted(wanted):
+            target = self.directory / name
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, target)
+            shutil.copyfile(ROOT / name, target)
         return self.directory
 
     def __exit__(self, *exception):
@@ -64,9 +71,17 @@ class AsWritten(unittest.TestCase):
         self.assertEqual(self.check["tools"]["exchange"]["commandsThatExist"],
                          ["queue", "timeline", "view"])
 
-    def test_every_named_guide_exists(self):
+    def test_every_required_guide_exists_and_the_folder_is_read_too(self):
         self.assertEqual(self.check["guidesMissing"], [])
-        self.assertEqual(sorted(self.check["guidesRead"]), sorted(docs.GUIDES))
+        read = set(self.check["guidesRead"])
+        self.assertTrue(set(docs.REQUIRED_GUIDES) <= read,
+                        "the required guides must all be read")
+        # The point of the widening: the guide folder is read as well. Four of
+        # the eight entry points are documented only there, and the earlier
+        # check reported itself consistent without ever opening those files.
+        from_folder = sorted(name for name in read if name.startswith("docs/"))
+        self.assertTrue(from_folder, "the guide folder must be read")
+        self.assertGreater(len(read), len(docs.REQUIRED_GUIDES))
 
     def test_it_claims_only_that_a_command_exists_and_is_shown(self):
         said = " ".join(self.check["isNot"])
@@ -141,6 +156,96 @@ class WhenTheyDrift(unittest.TestCase):
         self.assertEqual(check["domainCommandSource"]["error"],
                          "EX_DOMAIN_CLI_CHOICES_NOT_FOUND")
         self.assertFalse(check["consistent"])
+
+
+class EntryPoints(unittest.TestCase):
+    """Every runnable module, not only the two that have subcommands."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.check = docs.check(str(ROOT))
+
+    def test_every_runnable_module_is_discovered_not_listed(self):
+        found = {entry["module"] for entry in self.check["entryPoints"]}
+        # Discovered from the source, so a new runnable module is covered
+        # without anyone remembering to add it here.
+        self.assertIn("scenarios.cli", found)
+        self.assertIn("exchange.cli", found)
+        self.assertIn("ci.smoke", found)
+        self.assertGreater(len(found), 2,
+                           "the earlier check knew only two command lines")
+        self.assertEqual(len(found), self.check["entryPointCount"])
+
+    def test_every_entry_point_is_documented_and_names_where(self):
+        self.assertEqual(self.check["entryPointsUndocumented"], [])
+        for entry in self.check["entryPoints"]:
+            with self.subTest(module=entry["module"]):
+                self.assertTrue(entry["documented"])
+                self.assertTrue(entry["documentedIn"])
+                for guide in entry["documentedIn"]:
+                    self.assertIn(guide, self.check["guidesRead"])
+
+    def test_a_module_taking_no_options_still_has_to_be_documented(self):
+        byname = {entry["module"]: entry for entry in self.check["entryPoints"]}
+        noopts = [entry for entry in byname.values() if not entry["takesOptions"]]
+        self.assertTrue(noopts, "at least one runnable module takes no options")
+        for entry in noopts:
+            with self.subTest(module=entry["module"]):
+                self.assertTrue(entry["documented"])
+
+    def test_a_test_module_is_not_treated_as_an_entry_point(self):
+        found = {entry["module"] for entry in self.check["entryPoints"]}
+        for module in found:
+            with self.subTest(module=module):
+                self.assertNotIn(".tests.", module)
+                self.assertFalse(module.split(".")[-1].startswith("test_"))
+
+    def test_a_foreign_module_in_a_guide_is_not_a_finding(self):
+        invoked = self.check["modulesInvokedByGuides"]
+        self.assertIn("unittest", invoked,
+                      "the guides really do invoke the test runner")
+        self.assertEqual(self.check["guideInvocationsNotRunnable"], [])
+
+
+class WhenEntryPointsDrift(unittest.TestCase):
+
+    def test_an_undocumented_entry_point_is_caught(self):
+        with _Copy() as root:
+            extra = root / "exchange" / "newtool.py"
+            extra.parent.mkdir(parents=True, exist_ok=True)
+            extra.write_text("import argparse\n\n\n"
+                             "def main():\n"
+                             "    argparse.ArgumentParser()\n\n\n"
+                             'if __name__ == "__main__":\n'
+                             "    main()\n", encoding="utf-8")
+            check = docs.check(str(root))
+        self.assertIn("a runnable entry point is documented nowhere",
+                      _findings(check))
+        self.assertIn("exchange.newtool", check["entryPointsUndocumented"])
+        self.assertFalse(check["consistent"])
+
+    def test_a_guide_invoking_a_module_that_is_not_runnable_is_caught(self):
+        with _Copy() as root:
+            guide = root / "ci/README.md"
+            guide.write_text(guide.read_text(encoding="utf-8")
+                             + "\n```sh\npython3 -B -m ci.not_a_tool\n```\n",
+                             encoding="utf-8")
+            check = docs.check(str(root))
+        self.assertIn("a guide invokes a module that is not runnable",
+                      _findings(check))
+        self.assertIn("ci.not_a_tool", check["guideInvocationsNotRunnable"])
+
+    def test_dropping_the_guide_folder_makes_entry_points_undocumented(self):
+        # The regression this widening fixes, stated as a test: without the
+        # guide folder, the modules documented only there look undocumented.
+        with _Copy() as root:
+            for path in sorted((root / "docs").glob("*.md")):
+                path.unlink()
+            check = docs.check(str(root))
+        self.assertIn("a runnable entry point is documented nowhere",
+                      _findings(check))
+        self.assertIn("exchange.demo_package", check["entryPointsUndocumented"])
+        self.assertIn("exchange.demo_ui", check["entryPointsUndocumented"])
 
 
 if __name__ == "__main__":
