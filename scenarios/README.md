@@ -368,6 +368,46 @@ snapshot correctly reported the loaded source changing mid-run. The list now
 lives in `commands.py`, which imports nothing, so one list serves both and
 nothing loads twice.
 
+## What depends on this package
+
+The reuse map answers what this package consumes. It did not answer the other
+direction, and by the time everything was merged another surface had come to
+depend on seven of these modules with nothing saying so. A rename here would
+have broken the joined integration suite, and no report would have named the
+dependency beforehand.
+
+So the map now reads that direction too, out of the depending surface's own
+source. Nothing is hand-maintained: that code is not this package's to declare,
+so the dependency is parsed from its imports and each name is resolved against
+the module it is imported from. A name that no longer resolves, a module that
+no longer exists, or a file that cannot be parsed is a finding - this package
+and that surface have drifted apart.
+
+Resolution reads the named module's own source rather than importing it. The
+first attempt imported, and the provenance snapshot immediately reported the
+set of loaded modules changing mid-run - the same defect this machinery had
+already caught in the command list. Reading the source also removes a worse
+problem the import hid: resolving through the loaded module gave a different
+answer in the test suite, which imports everything, than in the `reuse`
+subcommand, which imports almost nothing, so one module attribute was reported
+missing in the subcommand and present in the suite. A check whose verdict
+depends on who is asking is worse than no check, and a test now pins the two
+answers to be identical.
+
+Where a module's names cannot be read in full - no source to parse, or a
+star import re-exporting an unknown set - the name is neither resolved nor
+called missing. It goes to `undecidedNames`, which blocks like a finding
+because an undecided name is not a pass, and stays distinct from one because
+nothing here establishes the name is gone.
+
+The verdict is folded into the same `complete` flag the existing rule already
+acts on, rather than added beside it, because a verdict nobody reads is worse
+than no verdict. The negative controls hold it honest: a name that stopped
+existing, a module that stopped existing, a file that cannot be parsed, a name
+bound only inside a function or a class body (importable from neither, so
+counting it would make a missing name look present), and an undecidable name.
+A surface that depends on nothing is not a finding.
+
 ## Keeping the instructions true
 
 Usage documentation drifts the same way an outline does, with worse

@@ -391,7 +391,7 @@ class ReuseMapIsPartOfTheRun(unittest.TestCase):
 
     def test_the_bundle_carries_the_reuse_map(self):
         bundle = cli._bundle(ROOT)
-        self.assertEqual(bundle["reuse"]["schema"], "8415ex-reuse-map/1")
+        self.assertEqual(bundle["reuse"]["schema"], "8415ex-reuse-map/2")
         self.assertTrue(bundle["reuse"]["allAdaptersSimulated"])
         self.assertTrue(bundle["reuse"]["adaptersRecordedInThisRun"],
                         "the map reads the adapters from this run's scenarios")
