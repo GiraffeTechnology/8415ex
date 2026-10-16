@@ -3,7 +3,7 @@ on:
   push:
     branches: [main, bootstrap/commit-bound-ci, fix/zos-bucket-identity-20261013]
   pull_request:
-    branches: [main, bootstrap/commit-bound-ci]
+    branches: [main, bootstrap/commit-bound-ci, feat/stage1-domain-state-20261014, feat/stage2-segmented-settlement-20261014, feat/stage3-suffix-rollback-20261014, feat/stage4-deadline-exit-20261014]
 permissions:
   contents: read
 concurrency:
@@ -39,6 +39,56 @@ jobs:
         run: |
           set -euo pipefail
           python3 -B -m unittest discover -s ci/tests -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/unit-tests.log"
+      - name: Run Stage 1 domain tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s exchange/tests -t . -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/stage1-tests.log"
+      - name: Run local Stage 5 preparation tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s scenarios/tests -t . -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/stage5-preparation-tests.log"
+      - name: Run joined Stage 5 integration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s integration -t . -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/stage5-integration-tests.log"
+      - name: Run the six local scenarios and the three route contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          # An external observer captures final status and saves full raw logs.
+          # Published calculation files do not claim their own delivery succeeded.
+          python3 -B - <<'PYCODE'
+          import json, os, sys
+          from pathlib import Path
+          from scenarios import evidence_index, execution
+          directory = Path(os.environ["BOOTSTRAP_ROOT"]) / "evidence"
+          argv = [sys.executable, "-B", "-m", "scenarios.cli", "run-all", "--json",
+                  "--json-out", str(directory / "stage5-delivery.json"),
+                  "--text-out", str(directory / "stage5-scenarios.log")]
+          observed = execution.capture_cli(argv, raw_log_dir=directory)
+          (directory / "stage5-process.json").write_text(json.dumps(observed, indent=2) + "\n")
+          if "stdout" in observed.get("rawLog", {}):
+              stdout = Path(observed["rawLog"]["stdout"]["path"]).read_text()
+              try:
+                  bundle = json.loads(stdout)
+              except ValueError:
+                  print("CLI did not produce a parseable final record", file=sys.stderr)
+                  sys.exit(observed["exitCode"] or 1)
+              observed["cases"] = ["T-39", "T-40"]
+              index = evidence_index.build(
+                  bundle["scenarioReport"], bundle["pathReport"], ".",
+                  {"runId": bundle["runId"], "startedAt": bundle["startedAt"]},
+                  commands=bundle["commands"] + [observed],
+                  observations={key: bundle[key] for key in
+                                ("secretScan", "resourceObservation", "workload")},
+                  source=bundle["source"])
+              (directory / "stage5-evidence-index.json").write_text(json.dumps(index, indent=2) + "\n")
+          sys.exit(observed["exitCode"] if observed["exitCode"] is not None else 1)
+          PYCODE
+          cat "$BOOTSTRAP_ROOT/evidence/stage5-scenarios.log"
       - name: Verify deliberate failure and successful smoke
         shell: bash
         run: |
