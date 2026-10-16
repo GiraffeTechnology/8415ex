@@ -3,7 +3,7 @@ on:
   push:
     branches: [main, bootstrap/commit-bound-ci, fix/zos-bucket-identity-20261013]
   pull_request:
-    branches: [main, bootstrap/commit-bound-ci, feat/stage1-domain-state-20261014, feat/stage2-segmented-settlement-20261014, feat/stage3-suffix-rollback-20261014, feat/stage4-deadline-exit-20261014, feat/stage5-local-delivery-20261014]
+    branches: [main, bootstrap/commit-bound-ci, feat/stage1-domain-state-20261014, feat/stage2-segmented-settlement-20261014, feat/stage3-suffix-rollback-20261014, feat/stage4-deadline-exit-20261014, feat/stage5-local-delivery-20261014, feat/verified-local-demo-kit-20261015, feat/native-workbench-initial-20261016, feat/browser-materials-initial-20261016, feat/runtime-references-initial-20261016, feat/original-receipt-consumer-20261016, feat/native-presentation-initial-20261016, feat/native-film-initial-20261016, feat/runtime-observations-initial-20261016, feat/observation-config-initial-20261016]
 permissions:
   contents: read
 concurrency:
