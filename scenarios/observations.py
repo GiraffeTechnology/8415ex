@@ -1,0 +1,343 @@
+"""Secret and private-content checks, and measured resource observations.
+
+Both are fail-closed. A scan that could not enumerate its input, could not read
+a file, or saw nothing at all is reported as a failure, never as a clean result:
+"zero files, no findings" is the shape a silent breakage takes, so it is
+refused.
+
+The scan carries no private value of its own. Credential-shaped detection is
+generic, and any private fingerprint to look for is supplied through the
+already-approved private mechanism at call time, never embedded in this public
+source. There is no exemption for this file: the scanner's own source is
+scanned on the same terms as everything else.
+
+The resource observations are measured, not promised. No throughput or latency
+target is set or implied.
+"""
+import os
+import re
+import resource
+import subprocess
+import time
+from pathlib import Path
+
+#: Credential-shaped content. Each pattern names the shape it looks for and
+#: carries no real credential, fingerprint or identifier.
+SECRET_PATTERNS = (
+    ("private key block", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
+    ("mnemonic marker", re.compile(r"(?i)\b(mnemonic|seed phrase)\b\s*[:=]\s*\S")),
+    ("api or access token", re.compile(r"(?i)\b(api[_-]?key|access[_-]?token|secret[_-]?key)\b"
+                                      r"\s*[:=]\s*['\"]?[A-Za-z0-9._\-]{8,}")),
+    ("bearer credential", re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._\-]{20,}")),
+    ("password assignment", re.compile(r"(?i)\bpassword\b\s*[:=]\s*['\"]?[^\s'\"]{3,}")),
+    ("hex private key", re.compile(r"(?i)\bprivate[_-]?key\b\s*[:=]\s*['\"]?0x[0-9a-f]{64}")),
+    ("cloud access key id", re.compile(r"\b[A-Z]{4}[A-Z0-9]{16}\b")),
+    ("ssh private marker", re.compile(r"\bssh-rsa\s+AAAA")),
+)
+
+#: Private material that belongs only in the authorized private locations. These
+#: are shapes, not values: no private link, digest or name appears here.
+PRIVATE_CONTENT_PATTERNS = (
+    ("document sharing link", re.compile(r"(?i)\b(?:drive|docs)\.google\.com/\S+")),
+    # A leading slash is not a word character, so ``\b`` would never match at
+    # the start of a line; an explicit left-hand guard is required instead.
+    ("internal operational path",
+     re.compile(r"(?i)(?<![\w./-])(?:/srv|/opt/private|/mnt/private)/\S+")),
+)
+
+#: Scripts that carry prose in another language, as code-point ranges so this
+#: public source stays ASCII. Typography such as an arrow or a dash is not
+#: non-English prose, so only these ranges are flagged.
+NON_ENGLISH_RANGES = (
+    (0x2E80, 0x9FFF),   # CJK radicals through unified ideographs
+    (0xAC00, 0xD7AF),   # Hangul syllables
+    (0x0400, 0x04FF),   # Cyrillic
+    (0x0590, 0x05FF),   # Hebrew
+    (0x0600, 0x06FF),   # Arabic
+    (0x3040, 0x30FF),   # Hiragana and Katakana
+)
+NON_ENGLISH_PROSE = re.compile(
+    "[" + "".join(f"{chr(low)}-{chr(high)}" for low, high in NON_ENGLISH_RANGES) + "]")
+
+#: Text this scan reads. Anything else is skipped and reported as skipped, with
+#: its reason, rather than silently ignored.
+TEXT_SUFFIXES = (".py", ".md", ".yml", ".yaml", ".json", ".txt", ".cfg", ".toml", ".sh")
+
+#: The environment variable through which the approved private mechanism may
+#: supply fingerprints to look for. Its contents are never written to this
+#: source, to a report, or to any public artifact.
+PRIVATE_MARKER_ENV = "EX_PRIVATE_CONTENT_MARKERS"
+
+
+class EnumerationError(Exception):
+    """Raised when the source file list could not be established."""
+
+
+def tracked_files(root="."):
+    """Every tracked path, enumerated NUL-delimited so spaces survive.
+
+    Returns the paths and an explicit status. A non-repository, a failed Git
+    invocation and a failed enumeration are distinguished from a genuinely empty
+    repository; none of them is reported as a clean, empty source.
+    """
+    try:
+        inside = subprocess.run(("git", "rev-parse", "--git-dir"), cwd=root,
+                                capture_output=True, text=True, check=False)
+    except OSError as problem:
+        return {"ok": False, "state": "git-unavailable", "error": str(problem), "files": ()}
+    if inside.returncode != 0:
+        return {"ok": False, "state": "not-a-repository",
+                "error": inside.stderr.strip() or "git rev-parse failed", "files": ()}
+    try:
+        listed = subprocess.run(("git", "ls-files", "-z"), cwd=root,
+                                capture_output=True, check=False)
+    except OSError as problem:
+        return {"ok": False, "state": "git-unavailable", "error": str(problem), "files": ()}
+    if listed.returncode != 0:
+        return {"ok": False, "state": "enumeration-failed",
+                "error": listed.stderr.decode("utf-8", "replace").strip()
+                or "git ls-files failed", "files": ()}
+    names = tuple(name for name in listed.stdout.decode("utf-8", "surrogateescape").split("\0")
+                  if name)
+    if not names:
+        # A tracked-file list is never legitimately empty for this repository.
+        # An empty result here means the lookup did not see the source.
+        return {"ok": False, "state": "empty-enumeration",
+                "error": "git reported no tracked files", "files": ()}
+    return {"ok": True, "state": "enumerated", "error": None, "files": names}
+
+
+def _private_markers(supplied=None):
+    """Fingerprints to look for, from the approved private mechanism only."""
+    if supplied is not None:
+        return tuple(str(marker) for marker in supplied if str(marker).strip())
+    raw = os.environ.get(PRIVATE_MARKER_ENV, "")
+    return tuple(marker.strip() for marker in raw.split(",") if marker.strip())
+
+
+#: What this scan is, said plainly, and what it is not. A pattern scan over the
+#: tracked text of one checkout is bounded evidence, and saying so is part of
+#: the result rather than a footnote somewhere else.
+def coverage_statement(coverage, marker_count, enumeration_state):
+    """A statement of exactly how far this scan reached."""
+    enumerated = coverage["enumerated"]
+    scanned = coverage["scanned"]
+    skipped = len(coverage["skipped"])
+    unreadable = len(coverage["unreadable"])
+    return {
+        "inventoryTotal": enumerated,
+        "scannedCount": scanned,
+        "skippedCount": skipped,
+        "unreadableCount": unreadable,
+        "accountedFor": scanned + skipped + unreadable == enumerated,
+        "enumerationState": enumeration_state,
+        "suppliedPrivateMarkers": marker_count,
+        "boundedCoverage": (
+            f"{scanned} of {enumerated} tracked files were read; {skipped} were "
+            f"skipped with a recorded reason and {unreadable} were unreadable"),
+        "isNot": [
+            "not a private-fingerprint certification: "
+            + ("no private markers were supplied, so detection was generic only"
+               if marker_count == 0 else
+               f"{marker_count} supplied markers were checked, which certifies "
+               "nothing beyond those exact values"),
+            "not a historical-repository certification: only this checkout's "
+            "tracked text was read, not any earlier commit",
+            "not an independent security review",
+        ],
+    }
+
+
+def secret_scan(root=".", private_markers=None):
+    """T-39: credential-shaped content and private material in the source.
+
+    Fails closed. ``clean`` is true only when enumeration succeeded, at least
+    one file was read, nothing was unreadable, and no pattern matched.
+    """
+    enumeration = tracked_files(root)
+    markers = _private_markers(private_markers)
+    if not enumeration["ok"]:
+        return {
+            "schema": "8415ex-secret-scan/2", "cases": ["T-39"], "ok": False,
+            "enumerationState": enumeration["state"], "error": enumeration["error"],
+            "coverage": {"enumerated": 0, "scanned": 0, "skipped": [], "unreadable": []},
+            "coverageStatement": coverage_statement(
+                {"enumerated": 0, "scanned": 0, "skipped": [], "unreadable": []},
+                len(markers), enumeration["state"]),
+            "findings": [], "clean": False,
+            "privateMarkerCount": len(markers),
+            "scope": "the source file list could not be established, so nothing is certified",
+        }
+    base = Path(root)
+    findings, skipped, unreadable, scanned = [], [], [], 0
+    for name in enumeration["files"]:
+        target = base / name
+        if not name.endswith(TEXT_SUFFIXES):
+            skipped.append({"path": name, "reason": "not a scanned text suffix"})
+            continue
+        if not target.is_file():
+            unreadable.append({"path": name, "reason": "tracked but missing from the worktree"})
+            continue
+        try:
+            text = target.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as problem:
+            unreadable.append({"path": name, "reason": f"unreadable: {problem}"})
+            continue
+        scanned += 1
+        for label, pattern in SECRET_PATTERNS + PRIVATE_CONTENT_PATTERNS:
+            for match in pattern.finditer(text):
+                findings.append({"path": name,
+                                 "kind": "secret" if (label, pattern) in SECRET_PATTERNS
+                                 else "private-content",
+                                 "pattern": label,
+                                 "line": text[:match.start()].count("\n") + 1})
+        for marker in markers:
+            index = text.find(marker)
+            if index >= 0:
+                # The marker itself is never echoed into the report.
+                findings.append({"path": name, "kind": "private-content",
+                                 "pattern": "configured private fingerprint",
+                                 "line": text[:index].count("\n") + 1})
+        if name.endswith((".py", ".md", ".yml")):
+            for number, line in enumerate(text.splitlines(), start=1):
+                if NON_ENGLISH_PROSE.search(line):
+                    findings.append({"path": name, "kind": "non-english",
+                                     "pattern": "non-english prose in public source",
+                                     "line": number})
+    clean = findings == [] and scanned > 0 and unreadable == []
+    coverage = {"enumerated": len(enumeration["files"]), "scanned": scanned,
+                "skipped": skipped, "unreadable": unreadable,
+                "scannedSuffixes": list(TEXT_SUFFIXES)}
+    return {
+        "schema": "8415ex-secret-scan/3", "cases": ["T-39"], "ok": True,
+        "enumerationState": enumeration["state"], "error": None,
+        "coverage": coverage,
+        "coverageStatement": coverage_statement(coverage, len(markers),
+                                                enumeration["state"]),
+        "findings": findings, "clean": clean,
+        "privateMarkerCount": len(markers),
+        "scope": ("a pattern scan of this repository's tracked text, including this scanner's "
+                  "own source; it is not a substitute for an independent security review"),
+    }
+
+
+def measure(run):
+    """T-40: what one local run actually cost. No target is implied."""
+    before = resource.getrusage(resource.RUSAGE_SELF)
+    started = time.time()
+    result = run()
+    elapsed = time.time() - started
+    after = resource.getrusage(resource.RUSAGE_SELF)
+    return result, {
+        "schema": "8415ex-resource-observation/1",
+        "cases": ["T-40"],
+        "elapsedMs": int(elapsed * 1000),
+        "userCpuMs": int((after.ru_utime - before.ru_utime) * 1000),
+        "systemCpuMs": int((after.ru_stime - before.ru_stime) * 1000),
+        "peakResidentKib": after.ru_maxrss,
+        "note": ("measured on the machine that ran it; no throughput or latency target is "
+                 "set or implied, and a single observation is not a baseline distribution"),
+    }
+
+
+#: Step facts that measure a backlog. ``outstandingLegs`` is how many legs are
+#: still unresolved; ``deferredLegs`` is how many registration results are
+#: buffered waiting for a gap. Both are read from the facts the scenarios
+#: already record, so nothing is instrumented specially for this.
+BACKLOG_FACTS = ("outstandingLegs", "deferredLegs")
+
+
+def _rate(part, whole):
+    """A rate in parts per thousand, as an integer. No floating point appears
+    anywhere in these records, and a rate over nothing is reported as None
+    rather than as zero: zero would read as a measurement."""
+    if not whole:
+        return None
+    return (part * 1000 + whole // 2) // whole
+
+
+def _backlog(report):
+    """The highest backlog each scenario reached, from the facts it recorded.
+
+    A backlog is read as a count, never as a failure: a deferred result waiting
+    for a gap is the normal serial-registration state, and an outstanding leg is
+    work in flight.
+
+    The second figure is the *last recorded* value, not the end state. A
+    scenario stops recording a fact once it is no longer what a step is about,
+    so a non-zero last value means the scenario stopped mentioning the backlog,
+    not necessarily that it ended with one. Calling it final would be the kind
+    of small overstatement that a reader then builds on.
+    """
+    observed = {}
+    for scenario in report["scenarios"]:
+        for fact in BACKLOG_FACTS:
+            seen = [step["facts"][fact] for step in scenario["steps"]
+                    if isinstance(step["facts"].get(fact), (int, list))
+                    and not isinstance(step["facts"].get(fact), bool)]
+            counts = [value if isinstance(value, int) else len(value) for value in seen]
+            if not counts:
+                continue
+            entry = observed.setdefault(fact, {"observedIn": [], "peak": 0,
+                                               "lastRecordedByScenario": {},
+                                               "lastRecordedStepByScenario": {}})
+            entry["observedIn"].append(scenario["scenarioId"])
+            entry["peak"] = max(entry["peak"], max(counts))
+            entry["lastRecordedByScenario"][scenario["scenarioId"]] = counts[-1]
+            entry["lastRecordedStepByScenario"][scenario["scenarioId"]] = max(
+                step["index"] for step in scenario["steps"]
+                if fact in step["facts"])
+    for fact, entry in observed.items():
+        entry["observedIn"] = sorted(set(entry["observedIn"]))
+        entry["clearedWhereLastRecorded"] = sorted(
+            scenario for scenario, value
+            in entry["lastRecordedByScenario"].items() if value == 0)
+        entry["stillCountedWhenLastRecorded"] = sorted(
+            scenario for scenario, value
+            in entry["lastRecordedByScenario"].items() if value != 0)
+        entry["lastRecordedIsNotTheEndState"] = True
+    return {fact: observed.get(fact) for fact in BACKLOG_FACTS}
+
+
+def workload_observation(report):
+    """T-40: the load that produced a report, its backlog and its rates.
+
+    EX-NFR-08 asks for a recorded test load, execution time, queue backlog and
+    failure rate before any throughput or latency figure is spoken about, and
+    these are those four. Two things are kept strictly apart. A ``not-run``
+    obligation is not a failure, so it has its own rate and is excluded from the
+    failure rate; counting it as a failure would make an honest outstanding duty
+    look like a defect. And none of this is a target: one observation on one
+    machine is a load record, not a baseline distribution and not an SLA.
+    """
+    expectations = sum(len(scenario["expectations"]) for scenario in report["scenarios"])
+    steps = sum(len(scenario["steps"]) for scenario in report["scenarios"])
+    totals = report["totals"]
+    recorded = sum(totals.get(outcome, 0) for outcome in
+                   ("passed", "failed", "blocked", "not-run"))
+    elapsed = [scenario["elapsedMs"] for scenario in report["scenarios"]]
+    return {
+        "scenarios": report["scenariosTotal"],
+        "recordedExpectations": expectations,
+        "recordedSteps": steps,
+        "outcomeTotals": totals,
+        "slowestScenarioMs": max(elapsed, default=0),
+        "totalScenarioMs": sum(elapsed),
+        "ratesPerThousand": {
+            "passed": _rate(totals.get("passed", 0), recorded),
+            "failed": _rate(totals.get("failed", 0), recorded),
+            "blocked": _rate(totals.get("blocked", 0), recorded),
+            "notRun": _rate(totals.get("not-run", 0), recorded),
+        },
+        "rateDenominator": recorded,
+        "failureRateExcludesNotRun": True,
+        "backlog": _backlog(report),
+        "isNot": [
+            "not a service level: one observation on one machine is a load "
+            "record, never a throughput or latency target",
+            "not a defect count: a not-run obligation has its own rate and is "
+            "excluded from the failure rate",
+            "not a backlog problem: a deferred result waiting for a gap is the "
+            "normal serial-registration state",
+        ],
+    }

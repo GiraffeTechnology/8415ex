@@ -144,20 +144,22 @@ def funded_exchange(registration_path="REG_DIRECT", clock=None, outcomes=None):
 
 
 def funded_hop(exchange, seller, buyer, nonce, transfer_id, seller_session, buyer_session,
-               price=PRICE, now=None, lock=True):
+               price=PRICE, now=None, lock=True, expires_at=1_700_800_000):
     """Lock this leg's own escrow, then form the leg. Returns (escrow, leg)."""
     suffix = transfer_id.replace("transfer-", "")
     sell_auth, buy_auth = f"auth-sell-{suffix}", f"auth-buy-{suffix}"
     exchange.connect_wallet(seller, seller_session)
     exchange.connect_wallet(buyer, buyer_session)
     exchange.register_authorization(authorization(seller, sell_auth, seller_session,
-                                                  counterparties=(buyer,), max_amount=price))
+                                                  counterparties=(buyer,), max_amount=price,
+                                                  expires_at=expires_at))
     exchange.register_authorization(authorization(buyer, buy_auth, buyer_session,
-                                                  counterparties=(seller,), max_amount=price))
+                                                  counterparties=(seller,), max_amount=price,
+                                                  expires_at=expires_at))
     sell = exchange.submit_intent(intent(f"sell-{suffix}", "sell", seller, sell_auth, buyer, nonce,
-                                         limit_price=price))
+                                         limit_price=price, expires_at=expires_at))
     buy = exchange.submit_intent(intent(f"buy-{suffix}", "buy", buyer, buy_auth, seller, nonce,
-                                        limit_price=price))
+                                        limit_price=price, expires_at=expires_at))
     match = exchange.match_intents(sell.intent_id, buy.intent_id, now)
     if not lock:
         return match, None
@@ -193,7 +195,8 @@ def release_authority(exchange, leg_index, authority_id, receipt_id="rcpt-8415-0
                   journal_reference=f"journal:{leg.transfer_id}",
                   binding=segment_binding(receipt_record.asset, receipt_id, leg_index,
                                           leg.transfer_id, escrow.payer, escrow.payee,
-                                          escrow.principal, escrow.quote_asset),
+                                          escrow.principal, escrow.quote_asset,
+                                          f"journal:{leg.transfer_id}"),
                   observed_at=now)
     fields.update(overrides)
     return ReleaseAuthority(**fields)
@@ -256,3 +259,48 @@ def rollback_authority(exchange, refused_leg_index, authority_id,
 def refuse(exchange, request, result_id, receipt_id="rcpt-8415-0001"):
     """Record a registrar refusal for one already-filed request."""
     return confirm(exchange, request, result_id, outcome="rejected", receipt_id=receipt_id)
+
+
+# ----------------------------------------------------------- Stage 4 fixtures
+
+ALL_CHECKS = ("rights-holder-verification", "asset-validity", "other-eligibility")
+
+
+def exit_exchange(registration_path="REG_DIRECT", clock=None, voucher_outcomes=None, **kwargs):
+    """A funded exchange with the simulated collection desk configured."""
+    from .exit import SimulatedVoucherDesk
+    from .ledger import Exchange
+    from .rollback import SimulatedAssetControl
+    from .settlement import SimulatedPaymentAdapter
+
+    clock = clock or ManualClock()
+    exchange = Exchange(clock, payment_adapter=SimulatedPaymentAdapter(clock,
+                        outcomes=kwargs.get("outcomes")),
+                        release_sources=(RELEASE_SOURCE,), funding_required=True,
+                        asset_control=SimulatedAssetControl(clock,
+                                                            outcomes=kwargs.get("return_outcomes")),
+                        rollback_sources=(ROLLBACK_SOURCE,),
+                        gas_budgets=kwargs.get("gas_budgets"),
+                        voucher_desk=SimulatedVoucherDesk(clock, registration_path,
+                                                          outcomes=voucher_outcomes))
+    exchange.mint(receipt(registration_path=registration_path))
+    exchange.connect_wallet(A, "session-a")
+    return exchange, clock
+
+
+def settled_at_b(**kwargs):
+    """A -> B only: funded, registered and released, so owner = holder = B."""
+    exchange, clock = exit_exchange(**kwargs)
+    funded_hop(exchange, A, B, 1, "transfer-ab", "session-a", "session-b", price=PRICE_AB)
+    request, _ = exchange.submit_registration("rcpt-8415-0001", 0, "req-leg-0", 86_400)
+    confirm(exchange, request, "res-ab")
+    exchange.release_segment("rcpt-8415-0001", 0, release_authority(exchange, 0, "auth-0"))
+    return exchange, clock
+
+
+def redeem_authorization(exchange, account=B, authorization_id="auth-redeem",
+                         session_id="session-b"):
+    """A wallet grant that actually covers the exit action."""
+    exchange.connect_wallet(account, session_id)
+    return exchange.register_authorization(
+        authorization(account, authorization_id, session_id, actions=("sell", "buy", "redeem")))

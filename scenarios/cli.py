@@ -1,0 +1,730 @@
+"""One reproducible entry point for the local Stage 5 preparation.
+
+    python3 -B -m scenarios.cli run-all [--execute-suites]
+                                        [--json] [--json-out FILE] [--text-out FILE]
+    python3 -B -m scenarios.cli scenarios | paths | matrix | manifest | handoff
+    python3 -B -m scenarios.cli validate-config | observations
+
+``run-all`` is the whole local delivery in one command: the six scenarios, the
+three path contracts, the acceptance matrix, the manifest, the handoff, the
+secret scan and the measured observations.
+
+Three rules govern what it records.
+
+*Execution.* A command record is written only for a command that actually ran,
+and only after its exit code is known. The run's own record is sealed at the
+very end from the real exit status. The two unit suites are recorded as NOT_RUN
+unless ``--execute-suites`` is given, in which case they are really executed as
+subprocesses and their true status, timing and output digests are kept.
+
+*Source.* The reported root must be the tree this code was imported from, the
+worktree must be clean, and the file inventory must be complete. A failure in
+any of those is a failure of the run, not a footnote.
+
+*One run, one identity.* ``--json-out`` and ``--text-out`` write both forms of
+the same single execution, under one run id. Two invocations are two runs and
+are never presented as one.
+"""
+import argparse
+import hashlib
+import os
+import sys
+import shutil
+import shlex
+import time
+import uuid
+
+from exchange.ids import canonical_json
+
+from .commands import COMMANDS, STDOUT_ONLY
+from . import (completion, decisions, docs, dossier, events, evidence_index,
+               execution, handoff, manifest, matrix, observations, operations,
+               prd, receipt, reuse, stages, storyboard, validation)
+from .demos import DEMOS
+from .harness import report_text, run_all
+from .paths import PATH_CONTRACTS, coverage_map
+
+#: The suites whose real status this bundle can carry, and the case they serve.
+UNIT_SUITES = (
+    ("scenario preparation suite",
+     ("python3", "-B", "-m", "unittest", "discover", "-s", "scenarios/tests", "-t", ".")),
+    ("domain suite",
+     ("python3", "-B", "-m", "unittest", "discover", "-s", "exchange/tests", "-t", ".")),
+)
+
+#: Why a suite is NOT_RUN when it was not executed in this invocation.
+NOT_EXECUTED_HERE = ("not executed in this invocation; pass --execute-suites to run it and "
+                     "record its real status")
+
+#: Set in a suite subprocess this run started. The scenario suite exercises this
+#: very bundle, so executing the suites from inside a suite would re-enter the
+#: run without end. The nested level records the suites as NOT_RUN rather than
+#: recursing, which keeps the outer record real and the inner one empty.
+NESTING_GUARD_ENV = "EX_SUITE_EXECUTION_IN_PROGRESS"
+NESTED_NOT_EXECUTED = ("not executed: this bundle is already running inside a suite this run "
+                       "started, and nesting would re-enter the run")
+
+
+def _run_id():
+    """A run identity no second run can repeat."""
+    return (f"local-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}"
+            f"-{uuid.uuid4().hex[:12]}")
+
+
+def _suite_records(root, execute):
+    nested = os.environ.get(NESTING_GUARD_ENV) == "1"
+    records = []
+    for title, argv in UNIT_SUITES:
+        if execute and not nested:
+            record = execution.run_command(argv, root=root, env={NESTING_GUARD_ENV: "1"})
+        else:
+            record = execution.not_run(" ".join(argv),
+                                       NESTED_NOT_EXECUTED if nested else NOT_EXECUTED_HERE)
+        record["title"] = title
+        records.append(record)
+    return records
+
+
+#: The self-consistency checks this bundle carries, and what a failure means.
+#:
+#: A report that quietly disagrees with the code is worse than no report, so a
+#: failing check blocks the run rather than sitting in the record as a field
+#: nobody reads. ``flag`` is the path to the verdict inside that report.
+CONSISTENCY_CHECKS = (
+    {"key": "usage", "flag": ("consistent",), "blocks": True,
+     "reason": "the guides and the commands that exist disagree"},
+    {"key": "storyboard", "flag": ("consistent",), "blocks": True,
+     "reason": "the presentation outline no longer describes the code"},
+    {"key": "operations", "flag": ("consistent",), "blocks": True,
+     "reason": "a logical operation does not resolve, or a read moved something"},
+    {"key": "stageMap", "flag": ("agreesWithMatrix",), "blocks": True,
+     "reason": "the stage map disagrees with the acceptance matrix"},
+    {"key": "eventContract", "flag": ("conformance", "accountedFor"), "blocks": True,
+     "reason": "the event vocabulary does not account for what the domain records"},
+    {"key": "dossier", "flag": ("allItemsCarried",), "blocks": True,
+     "reason": "a scenario does not record something a demonstration must carry"},
+    {"key": "sectionLedger", "flag": ("consistent",), "blocks": True,
+     "reason": "a requirement section is addressed by nothing, or names "
+               "something that is not there"},
+    {"key": "completion", "flag": ("notMeantHolds",), "blocks": True,
+     "reason": "something this round explicitly does not mean was observed in "
+               "the run: a main network, a real adapter or a live quote asset"},
+)
+
+#: Verdict field names a report uses to say it agrees with the code. Any report
+#: in the bundle carrying one of these must be accounted for, so a new check
+#: cannot be added and then left out of the run's verdict.
+VERDICT_FIELDS = ("consistent", "agreesWithMatrix", "allItemsCarried",
+                  "accountedFor")
+
+#: Reports whose verdict an earlier rule already acts on. They are named here
+#: rather than checked twice, so there is still one place to look for what
+#: happens to every verdict in the bundle.
+HANDLED_ELSEWHERE = {
+    "manifest": "the file inventory rule",
+    "secretScan": "the secret scan rule",
+    "sourceReconciliation": "the source-held-still rule",
+    "reuse": "the reuse-map rule, which reads the stricter top-level verdict",
+    "evidenceValidation": "the evidence record rule",
+}
+
+def _verdict(bundle, check):
+    """The verdict one consistency check reports, or None if it is absent."""
+    found = bundle.get(check["key"])
+    for step in check["flag"]:
+        found = found.get(step) if isinstance(found, dict) else None
+    return found
+
+
+def unclassified_verdicts(bundle):
+    """Reports that state a verdict about the code which nothing acts on.
+
+    A report added to the bundle with a verdict field, and not declared in
+    CONSISTENCY_CHECKS, would be a check whose failure the run ignores. That is
+    the failure mode this guards: the check exists, reads as authoritative, and
+    changes nothing.
+    """
+    declared = ({check["key"] for check in CONSISTENCY_CHECKS}
+                | set(HANDLED_ELSEWHERE))
+    found = []
+    for key, value in sorted(bundle.items()):
+        if key in declared or not isinstance(value, dict):
+            continue
+        nested = [value] + [inner for inner in value.values()
+                            if isinstance(inner, dict)]
+        if any(field in level for level in nested for field in VERDICT_FIELDS):
+            found.append(key)
+    return found
+
+
+def _bundle(root, execute_suites=False, run_id=None, started_at=None,
+            artifacts=None):
+    """Everything this run observed, with no record of its own exit status yet.
+
+    The self record cannot exist here: the exit status is not known until the
+    bundle is complete. ``seal`` adds it afterwards.
+
+    ``artifacts`` is the output delivery plan, declared here so the evidence
+    index can name where each row lands. Declaring a path is not writing it:
+    the index says so, and the delivery report added later carries the result.
+    """
+    run_id = run_id or _run_id()
+    started_at = started_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    # The source is pinned before anything runs and checked again after
+    # packaging, so an earlier clean reading cannot be combined with a later,
+    # different one.
+    before = manifest.snapshot(root)
+    (scenario_report, path_report), measured = observations.measure(
+        lambda: (run_all(list(DEMOS)), run_all(list(PATH_CONTRACTS))))
+    source = manifest.source_identity(root)
+    source["ancestry"] = manifest.parent_identity(root, head=source["commit"])
+    acceptance = matrix.build(source, {"runId": run_id, "startedAt": started_at},
+                              scenario_report, path_report)
+    commands = _suite_records(root, execute_suites)
+    scan = observations.secret_scan(root)
+    package = manifest.build(root, commands=commands, run_id=run_id)
+    bundle = {
+        "schema": "8415ex-local-delivery/2",
+        "runId": run_id,
+        "startedAt": started_at,
+        "source": source,
+        "runtime": manifest.runtime_identity(),
+        "scenarioReport": scenario_report,
+        "pathReport": path_report,
+        "coverage": coverage_map(),
+        "matrix": acceptance,
+        "manifest": package,
+        "commands": commands,
+        "handoff": handoff.build(acceptance),
+        "openDecisions": decisions.register(),
+        "outputDeliveryPlan": [entry.get("path") if isinstance(entry, dict) else entry
+                               for entry in (artifacts or []) if entry],
+        "outputArtifacts": artifacts or [],
+        "reuse": reuse.build(scenario_report, root),
+        "eventContract": events.build(root=root),
+        "stageMap": stages.build(root),
+        "dossier": dossier.build(scenario_report),
+        "storyboard": storyboard.check(root),
+        "operations": operations.build(root),
+        "sectionLedger": prd.build(root),
+        "usage": docs.check(root),
+        "evidenceIndex": evidence_index.build(
+            scenario_report, path_report, root,
+            {"runId": run_id, "startedAt": started_at},
+            artifacts=artifacts),
+        "configuration": {"template": validation.local_config_template(),
+                          "validation": validation.validate_config(
+                              validation.local_config_template())},
+        "secretScan": scan,
+        "resourceObservation": measured,
+        "workload": {"scenarios": observations.workload_observation(scenario_report),
+                     "paths": observations.workload_observation(path_report)},
+        "notRun": [{"obligation": row["case"], "status": "NOT_RUN",
+                    "requires": row["remainingRealEvidence"]}
+                   for row in acceptance["rows"] if row.get("remainingRealEvidence")]
+        + [{"obligation": record["title"], "status": "NOT_RUN",
+            "requires": record["reason"]}
+           for record in commands if record["outcome"] == "not-run"],
+    }
+    after = manifest.snapshot(root)
+    reconciliation = manifest.reconcile(before, after)
+    bundle["sourceReconciliation"] = reconciliation
+    executed = [record for record in commands if record["executed"]]
+    # The evidence record is the shape the validator refuses a guess in. It is
+    # built from this run and checked here, so a record that could not stand on
+    # its own identity blocks the run instead of being reported beside it.
+    evidence = {
+        "schema": "8415ex-local-delivery-evidence/1",
+        "runId": run_id,
+        "commit": source["commit"],
+        "tree": source["tree"],
+        "worktreeClean": source["worktreeClean"],
+        "commands": commands,
+        "startedAt": started_at,
+        "finishedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "scenarioDigest": scenario_report["deterministicDigest"],
+        # Filled in below, once the outstanding obligations are collected.
+        "notRun": [],
+        "transactionHashes": "NOT_RUN",
+    }
+    # The ledger reads the reports this bundle already carries, so it is built
+    # from the bundle rather than beside it - and after the reconciliation it
+    # reads, because a signal pointing at a report that is not there yet would
+    # resolve to None and look like a clause that is not evidenced.
+    bundle["completion"] = completion.build(bundle)
+    blocking = receipt.source_binding_errors(bundle)
+    if not bundle["reuse"]["complete"]:
+        blocking.append("the reuse map is incomplete")
+    if not scenario_report["allPassed"]:
+        blocking.append("a scenario did not pass")
+    if not path_report["allPassed"]:
+        blocking.append("a path contract did not pass")
+    if not scan["clean"]:
+        blocking.append(f"the secret scan is not clean ({scan['enumerationState']})")
+    if not acceptance["allCasesSound"]:
+        blocking.append(f"unsound acceptance cases: {', '.join(acceptance['unsoundCases'])}")
+    if not source["ok"]:
+        blocking.append("the source identity could not be established: "
+                        + "; ".join(source["errors"] or ["incomplete"]))
+    elif source["worktreeClean"] is not True:
+        blocking.append(f"the worktree is not clean ({source['dirtyFileCount']} files)")
+    if not source["executedSourceConfirmed"]:
+        blocking.append("the reported root is not the tree this code executed from")
+    if not package["inventoryOk"]:
+        blocking.append(f"the file inventory is incomplete ({package['enumerationState']})")
+    if not reconciliation["consistent"]:
+        blocking.append("the source did not hold still during the run: "
+                        + "; ".join(reconciliation["reasons"]))
+    for record in executed:
+        if record["outcome"] != "passed":
+            blocking.append(f"{record['command']} ended {record['outcome']}")
+    evidence["notRun"] = [{"obligation": entry["obligation"], "status": "NOT_RUN"}
+                          for entry in bundle["notRun"]]
+    checked = validation.validate_result(evidence)
+    bundle["evidence"] = evidence
+    bundle["evidenceValidation"] = checked
+    if not checked["accepted"]:
+        blocking.append("the evidence record was refused: " + ", ".join(checked["reasons"]))
+    # Valid evidence of a real failure is still evidence that this run did not
+    # pass. Structural validity never stands in for the result.
+    for reason in checked["notPassing"]:
+        if reason not in blocking:
+            blocking.append(reason)
+    for check in CONSISTENCY_CHECKS:
+        verdict = bundle.get(check["key"])
+        for step in check["flag"]:
+            verdict = verdict.get(step) if isinstance(verdict, dict) else None
+        if verdict is not True and check["blocks"]:
+            blocking.append("%s (%s)" % (check["reason"], check["key"]))
+    bundle["consistencyChecks"] = [
+        dict(check, flag=list(check["flag"]),
+             verdict=_verdict(bundle, check))
+        for check in CONSISTENCY_CHECKS]
+    bundle["verdictsHandledElsewhere"] = dict(HANDLED_ELSEWHERE)
+    bundle["unclassifiedVerdicts"] = unclassified_verdicts(bundle)
+    for key in bundle["unclassifiedVerdicts"]:
+        blocking.append("a report states a verdict that the run ignores: " + key)
+    bundle["blocking"] = blocking
+    bundle["allLocalPassed"] = blocking == []
+    bundle["meaning"] = ("every local expectation passed over a confirmed source tree; it is "
+                         "not deployment, chain or UI evidence" if blocking == []
+                         else "this run is not a local pass")
+    return bundle
+
+
+def seal(bundle, exit_code, finished_at=None, command="python3 -B -m scenarios.cli run-all"):
+    """Attach this run's own record, once the calculation's status is known.
+
+    The record covers only the completed calculation, before output publication.
+    It deliberately does not claim the final outer process status: that is not
+    knowable from inside the process that is still running, so it is marked as
+    needing external capture and `execution.capture_cli` is what captures it.
+    """
+    finished_at = finished_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    record = execution.self_record(command, exit_code,
+                                   bundle["startedAt"], finished_at)
+    record["scope"] = "calculation-only-before-publication"
+    record["finalProcessStatus"] = "NOT_CAPTURED_IN_PROCESS"
+    record["detail"] = ("only the completed calculation is covered; output publication "
+                        "has not happened. Delivery is reported separately after the "
+                        "attempt; final process status must be captured externally, "
+                        "with execution.capture_cli")
+    bundle["finishedAt"] = finished_at
+    bundle["commands"] = [record] + list(bundle["commands"])
+    bundle["manifest"]["commands"] = list(bundle["commands"])
+    bundle["calculationExitCode"] = exit_code
+    bundle["exitCode"] = exit_code
+    # The sealed evidence carries the run's own record and its real end time.
+    # It is validated again, so the record that leaves this run is the one that
+    # was checked, not an earlier draft of it.
+    bundle["evidence"] = dict(bundle["evidence"], commands=list(bundle["commands"]),
+                              finishedAt=finished_at)
+    bundle["evidenceValidation"] = validation.validate_result(bundle["evidence"])
+    # The rebuilt index keeps the same declared output plan. Rebuilding it
+    # without the plan would silently drop the artifact leg from the record
+    # that actually leaves the run, which is the only copy a reviewer reads.
+    bundle["evidenceIndex"] = evidence_index.build(
+        bundle["scenarioReport"], bundle["pathReport"],
+        bundle["source"]["requestedRoot"],
+        {"runId": bundle["runId"], "startedAt": bundle["startedAt"],
+         "finishedAt": finished_at}, commands=bundle["commands"],
+        observations={key: bundle[key] for key in
+                      ("secretScan", "resourceObservation", "workload")},
+        source=bundle["source"],
+        artifacts=bundle.get("outputArtifacts", bundle.get("outputDeliveryPlan")))
+    return bundle
+
+
+def _destination_error(path):
+    """Why this path could not receive an output, or None if it can."""
+    if os.path.isdir(path):
+        # Staging would succeed and the publish would fail, so this has to be
+        # caught before anything is written.
+        return f"[Errno 21] Is a directory: {path!r}"
+    parent = os.path.dirname(os.path.abspath(path))
+    if not os.path.isdir(parent):
+        return f"[Errno 2] No such directory: {parent!r}"
+    return None
+
+
+def deliver_outputs(targets, run_id, root=None):
+    """Stage all outputs and roll back earlier publications on a later failure.
+
+    Independent path replacements are not a filesystem transaction: concurrent
+    readers may see an intermediate pair, and process/power loss is not covered.
+    Caught publication errors restore previous bytes (or remove newly created
+    outputs). A failed restoration or cleanup is explicitly reported, with the
+    recovery backup retained. Never claim unconditional all-or-nothing delivery.
+    """
+    wanted = [(os.fspath(path), content) for path, content in targets if path]
+    records = {path: None for path, _ in wanted}
+    created, staged, backups, published = [], [], {}, []
+    preserve = set()
+
+    def refuse(path, error, stage):
+        records[path] = {"path": path, "ok": False, "bytes": None, "sha256": None,
+                         "error": error, "stage": stage}
+
+    def withhold():
+        for path in records:
+            if records[path] is None:
+                refuse(path, "withheld: another output in the same delivery failed",
+                       "withheld")
+
+    try:
+        seen = {}
+        for path, _ in wanted:
+            resolved = os.path.realpath(path)
+            if resolved in seen:
+                refuse(path, f"two outputs name the same destination as {seen[resolved]!r}",
+                       "destination")
+            seen.setdefault(resolved, path)
+            error = _destination_error(path)
+            if error:
+                refuse(path, error, "destination")
+            if os.path.islink(path):
+                refuse(path, "output symlinks are not supported", "destination")
+            if root is not None:
+                # Fail closed: outputs belong outside the input repository, not
+                # just outside today's tracked file list. realpath catches parent
+                # symlink aliases; replacing a hard link cannot alter its source.
+                bases = (os.path.realpath(root),
+                         os.path.realpath(manifest.executed_source_root()))
+                if any(os.path.commonpath([base, resolved]) == base for base in bases):
+                    refuse(path, "output must be outside the input source repository",
+                           "source-protection")
+        if any(record is not None for record in records.values()):
+            withhold()
+            return [records[path] for path, _ in wanted]
+
+        for path, content in wanted:
+            staging = f"{path}.staging-{run_id}"
+            # Keep tracking before writing; an unexpected partial-write exception
+            # must still pass through cleanup. Exclusive create never clobbers a
+            # pre-existing staging file.
+            if os.path.lexists(staging):
+                refuse(path, "staging path already exists", "staging")
+                continue
+            created.append(staging)
+            try:
+                with open(staging, "x", encoding="utf-8") as handle:
+                    handle.write(content)
+                if os.path.exists(path):
+                    backup = f"{path}.backup-{run_id}"
+                    if os.path.lexists(backup):
+                        raise FileExistsError(f"backup path already exists: {backup}")
+                    created.append(backup)
+                    with open(path, "rb") as src, open(backup, "xb") as dst:
+                        shutil.copyfileobj(src, dst)
+                    backups[path] = backup
+                else:
+                    backups[path] = None
+            except OSError as problem:
+                refuse(path, str(problem), "staging")
+                continue
+            staged.append((staging, path, content))
+
+        if any(record is not None for record in records.values()):
+            withhold()
+            return [records[path] for path, _ in wanted]
+
+        for staging, path, content in staged:
+            try:
+                os.replace(staging, path)
+            except OSError as problem:
+                refuse(path, str(problem), "publish")
+                for previous in reversed(published):
+                    backup = backups[previous]
+                    try:
+                        if backup is None:
+                            os.unlink(previous)
+                        else:
+                            os.replace(backup, previous)
+                        refuse(previous, "publication rolled back after another output failed",
+                               "rolled-back")
+                    except OSError as restore_problem:
+                        if backup is not None:
+                            preserve.add(backup)
+                        refuse(previous, f"rollback failed: {restore_problem}", "rollback-failed")
+                        records[previous]["recoveryBackup"] = backup
+                        records[previous]["mayContainNewOutput"] = True
+                withhold()
+                break
+            published.append(path)
+            data = content.encode("utf-8")
+            records[path] = {"path": path, "ok": True, "bytes": len(data),
+                             "sha256": hashlib.sha256(data).hexdigest(),
+                             "error": None, "stage": "published"}
+        return [records[path] for path, _ in wanted]
+    finally:
+        cleanup_errors = []
+        for temporary in created:
+            if temporary in preserve:
+                continue
+            if os.path.lexists(temporary):
+                try:
+                    os.unlink(temporary)
+                except OSError as problem:
+                    cleanup_errors.append({"path": temporary, "error": str(problem)})
+        if cleanup_errors:
+            for path in records:
+                if records[path] is None:
+                    refuse(path, "temporary file cleanup failed", "cleanup-failed")
+                entry = records[path]
+                entry["cleanupErrors"] = list(cleanup_errors)
+                entry["ok"] = False
+                entry["error"] = (entry["error"] + "; " if entry["error"] else "") + \
+                    "temporary file cleanup failed"
+            # Even an unexpected exception must not hide a cleanup failure.
+            if sys.exc_info()[0] is not None:
+                print(f"output cleanup failed: {cleanup_errors}", file=sys.stderr)
+
+
+def summary_text(bundle):
+    """The human summary, derived from the same bundle as the JSON."""
+    scan = bundle["secretScan"]
+    lines = [report_text(bundle["scenarioReport"]), "",
+             report_text(bundle["pathReport"]), "",
+             f"run id: {bundle['runId']}",
+             f"acceptance matrix: {bundle['matrix']['localOutcomeCounts']}",
+             f"secret scan: {'clean' if scan['clean'] else 'FINDINGS'} over "
+             f"{scan['coverage']['scanned']} of {scan['coverage']['enumerated']} files "
+             f"({scan['enumerationState']})",
+             f"measured: {bundle['resourceObservation']['elapsedMs']} ms wall, "
+             f"{bundle['resourceObservation']['peakResidentKib']} KiB peak resident "
+             f"(measured, no target implied)"]
+    for record in bundle["commands"]:
+        if record["executed"]:
+            lines.append(f"command: {record['command']} -> {record['outcome']} "
+                         f"exit {record['exitCode']}")
+        else:
+            lines.append(f"command: {record['command']} -> {record['outcome'].upper()} "
+                         f"(no exit code recorded)")
+    lines.append("real evidence still owed: "
+                 + ", ".join(entry["obligation"] for entry in bundle["notRun"]) + " = NOT_RUN")
+    lines.append(f"source: {bundle['source']['commit']} tree {bundle['source']['tree']} "
+                 f"clean={bundle['source']['worktreeClean']} "
+                 f"executedFrom={bundle['source']['executedFrom']}")
+    for reason in bundle["blocking"]:
+        lines.append(f"BLOCKING {reason}")
+    if bundle.get("outputDeliveryStatus") == "NOT_CAPTURED_IN_PROCESS":
+        lines.append(f"calculation passed: {bundle['calculationPassed']}")
+        lines.append("output delivery: NOT_CAPTURED_IN_PROCESS (publication not yet attempted)")
+    else:
+        lines.append(f"local delivery passed: {bundle['allLocalPassed']}")
+    return "\n".join(lines)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Local Stage 5 preparation for 8415ex.")
+    parser.add_argument("command", choices=COMMANDS)
+    parser.add_argument("--root", default=".")
+    parser.add_argument("--json", action="store_true", help="print the canonical record only")
+    parser.add_argument("--json-out", help="write the canonical record of this same run here")
+    parser.add_argument("--text-out", help="write the summary of this same run here")
+    parser.add_argument("--execute-suites", action="store_true",
+                        help="really execute the two unit suites and record their true status")
+    arguments = parser.parse_args(argv)
+
+    if arguments.command == "scenarios":
+        report = run_all(list(DEMOS))
+        print(canonical_json(report) if arguments.json else report_text(report))
+        return 0 if report["allPassed"] else 1
+    if arguments.command == "paths":
+        report = run_all(list(PATH_CONTRACTS))
+        print(canonical_json(report) if arguments.json else report_text(report))
+        return 0 if report["allPassed"] else 1
+    if arguments.command == "matrix":
+        built = matrix.build(manifest.source_identity(arguments.root), {"runId": _run_id()})
+        print(canonical_json(built))
+        return 0 if built["allCasesSound"] else 1
+    if arguments.command == "manifest":
+        built = manifest.build(arguments.root, run_id=_run_id())
+        print(canonical_json(built))
+        return 0 if built["consistent"] else 1
+    if arguments.command in STDOUT_ONLY and (arguments.json_out or arguments.text_out):
+        parser.error("%s publish JSON to stdout only; capture stdout externally"
+                     % ", ".join(sorted(STDOUT_ONLY)))
+    if arguments.command == "decisions":
+        print(canonical_json(decisions.register()))
+        return 0
+    if arguments.command == "sections":
+        built = prd.build(arguments.root)
+        print(canonical_json(built))
+        return 0 if built["consistent"] else 1
+    if arguments.command == "completion":
+        # The ledger describes a completed run, so one is performed and then
+        # read; nothing in it is recomputed from the run.
+        bundle = _bundle(arguments.root, execute_suites=arguments.execute_suites)
+        print(canonical_json(bundle["completion"]))
+        return 0 if bundle["completion"]["notMeantHolds"] else 1
+    if arguments.command == "usage":
+        built = docs.check(arguments.root)
+        print(canonical_json(built))
+        return 0 if built["consistent"] else 1
+    if arguments.command == "operations":
+        built = operations.build(arguments.root)
+        print(canonical_json(built))
+        return 0 if built["consistent"] else 1
+    if arguments.command == "storyboard":
+        built = storyboard.check(arguments.root)
+        print(canonical_json(built))
+        return 0 if built["consistent"] else 1
+    if arguments.command == "dossier":
+        built = dossier.build(run_all(list(DEMOS)))
+        print(canonical_json(built))
+        return 0 if built["allItemsCarried"] else 1
+    if arguments.command == "stages":
+        built = stages.build(arguments.root)
+        print(canonical_json(built))
+        return 0 if built["agreesWithMatrix"] else 1
+    if arguments.command == "events":
+        # The contract and its conformance need no run. The coverage and replay
+        # halves do, so one demonstration timeline is built and read.
+        exchange, receipt_id = events.demonstration_timeline()
+        built = events.build(exchange, receipt_id, arguments.root, _run_id())
+        print(canonical_json(built))
+        return 0 if built["conformance"]["accountedFor"] else 1
+    if arguments.command == "reuse":
+        # The adapter half is read from a real run, so one is performed; the
+        # domain half is read from the imported modules and the package source.
+        built = reuse.build(run_all(list(DEMOS)), arguments.root)
+        print(canonical_json(built))
+        return 0 if built["complete"] else 1
+    if arguments.command == "receipt":
+        bundle = _bundle(arguments.root, execute_suites=arguments.execute_suites)
+        final_source = manifest.reconcile(bundle["sourceReconciliation"]["before"],
+                                          manifest.snapshot(arguments.root))
+        if not final_source["consistent"]:
+            bundle["blocking"].append("source changed before receipt publication")
+            bundle["allLocalPassed"] = False
+        ancestry = bundle["source"].get("ancestry", {})
+        if ancestry.get("errors") or ancestry.get("head") != bundle["source"].get("commit"):
+            bundle["blocking"].append("receipt ancestry is incomplete or mismatched")
+            bundle["allLocalPassed"] = False
+        code = 0 if bundle["allLocalPassed"] else 1
+        bundle["calculationPassed"] = bundle["allLocalPassed"]
+        seal(bundle, code, command=shlex.join(
+            ["python3", "-B", "-m", "scenarios.cli"]
+            + list(argv if argv is not None else sys.argv[1:])))
+        try:
+            built = receipt.build(bundle, arguments.root)
+        except ValueError as problem:
+            print(f"receipt source binding failed: {problem}", file=sys.stderr)
+            return 1
+        try:
+            print(canonical_json(built), flush=True)
+        except OSError as problem:
+            print(f"receipt stdout delivery failed: {problem}", file=sys.stderr)
+            return 1
+        return code
+    if arguments.command == "evidence-index":
+        # This subcommand prints JSON but writes no named file, so it declares no
+        # artifact. The index then says so rather than naming a file that was
+        # never going to be written; ``run-all`` is where the plan is real.
+        built = evidence_index.build(run_all(list(DEMOS)), run_all(list(PATH_CONTRACTS)),
+                                     arguments.root, {"runId": _run_id()})
+        print(canonical_json(built))
+        return 0 if built["allCasesSound"] else 1
+    if arguments.command == "handoff":
+        print(canonical_json(handoff.build()))
+        return 0
+    if arguments.command == "validate-config":
+        template = validation.local_config_template()
+        outcome = validation.validate_config(template)
+        rejected = [{"case": name, "expected": expected,
+                     "reasons": list(validation.validate_config(config)["reasons"])}
+                    for name, config, expected in validation.synthetic_rejection_cases()]
+        print(canonical_json({"template": template, "validation": outcome,
+                              "syntheticRejections": rejected}))
+        return 0 if outcome["accepted"] else 1
+    if arguments.command == "observations":
+        scan = observations.secret_scan(arguments.root)
+        print(canonical_json(scan))
+        return 0 if scan["clean"] else 1
+
+    bundle = _bundle(arguments.root, execute_suites=arguments.execute_suites,
+                     artifacts=[{"path": path, "format": kind} for path, kind in
+                                ((arguments.json_out, "json"), (arguments.text_out, "text")) if path])
+    # The calculation's status is decided from the observations. It is not the
+    # command's status: the outputs still have to be delivered, and a process
+    # cannot observe its own final exit.
+    calculation_passed = bundle["allLocalPassed"]
+    calculation_exit = 0 if calculation_passed else 1
+    bundle["calculationPassed"] = calculation_passed
+    # The plan was declared when the bundle was built, so the evidence index
+    # already names it; nothing re-derives it here.
+    bundle["outputDeliveryStatus"] = "NOT_CAPTURED_IN_PROCESS"
+    pre_publication = manifest.snapshot(arguments.root)
+    final_source = manifest.reconcile(bundle["sourceReconciliation"]["before"],
+                                      pre_publication)
+    bundle["prePublicationReconciliation"] = final_source
+    if not final_source["consistent"]:
+        bundle["blocking"].append("source changed before publication")
+        calculation_passed = False
+        calculation_exit = 1
+        bundle["allLocalPassed"] = False
+        bundle["calculationPassed"] = False
+    seal(bundle, calculation_exit)
+
+    # The published files carry this sealed calculation record. Both come from
+    # this one execution under this one run id. The delivery report records
+    # publication, rollback and cleanup separately from calculation.
+    text, record = summary_text(bundle), canonical_json(bundle)
+    delivery = deliver_outputs(
+        [(arguments.json_out, record + "\n"), (arguments.text_out, text + "\n")],
+        bundle["runId"], root=arguments.root)
+    delivered = all(entry["ok"] for entry in delivery)
+    for entry in delivery:
+        if not entry["ok"]:
+            print(f"output delivery failed: {entry['path']}: {entry['error']}",
+                  file=sys.stderr)
+
+    # What actually happened to the outputs is known only now, after the files
+    # were written, so it belongs to the record this process still emits rather
+    # than to the files it has already closed. Those files say so themselves,
+    # through outputDeliveryStatus.
+    bundle["outputDelivery"] = delivery
+    bundle["outputDeliveryStatus"] = "delivered" if delivered else "failed"
+    bundle["finalSourceReconciliation"] = manifest.reconcile(
+        pre_publication, manifest.snapshot(arguments.root))
+    source_held = bundle["finalSourceReconciliation"]["consistent"]
+    if not source_held:
+        bundle["blocking"].append("source changed during output delivery")
+    bundle["allLocalPassed"] = calculation_passed and delivered and source_held
+    if not delivered:
+        for entry in delivery:
+            if not entry["ok"]:
+                bundle["blocking"].append(
+                    f"output delivery to {entry['path']} failed: {entry['error']}")
+    exit_code = 0 if bundle["allLocalPassed"] else 1
+    bundle["exitCode"] = exit_code
+    bundle["meaning"] = ("every local expectation and output delivery passed; "
+                         "not deployment, chain or UI evidence" if bundle["allLocalPassed"]
+                         else "this run is not a local pass")
+    print(canonical_json(bundle) if arguments.json else summary_text(bundle))
+    return exit_code
+
+
+if __name__ == "__main__":
+    sys.exit(main())
