@@ -1,10 +1,24 @@
-# Stage 1 exchange domain
+# Exchange domain
 
-This package implements the Stage 1 scope of the private staged requirements
-document: warehouse-receipt domain state, the owner/holder dual track, the
+This package implements the staged scope of the private requirements document.
+
+**Stage 1**: warehouse-receipt domain state, the owner/holder dual track, the
 serial registration contract with three simulated registrar adapters,
 explicitly paired limit intents, wallet-authorization checks, and a basic
 operable status console.
+
+**Stage 2**: one escrow position per leg funded by that leg's own buyer, release
+per segment on the positional condition with bound authority evidence, an
+optional separate payment adapter, unknown-outcome recovery by enquiry, and
+per-segment reconciliation.
+
+**Stage 3**: suffix rollback that protects the finalized prefix, refunds each
+segment to its own original buyer, returns the asset to the boundary in one
+control operation, and records each leg's buyer's own gas.
+
+**Stage 4**: the trading deadline and its exact boundary, the post-deadline
+return to the last confirmed holder, exit eligibility, and the stop-resale,
+voucher and burn records as separate non-atomic acts.
 
 Execute according to the private requirements document. That document, the full
 task text and any internal path, endpoint or credential stay out of this
@@ -17,9 +31,15 @@ repository.
 - The three registration paths are **simulated business roles**. None of them is
   a real registration institution, and no real institutional cooperation,
   API access or business licence is implied.
-- Segmented escrow, suffix rollback, deadline handling and redemption are later
-  stages. Where Stage 1 touches them it says they are not implemented rather
-  than showing a zero or an empty success.
+- Stage 5 - deployment, the public test network and the demonstration material -
+  is not implemented here and is not claimed.
+- Handing over a physical voucher and burning a token are not one atomic act.
+  Each exit step records its own completion instant, and the report says so.
+- A rollback never takes the asset into temporary custody, never imposes a
+  time-limited redemption or an overdue sale, and never liquidates a position to
+  cover a shortfall. A shortfall is a blocked, resumable state.
+- Payment is an optional, separate adapter. An escrow record, an amount or a
+  released payment is never authority for completion, acceptance or return.
 - A rendered page from `exchange.views` is development evidence. It is not UI
   acceptance evidence, which needs a real browser journey against a deployed
   build.
@@ -47,6 +67,32 @@ repository.
    its own on top of what the wallet already authorized.
 8. **Amounts are integers** in the smallest unit. A float cannot reach a
    canonical record.
+9. **Each leg funds itself.** A position carries its own payer, payee, asset and
+   principal; a later leg's unreleased money can never support an earlier one,
+   and a release pays exactly one position to exactly its own payee.
+10. **Release and refund are mutually exclusive**, and neither happens twice. A
+    segment that already qualifies is not swept into a refund just because its
+    payment is late.
+11. **Release needs bound authority.** A plain signature, the text `VALID`,
+    public JSON or a bare settlement identifier is refused. The evidence must
+    bind source, asset, network, receipt, transfer, leg and a journal reference.
+12. **An unknown payment is never repaired by a second payment.** The adapter is
+    asked what happened first, a restart does not read unknown as failed, and an
+    enquiry applies the outcome the payment was actually for.
+13. **A finalized prefix is immutable.** A released segment is detached for
+    good: it is not reopened, reversed or re-collected, and a return stops at
+    the boundary that prefix established.
+14. **A return is one control operation** to the boundary account. It does not
+    walk back through the intermediate wallets and does not depend on their gas.
+15. **A rollback is only complete when every step has its own evidence**, and
+    each step is keyed so a resumed rollback repeats no refund and no return.
+16. **`owner == holder` is necessary and never sufficient for an exit.** The
+    other checks arrive as verified facts; an unsupplied check counts as not
+    met, never as passed.
+17. **A physical hand-over and an on-chain burn are not atomic.** Each exit step
+    records its own instant, and no step is completed from a neighbour.
+18. **A burn preserves the history**: the asset link, registration order, funds
+    record and collection record all stay readable.
 
 ## Layout
 
@@ -56,6 +102,9 @@ repository.
 | `ids.py` | canonical JSON, digests, identifier/address/instant/amount checks |
 | `model.py` | `WarehouseReceipt`, `AuthorizationReference`, `TradeIntent`, `Asset` |
 | `registration.py` | request/evidence contract and the three simulated adapters |
+| `settlement.py` | escrow positions, release authority, optional payment adapter |
+| `rollback.py` | rollback authority, recoverable steps, simulated asset-return control |
+| `exit.py` | redemption request, exit steps, simulated collection desk |
 | `ledger.py` | the state machine: chain, dual track, registration, reporting |
 | `views.py` | the six status pages and their wording rules |
 | `webui.py` | read-only console over `http.server` |
@@ -102,11 +151,44 @@ tests cover each Stage 1 case; it names no requirement text.
 | T-26 | `test_receipt_state.NoCollapsedStatus`, `test_views` | simulated vs real, pending vs complete, owner vs holder |
 | T-27 | `test_reproducibility` | identical results from a fixed clock and fixture; traceable records |
 | T-34 | `test_authorization.NoSecondApprovalLayer` | consecutive in-scope actions need no extra approval; out of scope still refused |
+| T-11 | `test_settlement.SegmentFunding` | each leg funded by its own buyer; a failed lock forms no trade and no request |
+| T-12 | `test_settlement.IndependentRelease` | AB releases without waiting for C or D; a released segment detaches |
+| T-13 | `test_settlement.NoCrossSubsidy` | the three principals stay distinct; no later leg funds an earlier one |
+| T-14 | `test_settlement.ReleaseAuthorityBinding` | wrong asset, network, segment, transfer, journal or source refused |
+| T-15 | `test_settlement.HistoricalAndCurrentEvidence` | an earlier confirmation and a later holder observation both hold |
+| T-16 | `test_settlement.PaymentFailureAndRecovery` | confirmed registration with a late payment is tracked, not refunded |
+| T-28 | `test_settlement.PaymentFailureAndRecovery` | enquiry before retry; restart and repeat move nothing twice |
+| T-31 | `test_settlement.Reconciliation` | release and refund exclusive; principal, gas and net per segment |
+| T-17 | `test_rollback.FullSuffixRollback` | a refusal at the first leg unwinds the whole suffix back to the origin |
+| T-18 | `test_rollback.FinalizedPrefixSurvives` | a settled prefix survives; only the later segments unwind, back to its buyer |
+| T-19 | `test_rollback.RefundsAndGas` | each original buyer's own principal, with actual gas and net |
+| T-20 | `test_rollback.ReturnDoesNotWalkIntermediates` | one control operation; a zero-balance intermediate changes no obligation |
+| T-21 | `test_rollback.RefundsAndGas` | a shared operation is recorded once, never charged in full twice |
+| T-22 | `test_rollback.ShortfallStaysBlocked` | a shortfall blocks and resumes; no custody, sale or liquidation |
+| T-23 | `test_rollback.InterruptionAndLateResults` | resume without repeating; a late success revives nothing |
+| T-29 | `test_rollback.RollbackPermission` | unverified authority refused; no confiscation, no prefix rewrite |
+| T-30 | `test_rollback.DuplicateAndReorderedEvents` | duplicate and re-ordered observations move nothing twice |
+| T-24 | `test_exit.DeadlineBoundary` | the boundary is exact; in-flight work continues; the suffix returns to the confirmed holder |
+| T-25 | `test_exit.ExitEligibility` | divergence refuses the exit; agreement alone is never sufficient |
+| T-32 | `test_exit.VoucherAndBurn` | stop-resale, voucher and burn recorded separately and recoverably |
+| T-33 | `test_exit.NoRepeatedExit` | repeated request, act, replay and substitution refused; history readable |
 
-Later-stage cases (T-11 onward) are out of Stage 1 scope and are not claimed
-here.
+The Stage 5 cases (T-35 to T-38) need a real deployment and a public test
+network, which this package does not perform. T-39 and T-40 are continuous
+requirements rather than a single case.
 
 ## Dependency gaps that do not block Stage 1
+
+The gas apportionment rule for a shared on-chain operation, the actual fee
+deduction mechanism, the recovery detail for a confirmed registration whose
+payment failed, the real asset-return control, the precedence between a registration timeout,
+the trading deadline and an in-flight result, and the exact confirmation and
+recovery order for the voucher hand-over and the burn are all still open in the
+requirements document. Re-trading a receipt after a rollback
+returned it is also not a defined order, so it is refused with
+`EX_TRADE_RETURNED_CHAIN_CLOSED` rather than guessed. The code records the facts and refuses
+where an order is undefined; it does not assume an answer. A shared operation is
+recorded once and is never charged in full to every leg.
 
 Private artifact storage, the external document sync target and the designated
 test-network token address are later-stage inputs. They are not configured in

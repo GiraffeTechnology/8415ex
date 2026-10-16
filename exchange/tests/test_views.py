@@ -78,7 +78,7 @@ class EveryPageRenders(unittest.TestCase):
         html = self._page("rollback")
         self.assertIn("Finalized prefix", html)
         self.assertIn("1 legs confirmed and shown", html)
-        self.assertIn("not implemented in Stage 1", html)
+        self.assertIn("no rollback is open for this receipt", html)
         self.assertIn("Nothing on this page is zeroed out", html)
 
     def test_the_queue_page_offers_no_manual_outcome_control(self):
@@ -109,7 +109,13 @@ class EveryPageRenders(unittest.TestCase):
     def test_every_page_carries_the_scope_banner(self):
         for name in views.PAGES:
             with self.subTest(page=name):
-                self.assertIn("Not a deployment or an acceptance record", self._page(name))
+                html = self._page(name)
+                self.assertIn("Not a deployment or an acceptance record", html)
+                self.assertIn("Registration is simulated", html)
+
+    def test_an_unfunded_stage_says_no_payment_is_modelled(self):
+        html = self._page("receipt")
+        self.assertIn("No payment is modelled at this stage", html)
 
     def test_an_unknown_page_is_refused(self):
         with self.assertRaises(KeyError):
