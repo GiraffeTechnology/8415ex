@@ -453,11 +453,20 @@ ran only over the bundle as built, which left anything added at sealing outside
 it, including this check itself; the sealed record is scanned too now, and a
 report that appears only there has to be declared.
 
-Two decisions worth stating. A comparison of the verdict against the blocking
-list was written and then dropped: both places that set the verdict derive it
-from that list, so it restates a construction rather than checking it, and it
-fired on a test that fabricates a verdict to exercise its own rendering. A
-comparison that cannot fail for the reason it names does not belong.
+One of the eleven comparisons is not between two copies of a fact: the verdict
+against the blocking list. It was written, dropped as a restatement of how both
+places derive the verdict from that list, and restored when the very next run
+disproved that reasoning. The publication stage recomputes the verdict from its
+own factors and then appends to the list, so a sealed refusal was being
+overwritten: the record said the calculation had not passed while the process
+exited 0. Nothing else was watching. The stage now carries the sealed verdict
+forward, and a report that fabricates a verdict to exercise its own rendering
+has to clear the list to mean what it says.
+
+The rescan of the sealed record found a second real thing on its first run: the
+pre-publication source reconciliation carries a verdict and was acted on, but
+nothing declared it, because the original scan ran before it existed. It is
+declared now, with the rule that acts on it.
 
 And nothing to compare is a third answer, not agreement and not a
 contradiction. A recorded bundle from an earlier run may legitimately carry no

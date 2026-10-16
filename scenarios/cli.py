@@ -140,12 +140,19 @@ HANDLED_ELSEWHERE = {
 #: each. They are declared apart from HANDLED_ELSEWHERE because that record is
 #: of reports the bundle carries all along, and a key naming a report that is
 #: not there yet would make its own check vacuous.
-HANDLED_AT_SEALING = {
+HANDLED_AFTER_BUILD = {
     "selfAgreement": "the sealing rule, which compares the finished record with "
                      "itself and blocks on a contradiction; it cannot be a "
                      "consistency check because the published copies of the "
                      "reports do not exist until sealing",
+    "prePublicationReconciliation": "the source-held-still rule applied again "
+                                    "before publication, which blocks the run "
+                                    "when the tree moved between the "
+                                    "calculation and the write",
 }
+
+#: Kept for callers that named the sealing-time record directly.
+HANDLED_AT_SEALING = HANDLED_AFTER_BUILD
 
 
 def _verdict(bundle, check):
@@ -165,7 +172,7 @@ def unclassified_verdicts(bundle):
     changes nothing.
     """
     declared = ({check["key"] for check in CONSISTENCY_CHECKS}
-                | set(HANDLED_ELSEWHERE) | set(HANDLED_AT_SEALING))
+                | set(HANDLED_ELSEWHERE) | set(HANDLED_AFTER_BUILD))
     found = []
     for key, value in sorted(bundle.items()):
         if key in declared or not isinstance(value, dict):
@@ -790,6 +797,11 @@ def main(argv=None):
     # sealed by another command.
     agreement_report = bundle["selfAgreement"]
     agreed = agreement_report["consistent"] and agreement_report["comparable"]
+    # Sealing may already have refused this run. Recomputing the verdict from
+    # the factors known here would overwrite that refusal, which is how a
+    # record came to say the calculation had not passed while the process
+    # exited 0.
+    calculation_passed = calculation_passed and bundle["calculationPassed"]
     if not agreement_report["comparable"]:
         bundle["blocking"].append(
             "the sealed record carried nothing to compare: "

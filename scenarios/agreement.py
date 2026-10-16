@@ -19,12 +19,13 @@ compares what the bundle already says, which is the only way to catch a report
 that silently lost an input: the inputs are gone by then, and the disagreement
 is all that is left to see.
 
-Every comparison here is between two copies of the same fact. One candidate was
-dropped for not being that: comparing the verdict with the blocking list reads
-as a check and is not one, because both places that set the verdict derive it
-from that list, so it would only restate a construction - and it fires on a
-report that fabricates a verdict to exercise its own rendering. A comparison
-that cannot fail for the reason it names does not belong here.
+Most comparisons here are between two copies of the same fact. One is not: the
+verdict against the blocking list. It was written, dropped as a restatement of
+how both places derive the verdict from that list, and restored when the very
+next run proved the reasoning wrong - the publication stage recomputes the
+verdict from its own factors and then appends to the list, so the two really can
+disagree, and nothing else was watching. A report that fabricates a verdict to
+exercise its own rendering has to clear the list to mean what it says.
 
 What this is not: a check that the reports are right. Two reports can agree and
 both be wrong, and that is what the acceptance matrix, the consistency gates and
@@ -141,6 +142,15 @@ def _run_comparisons(bundle):
             list(bundle.get("commands") or []),
             list(bundle["manifest"]["commands"]),
             "sealing writes both, so they are one list recorded twice")
+    if bundle.get("blocking") is not None and "allLocalPassed" in bundle:
+        yield _compare(
+            "the verdict matches the blocking items",
+            bundle["blocking"] == [], bundle["allLocalPassed"],
+            "a pass with a blocking item, or a failure with none, is the record "
+            "disagreeing with its own conclusion; the publication stage derives "
+            "the verdict from its own factors rather than from this list, so "
+            "the two can differ",
+            detail="; ".join(bundle["blocking"]) or None)
     if bundle.get("matrix") and index:
         yield _compare(
             "the same cases are unsound in both",

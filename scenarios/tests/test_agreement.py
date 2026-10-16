@@ -131,21 +131,28 @@ class WhenTheRecordContradictsItself(unittest.TestCase):
         self.assertIn("the sealed evidence names this run's scenario digest",
                       found["disagreements"])
 
-    def test_the_verdict_is_not_compared_with_its_own_blocking_list(self):
-        """A comparison that cannot fail for the reason it names is not one.
+    def test_a_verdict_that_disagrees_with_its_blocking_list_is_caught(self):
+        """The comparison that was dropped once, on reasoning this disproves.
 
-        Both places that set the verdict derive it from the blocking list, so
-        comparing the two restates a construction rather than checking it, and
-        it fires on a report that fabricates a verdict to exercise its own
-        rendering. It was dropped deliberately, and the reason is recorded.
+        It was dropped as a restatement of how the verdict is derived from the
+        blocking list. The next run showed otherwise: the publication stage
+        recomputes the verdict from its own factors and then appends to the
+        list, so a record did say the calculation had not passed while the
+        process exited 0, and nothing else was watching.
         """
         bundle = _sealed()
         bundle["blocking"] = ["something really did block"]
         bundle["allLocalPassed"] = True
         found = agreement.check(bundle)
-        self.assertTrue(found["consistent"])
-        self.assertNotIn("verdict", " ".join(
-            entry["comparison"] for entry in found["comparisons"]))
+        self.assertIn("the verdict matches the blocking items",
+                      found["disagreements"])
+        self.assertFalse(found["consistent"])
+
+    def test_a_sealed_refusal_is_not_overwritten_by_the_publication_stage(self):
+        """What the restored comparison caught, fixed where it happened."""
+        source = Path(ROOT, "scenarios/cli.py").read_text(encoding="utf-8")
+        self.assertIn('calculation_passed = calculation_passed and bundle["calculationPassed"]',
+                      source)
 
     def test_a_runner_count_that_disagrees_with_its_list_is_caught(self):
         bundle = _sealed()
