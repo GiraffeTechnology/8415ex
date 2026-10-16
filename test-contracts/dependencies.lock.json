@@ -1,0 +1,21 @@
+{
+  "schema": "ex-test-contract-dependencies/1",
+  "solidity": "0.8.24",
+  "compilerPolicy": "Existing approved Linux compiler only; no automatic download or install",
+  "openzeppelin": {
+    "repository": "https://github.com/OpenZeppelin/openzeppelin-contracts",
+    "tag": "v5.0.2",
+    "commit": "dbb6104ce834628e473d2173bbc9d47f81a9eec3",
+    "path": "lib/openzeppelin-contracts",
+    "imports": [
+      "contracts/token/ERC721/ERC721.sol",
+      "contracts/utils/Base64.sol",
+      "contracts/utils/Strings.sol"
+    ],
+    "policy": "Verify existing approved dependency input against exact commit. This file does not download, install or attest availability."
+  },
+  "forgeStd": false,
+  "workflowChanges": false,
+  "artifact": "out/EXSepoliaTestNFT.sol/EXSepoliaTestNFT.json",
+  "compiled": false
+}
