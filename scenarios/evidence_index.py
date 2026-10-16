@@ -203,7 +203,8 @@ def build(scenario_report=None, path_report=None, root=".", run_identity=None,
         })
 
     runners = []
-    for report, kind in ((scenario_report, "scenario"), (path_report, "route contract")):
+    for report, kind in ((scenario_report, "scenario"), (path_report, "route contract"),
+                         (guarantee_report, "guarantee contract")):
         for scenario in (report or {}).get("scenarios", []):
             runners.append({
                 "runner": scenario["scenarioId"],

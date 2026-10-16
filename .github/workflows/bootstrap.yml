@@ -84,7 +84,7 @@ jobs:
                   commands=bundle["commands"] + [observed],
                   observations={key: bundle[key] for key in
                                 ("secretScan", "resourceObservation", "workload")},
-                  source=bundle["source"])
+                  source=bundle["source"], guarantee_report=bundle["guaranteeReport"])
               (directory / "stage5-evidence-index.json").write_text(json.dumps(index, indent=2) + "\n")
           sys.exit(observed["exitCode"] if observed["exitCode"] is not None else 1)
           PYCODE

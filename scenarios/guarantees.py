@@ -341,7 +341,7 @@ def _matching(recorder):
         path=CONTRACT_PATH, accounts={"A": F.A, "B": F.B, "C": F.C},
         prices={"sellLimit": F.PRICE, "buyLimit": F.PRICE + 500},
         quoteAsset=F.QUOTE_ASSET,
-        simulatedAdapters={"matching": "explicit pairing over a limit fixture, no order book"})
+        simulatedAdapters={"matching": "simulated explicit pairing over a limit fixture, no order book"})
 
     sell = exchange.submit_intent(F.intent("sell-1", "sell", F.A, "auth-a", F.B, 1))
     buy = exchange.submit_intent(F.intent("buy-1", "buy", F.B, "auth-b", F.A, 1,

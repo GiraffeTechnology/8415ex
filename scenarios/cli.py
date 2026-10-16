@@ -212,7 +212,8 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
         "outputDeliveryPlan": [entry.get("path") if isinstance(entry, dict) else entry
                                for entry in (artifacts or []) if entry],
         "outputArtifacts": artifacts or [],
-        "reuse": reuse.build(scenario_report, root),
+        "reuse": reuse.build(scenario_report, root, path_report=path_report,
+                             guarantee_report=guarantee_report),
         "eventContract": events.build(root=root),
         "stageMap": stages.build(root),
         "dossier": dossier.build(scenario_report),
@@ -366,7 +367,8 @@ def seal(bundle, exit_code, finished_at=None, command="python3 -B -m scenarios.c
         observations={key: bundle[key] for key in
                       ("secretScan", "resourceObservation", "workload")},
         source=bundle["source"],
-        artifacts=bundle.get("outputArtifacts", bundle.get("outputDeliveryPlan")))
+        artifacts=bundle.get("outputArtifacts", bundle.get("outputDeliveryPlan")),
+        guarantee_report=bundle.get("guaranteeReport"))
     return bundle
 
 
@@ -562,6 +564,10 @@ def main(argv=None):
                         help="really execute the two unit suites and record their true status")
     arguments = parser.parse_args(argv)
 
+    if arguments.command in STDOUT_ONLY and (arguments.json_out or arguments.text_out):
+        parser.error("%s publish JSON to stdout only; capture stdout externally"
+                     % ", ".join(sorted(STDOUT_ONLY)))
+
     if arguments.command == "scenarios":
         report = run_all(list(DEMOS))
         print(canonical_json(report) if arguments.json else report_text(report))
@@ -586,9 +592,6 @@ def main(argv=None):
         built = manifest.build(arguments.root, run_id=_run_id())
         print(canonical_json(built))
         return 0 if built["consistent"] else 1
-    if arguments.command in STDOUT_ONLY and (arguments.json_out or arguments.text_out):
-        parser.error("%s publish JSON to stdout only; capture stdout externally"
-                     % ", ".join(sorted(STDOUT_ONLY)))
     if arguments.command == "decisions":
         print(canonical_json(decisions.register()))
         return 0
@@ -632,7 +635,9 @@ def main(argv=None):
     if arguments.command == "reuse":
         # The adapter half is read from a real run, so one is performed; the
         # domain half is read from the imported modules and the package source.
-        built = reuse.build(run_all(list(DEMOS)), arguments.root)
+        built = reuse.build(run_all(list(DEMOS)), arguments.root,
+                            path_report=run_all(list(PATH_CONTRACTS)),
+                            guarantee_report=run_all(list(GUARANTEE_CONTRACTS)))
         print(canonical_json(built))
         return 0 if built["complete"] else 1
     if arguments.command == "receipt":

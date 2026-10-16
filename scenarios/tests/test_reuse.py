@@ -6,6 +6,7 @@ so a domain rename or a new dependency breaks a test instead of quietly
 leaving the map wrong.
 """
 import ast
+import shutil
 import sys
 import tempfile
 import unittest
@@ -189,6 +190,60 @@ class Consumers(unittest.TestCase):
             with self.subTest(module=entry["module"]):
                 self.assertIsNone(entry["error"])
                 self.assertEqual(entry["unresolvedNames"], [])
+
+    def test_shipped_exchange_consumers_are_reported(self):
+        self.assertIn("exchange", self.consumers["surfaces"])
+        byname = {entry["module"]: entry for entry in self.consumers["dependedOn"]}
+        self.assertIn("DEMOS", byname["scenarios.demos"]["names"])
+        self.assertIn("exchange/demo_ui.py", byname["scenarios.demos"]["importedBy"])
+        self.assertIn("exchange/demo_materials.py",
+                      byname["scenarios.demos"]["importedBy"])
+        self.assertIn("run_all", byname["scenarios.harness"]["names"])
+        self.assertIn("exchange/demo_ui.py", byname["scenarios.harness"]["importedBy"])
+
+    def assert_exchange_drift_blocks_reuse(self, filename, replacement, module, name):
+        # Retain the real package source so declared coverage is independently
+        # complete; the only blocker must be the shipped consumer's import.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            shutil.copytree(Path(ROOT) / "scenarios", root / "scenarios")
+            surface = root / "exchange"
+            surface.mkdir()
+            source = (Path(ROOT) / "exchange" / filename).read_text(encoding="utf-8")
+            path = surface / filename
+            path.write_text(source, encoding="utf-8")
+            self.assertTrue(reuse.build(None, directory)["complete"])
+            original = "from scenarios.demos import DEMOS"
+            self.assertIn(original, source)
+            path.write_text(source.replace(original, replacement), encoding="utf-8")
+            built = reuse.build(None, directory)
+        self.assertTrue(built["declaredCoverage"]["complete"])
+        self.assertFalse(built["complete"])
+        found = built["consumers"]
+        self.assertFalse(found["consistent"])
+        entry, = [row for row in found["dependedOn"] if row["module"] == module]
+        self.assertEqual(entry["importedBy"], ["exchange/" + filename])
+        if name is not None:
+            self.assertIn(module + "." + name, found["unresolvedNames"])
+        if module == "scenarios.no_such_module":
+            self.assertIsNotNone(entry["error"])
+
+    def test_a_renamed_import_in_each_shipped_consumer_blocks_reuse(self):
+        for filename in ("demo_ui.py", "demo_materials.py"):
+            with self.subTest(filename=filename):
+                self.assert_exchange_drift_blocks_reuse(
+                    filename, "from scenarios.demos import NoLongerThere",
+                    "scenarios.demos", "NoLongerThere")
+
+    def test_a_missing_module_in_each_shipped_consumer_blocks_reuse(self):
+        # A plain import has no imported names to mark unresolved, but its
+        # missing module must still block the consumer and the complete map.
+        for filename in ("demo_ui.py", "demo_materials.py"):
+            for statement, name in (("from scenarios.no_such_module import DEMOS", "DEMOS"),
+                                    ("import scenarios.no_such_module", None)):
+                with self.subTest(filename=filename, statement=statement):
+                    self.assert_exchange_drift_blocks_reuse(
+                        filename, statement, "scenarios.no_such_module", name)
 
     def test_each_dependency_names_the_files_that_make_it(self):
         for entry in self.consumers["dependedOn"]:

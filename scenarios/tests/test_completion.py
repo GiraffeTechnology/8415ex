@@ -107,7 +107,8 @@ class WhatItDoesNotMean(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.ledger = cli._bundle(ROOT)["completion"]
+        cls.bundle = cli._bundle(ROOT)
+        cls.ledger = cls.bundle["completion"]
 
     def test_each_item_is_phrased_as_what_is_not_the_case(self):
         for entry in self.ledger["notMeant"]:
@@ -140,10 +141,10 @@ class WhatItDoesNotMean(unittest.TestCase):
         self.assertNotIn(completion.MAINNET_CHAIN_ID, checked["chainIdsObserved"])
         self.assertTrue(checked["chainIdsObserved"])
 
-    def test_both_reports_are_read_not_only_the_first(self):
-        # `x or [] + y` parses as `x or ([] + y)` and silently drops the second
-        # report whenever the first is non-empty. Nine runners exist.
-        self.assertEqual(self.ledger["notMeantChecked"]["scenariosRead"], 9)
+    def test_all_reports_are_read_not_only_the_first(self):
+        expected = sum(len(self.bundle[key]["scenarios"])
+                       for key in ("scenarioReport", "pathReport", "guaranteeReport"))
+        self.assertEqual(self.ledger["notMeantChecked"]["scenariosRead"], expected)
 
     def test_every_adapter_the_run_used_is_a_simulated_one(self):
         checked = self.ledger["notMeantChecked"]

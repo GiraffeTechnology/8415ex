@@ -148,10 +148,12 @@ def _stage_coverage(bundle, wanted):
 
 def _checked_non_claims(bundle):
     """The four non-claims that can be verified against the run, verified."""
-    # Both reports, explicitly bracketed: `x or [] + y` parses as `x or ([] + y)`
-    # and silently drops the second report whenever the first is non-empty.
-    scenarios = (list((bundle.get("scenarioReport") or {}).get("scenarios") or [])
-                 + list((bundle.get("pathReport") or {}).get("scenarios") or []))
+    # Every executed group participates, including guarantee contracts. Reading
+    # only the demonstration and route groups would let a guarantee violate a
+    # non-claim while the combined run still reports that it holds.
+    scenarios = [scenario
+                 for key in ("scenarioReport", "pathReport", "guaranteeReport")
+                 for scenario in (bundle.get(key) or {}).get("scenarios") or []]
     chain_ids, quote_assets, adapters = set(), set(), []
     fixture_notes = []
     for scenario in scenarios:
