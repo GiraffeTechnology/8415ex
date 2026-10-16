@@ -441,8 +441,33 @@ stale exemption - one naming a method that is exercised after all, or a method
 that no longer exists - blocks too, so the record cannot rot into a list of
 excuses.
 
+Widening the same measurement to the simulated adapters found four more, and
+they were the same kind of thing: the enquiry surface. Every adapter role stands
+in for an interface whose defining property is that it can be *asked* what
+happened, and nothing here had ever asked one - no history was read, and an
+unknown asset return or voucher outcome was never resolved. A ninth contract
+exercises that: the payment adapter keeps both attempts of a failed-then-retried
+release and its own count agrees with the ledger's; an unknown asset return is
+not re-sent while it stays unknown and the rollback completes on the enquiry's
+answer; an unknown burn blocks the exit, is not retried until the enquiry
+resolves it, and the resolution is its own record between the two attempts.
+Reading a history moves nothing, resolving twice is refused, and a key the
+adapter never saw is refused rather than invented. Coverage is 67 of 68 counted
+methods.
+
+The one method left is `SimulatedRegistrar.handover_record`: all three concrete
+registrars define their own, so the base class's default is on no path this
+delivery can take. It is accounted for with that reason, and the three
+overriding versions are each entered.
+
 It is a measurement, not a source scan: a name appearing in a file proves
-nothing about being called. The instrumented execution is a second run of the
+nothing about being called. Two things it cannot observe are named with their
+reasons rather than left as an unexplained narrower count. A module-level
+function is invisible to it, because a caller that wrote `from .errors import
+require` holds the original and replacing the module attribute observes nothing
+- every such function would read as unentered. An inherited method is invisible
+too, because wrapping it sets the wrapper on the subclass and shadows the base,
+so only methods a class defines itself are counted. The instrumented execution is a second run of the
 same groups and says so - the reported digest and the resource observation come
 from the primary run, and the instrumented run's own scenario results are
 discarded, though it still has to pass, because a scenario that stopped early

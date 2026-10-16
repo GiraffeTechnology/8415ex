@@ -40,17 +40,44 @@ class DomainReuse(unittest.TestCase):
         self.assertTrue(coverage["complete"])
 
     def test_a_test_only_import_is_reported_separately_not_as_package_reuse(self):
+        """The mechanism, over a tree built for it.
+
+        This used to point at whichever real module only the suites touched.
+        There is no longer one - every domain module a suite reaches is now
+        imported by a shipped module too - and a test that depends on that
+        coincidence tests nothing once the coincidence ends. So the split is
+        exercised over a tree where a test-only import exists by construction.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            package = Path(directory) / "scenarios"
+            (package / "tests").mkdir(parents=True)
+            (package / "shipped.py").write_text(
+                "from exchange.ids import digest\n", encoding="utf-8")
+            # A real module the reuse map does not declare, so the test-only
+            # bucket is the only place it can legitimately appear.
+            (package / "tests" / "test_only.py").write_text(
+                "from exchange.views import nothing_here\n", encoding="utf-8")
+            found = reuse.source_imports(directory)
+            coverage = reuse.declared_coverage(directory)
+        self.assertEqual(found["modules"], {"exchange.ids": ["digest"]})
+        self.assertEqual(found["tests"], {"exchange.views": ["nothing_here"]})
+        self.assertNotIn("exchange.views", coverage["importsFoundInModules"])
+        self.assertIn("exchange.views", coverage["importsFoundInTests"])
+        self.assertIn("exchange.views", coverage["importedOnlyByTests"])
+
+    def test_the_real_tree_currently_has_no_test_only_domain_import(self):
+        """A state, not a requirement.
+
+        Every domain module the suites reach is now imported by a shipped module
+        as well. Asserting it keeps the number honest: if it changes, the module
+        that became test-only is named here rather than appearing silently in a
+        report.
+        """
         coverage = reuse.declared_coverage(ROOT)
-        # The suites import domain modules to assert things about them. That is
-        # not this package consuming them, so it must not be counted as reuse,
-        # and must not be hidden either.
-        # exchange.ledger is no longer an example here: a shipped module now
-        # imports the domain class, so it is declared package reuse. The point
-        # still needs a module only the suites touch, and settlement is one.
-        self.assertNotIn("exchange.settlement", coverage["importsFoundInModules"])
-        self.assertIn("exchange", coverage["importsFoundInTests"])
-        self.assertIn("settlement", coverage["importsFoundInTests"]["exchange"])
-        self.assertIn("exchange", coverage["importedOnlyByTests"])
+        self.assertEqual(coverage["importedOnlyByTests"], [])
+        for module in coverage["importsFoundInTests"]:
+            with self.subTest(module=module):
+                self.assertIn(module, coverage["importsFoundInModules"])
 
     def test_source_imports_are_read_from_the_files_not_from_a_list(self):
         found = reuse.source_imports(ROOT)

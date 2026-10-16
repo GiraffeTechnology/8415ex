@@ -17,6 +17,7 @@ no chain transaction, no real wallet, registrar or payment provider.
 """
 from exchange import fixtures as F
 from exchange.errors import DomainError
+from exchange.exit import exit_step_key
 from exchange.ids import canonical_json, digest
 from exchange.model import Asset, TradeIntent, WHOLE_RECEIPT_UNITS, WarehouseReceipt
 from exchange.rollback import rollback_binding
@@ -872,6 +873,153 @@ def _recovery_and_exit(recorder):
                      "real clock and a real registrar; neither exists in a local model run")
 
 
+# --------------------- what the simulated adapters themselves were asked
+
+def _adapter_enquiry(recorder):
+    """The adapters' own enquiry surface, which nothing here had ever read.
+
+    Every adapter role is simulated, and each one stands in for an interface
+    whose defining property is that it can be *asked* what happened. The
+    delivery drove the adapters and never once asked them: no history was read,
+    and an unknown asset return or voucher outcome was never resolved. An
+    enquiry surface nothing exercises is the part of a simulation most likely to
+    be wrong when a real adapter replaces it.
+    """
+    payments, _ = F.funded_chain_to_d(registration_path=CONTRACT_PATH,
+                                      outcomes={"release:escrow-ab": "failed"})
+    payment_requests = F.submit_all(payments)
+    F.confirm(payments, payment_requests[0], "res-ab")
+    recorder.describe_setup(
+        path=CONTRACT_PATH, accounts={"A": F.A, "B": F.B, "C": F.C, "D": F.D},
+        prices={"AB": F.PRICE_AB, "BC": F.PRICE_BC, "CD": F.PRICE_CD},
+        quoteAsset=F.QUOTE_ASSET,
+        simulatedAdapters={"payment": "SimulatedPaymentAdapter",
+                           "assetControl": "SimulatedAssetControl",
+                           "voucherDesk": "SimulatedVoucherDesk",
+                           "registrar": payments.registrars[CONTRACT_PATH].label},
+        enquiryMeaning=("asking an adapter what happened is never a second "
+                        "instruction to it"))
+
+    payments.release_segment(RECEIPT, 0, F.release_authority(payments, 0, "auth-0"))
+    payments.release_segment(RECEIPT, 0, F.release_authority(payments, 0, "auth-0-retry"))
+    history = payments.payments.history("release:escrow-ab")
+    recorder.step("the payment adapter is asked what it did",
+                  attempts=[entry["attempt"] for entry in history],
+                  statuses=[entry["status"] for entry in history])
+    recorder.expect("the adapter kept every attempt rather than the latest one",
+                    ("T-28",),
+                    {"statuses": ["failed", "settled"], "attempts": [1, 2]},
+                    {"statuses": [entry["status"] for entry in history],
+                     "attempts": [entry["attempt"] for entry in history]},
+                    detail="an overwritten first attempt is the evidence an "
+                           "investigation would need and could not recover")
+    recorder.expect("the adapter's own count agrees with the ledger's", ("T-28",),
+                    {"settledInHistory": 1, "ledgerMovements": 1},
+                    {"settledInHistory": sum(1 for entry in history
+                                             if entry["status"] == "settled"),
+                     "ledgerMovements": payments.payments.movements})
+    before_reading = payments.payments.movements
+    read_again = payments.payments.history("release:escrow-ab")
+    recorder.expect("reading the history moved nothing and changed nothing",
+                    ("T-16", "T-28"),
+                    {"movements": before_reading, "sameHistory": True},
+                    {"movements": payments.payments.movements,
+                     "sameHistory": read_again == history},
+                    detail="an enquiry is a read: two reads give the same answer and "
+                           "neither is an instruction")
+
+    return_key = "return:%s:rb-1" % RECEIPT
+    control, _ = F.rollback_chain_to_d(registration_path=CONTRACT_PATH,
+                                       return_outcomes={return_key: "unknown"})
+    control_requests = F.submit_all(control)
+    F.refuse(control, control_requests[0], "res-ab-refused")
+    control.begin_rollback(RECEIPT, 0, F.rollback_authority(control, 0, "rb-1"))
+    control.advance_rollback(RECEIPT)
+    control.advance_rollback(RECEIPT)
+    recorder.step("the asset return comes back unknown and is asked about again",
+                  returns=control.asset_control.returns,
+                  status=control.asset_control.lookup(return_key)["status"])
+    recorder.expect("an unknown return is not sent again while it stays unknown",
+                    ("T-23",), {"status": "unknown", "returns": 0},
+                    {"status": control.asset_control.lookup(return_key)["status"],
+                     "returns": control.asset_control.returns})
+    resolved = control.asset_control.resolve_unknown(return_key, "returned")
+    completed = control.advance_rollback(RECEIPT)
+    recorder.expect("the enquiry records the return and sends nothing", ("T-23",),
+                    {"status": "returned", "resolved": True, "complete": True,
+                     "returns": 0},
+                    {"status": resolved["status"], "resolved": "resolvedAt" in resolved,
+                     "complete": completed["complete"],
+                     "returns": control.asset_control.returns},
+                    detail="the rollback completes on the enquiry's answer, not on a "
+                           "second return")
+    recorder.expect("an already resolved return cannot be resolved again", ("T-23",),
+                    "EX_ASSET_CONTROL_ALREADY_RESOLVED",
+                    _refusal(lambda: control.asset_control.resolve_unknown(return_key,
+                                                                          "failed")))
+    recorder.expect("a key the control never saw is refused, not invented", ("T-23",),
+                    "EX_ASSET_CONTROL_UNKNOWN_KEY",
+                    _refusal(lambda: control.asset_control.resolve_unknown(
+                        "return:%s:never-asked" % RECEIPT, "returned")))
+
+    burn_key = exit_step_key("burn", RECEIPT, "rdm-1")
+    desk, desk_clock = F.settled_at_b(registration_path=CONTRACT_PATH,
+                                      voucher_outcomes={burn_key: "unknown"})
+    F.redeem_authorization(desk)
+    desk.request_redemption(RECEIPT, F.B, "auth-redeem", "rdm-1", F.ALL_CHECKS)
+    blocked = desk.advance_exit(RECEIPT)
+    recorder.step("the burn comes back unknown and the exit stops there",
+                  state=blocked["state"],
+                  history=[entry["status"] for entry in desk.voucher_desk.history(burn_key)])
+    recorder.expect("an unknown exit act blocks rather than being retried", ("T-33",),
+                    {"state": "blocked", "history": ["unknown"], "attempts": [1]},
+                    {"state": blocked["state"],
+                     "history": [entry["status"]
+                                 for entry in desk.voucher_desk.history(burn_key)],
+                     "attempts": [entry["attempt"]
+                                  for entry in desk.voucher_desk.history(burn_key)]})
+    again = desk.advance_exit(RECEIPT)
+    recorder.expect("asking again while it stays unknown acts no further", ("T-33",),
+                    {"state": "blocked", "historyLength": 1},
+                    {"state": again["state"],
+                     "historyLength": len(desk.voucher_desk.history(burn_key))})
+    desk_clock.advance(1)
+    desk.voucher_desk.resolve_unknown(burn_key, "failed")
+    recovered = desk.advance_exit(RECEIPT)
+    desk_history = desk.voucher_desk.history(burn_key)
+    recorder.step("the enquiry establishes a confirmed no-effect failure",
+                  complete=recovered["complete"],
+                  history=[entry["status"] for entry in desk_history])
+    recorder.expect("the retry happens only once the uncertainty is resolved",
+                    ("T-33",),
+                    {"complete": True, "statuses": ["unknown", "failed", "done"],
+                     "attempts": [1, 1, 2]},
+                    {"complete": recovered["complete"],
+                     "statuses": [entry["status"] for entry in desk_history],
+                     "attempts": [entry["attempt"] for entry in desk_history]},
+                    detail="the resolution is its own record between the two attempts, "
+                           "so the retry is visibly a retry")
+    recorder.expect("the desk's record of the resolution says what it established",
+                    ("T-33",), {"effect": "not-applied", "retryable": True,
+                                "resolved": True},
+                    {"effect": desk_history[1]["effect"],
+                     "retryable": desk_history[1]["retryable"],
+                     "resolved": "resolvedAt" in desk_history[1]})
+    settled_length = len(desk.voucher_desk.history(burn_key))
+    repeated = desk.advance_exit(RECEIPT)
+    recorder.expect("a completed exit is not acted on again", ("T-33",),
+                    {"complete": True, "historyLength": settled_length},
+                    {"complete": repeated["complete"],
+                     "historyLength": len(desk.voucher_desk.history(burn_key))})
+    recorder.note("every adapter here can be asked what happened, and asking is never "
+                  "an instruction: no enquiry moved value, returned an asset or "
+                  "performed an exit act")
+    recorder.not_run("real adapter enquiry", ("T-35", "T-38"),
+                     "these are simulated roles; a real provider's enquiry semantics, "
+                     "including what its failure and unknown answers mean, are not "
+                     "established by this fixture")
+
+
 GUARANTEE_CONTRACTS = (
     Scenario("GUARANTEE-WHOLE-RECEIPT", "one NFT is one whole receipt, indivisibly",
              ("T-01",), CONTRACT_PATH, _whole_receipt),
@@ -897,6 +1045,10 @@ GUARANTEE_CONTRACTS = (
              "boundary and redemption readiness",
              ("T-02", "T-13", "T-14", "T-16", "T-23", "T-24", "T-28"), CONTRACT_PATH,
              _recovery_and_exit),
+    Scenario("GUARANTEE-ADAPTER-ENQUIRY",
+             "every simulated adapter can be asked what happened, and asking is "
+             "never an instruction",
+             ("T-16", "T-23", "T-28", "T-33"), CONTRACT_PATH, _adapter_enquiry),
 )
 
 #: The cases these contracts exist to cover: the ten the matrix reported as
@@ -908,7 +1060,7 @@ COVERED_CASES = ("T-01", "T-06", "T-07", "T-08", "T-09", "T-15", "T-16", "T-27",
 #: Cases the recovery contract also records, which already had scenario evidence.
 #: They are listed apart from ``COVERED_CASES`` because the contract exists to
 #: reach five domain methods nothing called, not to close a matrix gap.
-ALSO_RECORDED_CASES = ("T-02", "T-13", "T-14", "T-23", "T-24", "T-28")
+ALSO_RECORDED_CASES = ("T-02", "T-13", "T-14", "T-23", "T-24", "T-28", "T-33")
 
 
 def coverage_map():

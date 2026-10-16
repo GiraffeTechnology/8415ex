@@ -37,14 +37,6 @@ DOMAIN_REUSE = (
         "simulated": False,
     },
     {
-        "module": "exchange.exit",
-        "uses": ("exit_step_key",),
-        "purpose": "the exit step key, so a scenario names a step the same way the "
-                   "domain does rather than inventing a parallel key",
-        "kind": "domain contract",
-        "simulated": False,
-    },
-    {
         "module": "exchange.model",
         "uses": ("REGISTRATION_PATHS", "Asset", "WHOLE_RECEIPT_UNITS",
                  "WarehouseReceipt", "TradeIntent"),
@@ -57,10 +49,11 @@ DOMAIN_REUSE = (
     },
     {
         "module": "exchange.rollback",
-        "uses": ("rollback_binding",),
+        "uses": ("rollback_binding", "SimulatedAssetControl"),
         "purpose": "the rollback binding the domain itself computes, so a contract "
                    "that triggers a deadline rollback builds the authority the "
-                   "domain expects rather than a parallel shape",
+                   "domain expects rather than a parallel shape, and the simulated "
+                   "asset-return role, so the surface report counts its own methods",
         "kind": "domain contract",
         "simulated": False,
     },
@@ -83,9 +76,29 @@ DOMAIN_REUSE = (
     },
     {
         "module": "exchange.registration",
-        "uses": ("RegistrationEvidence",),
+        "uses": ("RegistrationEvidence", "SimulatedRegistrar", "DirectRegistrar",
+                 "ElectronicRegistrar", "IntermediaryRegistrar"),
         "purpose": "the registration evidence record, so a path scenario reports "
-                   "what the domain records rather than a parallel shape",
+                   "what the domain records rather than a parallel shape, and the "
+                   "four registrar roles themselves, so the surface report counts "
+                   "the methods the domain defines rather than a list of names",
+        "kind": "domain contract",
+        "simulated": False,
+    },
+    {
+        "module": "exchange.settlement",
+        "uses": ("SimulatedPaymentAdapter",),
+        "purpose": "the simulated payment role, so the surface report counts the "
+                   "methods it really defines, its enquiry surface included",
+        "kind": "local fixture",
+        "simulated": True,
+    },
+    {
+        "module": "exchange.exit",
+        "uses": ("exit_step_key", "SimulatedVoucherDesk"),
+        "purpose": "the exit step key and the simulated collection desk, so a "
+                   "contract names a step the way the domain does and the surface "
+                   "report counts the desk's own methods",
         "kind": "domain contract",
         "simulated": False,
     },
