@@ -117,6 +117,119 @@ class ReadsMoveNothing(unittest.TestCase):
             with self.subTest(method=name):
                 self.assertTrue(callable(getattr(Exchange, name, None)))
 
+    def test_the_rule_covers_every_classified_read(self):
+        """Not a chosen subset: the whole read half of the class.
+
+        This used to exercise the section's own three reads plus eleven
+        hand-picked names, with nothing checking that the eleven were all of
+        them. A read added to the domain would have been outside the one rule
+        here that can be demonstrated.
+        """
+        self.assertEqual([entry["method"] for entry in self.check["reads"]],
+                         list(operations.READS))
+        self.assertEqual(self.check["readCount"], len(operations.READS))
+        self.assertGreater(self.check["readCount"], 25)
+
+    def test_a_read_that_moved_something_would_be_named(self):
+        """The negative control for the rule itself, not just the counters.
+
+        The control above shows the counters notice a release. This one shows
+        the check notices when a method it calls as a read moves something: a
+        read that quietly recorded an event would otherwise pass.
+        """
+        original = Exchange.deferred_legs
+
+        def leaky(self, receipt_id):
+            # Moving money is the plainest version of what the rule forbids,
+            # and unlike recording an event it neither refuses on a repeat nor
+            # turns the read into one that could not be called at all.
+            self.payments.movements += 1
+            return original(self, receipt_id)
+
+        Exchange.deferred_legs = leaky
+        try:
+            measured = operations.read_only_moves_nothing()
+            built = operations.build(ROOT)
+        finally:
+            Exchange.deferred_legs = original
+        self.assertIn("deferred_legs", measured["movedSomething"])
+        self.assertFalse(measured["allReadsMovedNothing"])
+        self.assertFalse(built["consistent"],
+                         "a read that moved something must stop the run")
+        # And it is put back, or every later report describes a leaky domain.
+        self.assertIs(Exchange.deferred_legs, original)
+        self.assertEqual(operations.read_only_moves_nothing()["movedSomething"], [])
+
+
+class EveryMethodIsClassified(unittest.TestCase):
+    """A read nobody classified is a read outside the no-movement rule."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.buckets = operations.classification()
+
+    def test_the_two_buckets_account_for_the_whole_class(self):
+        self.assertEqual(self.buckets["unclassified"], [])
+        self.assertEqual(self.buckets["classifiedButNotOnTheClass"], [])
+        self.assertEqual(self.buckets["inBothBuckets"], [])
+        self.assertTrue(self.buckets["complete"])
+        self.assertEqual(self.buckets["readCount"] + self.buckets["changeCount"],
+                         self.buckets["classCount"])
+
+    def test_the_class_list_is_read_from_the_class(self):
+        self.assertEqual(operations.public_methods(),
+                         tuple(sorted(name for name in dir(Exchange)
+                                      if not name.startswith("_")
+                                      and callable(getattr(Exchange, name)))))
+        self.assertEqual(self.buckets["classCount"],
+                         len(operations.public_methods()))
+
+    def test_an_unclassified_method_is_a_finding(self):
+        kept = operations.READS
+        operations.READS = tuple(name for name in kept if name != "owner_of")
+        try:
+            broken = operations.classification()
+        finally:
+            operations.READS = kept
+        self.assertEqual(broken["unclassified"], ["owner_of"])
+        self.assertFalse(broken["complete"])
+
+    def test_a_method_in_both_buckets_is_a_finding(self):
+        kept = operations.CHANGES
+        operations.CHANGES = kept + ("owner_of",)
+        try:
+            broken = operations.classification()
+        finally:
+            operations.CHANGES = kept
+        self.assertEqual(broken["inBothBuckets"], ["owner_of"])
+        self.assertFalse(broken["complete"])
+
+    def test_a_classified_name_that_is_not_a_method_is_a_finding(self):
+        kept = operations.READS
+        operations.READS = kept + ("no_such_read",)
+        try:
+            broken = operations.classification()
+        finally:
+            operations.READS = kept
+        self.assertEqual(broken["classifiedButNotOnTheClass"], ["no_such_read"])
+        self.assertFalse(broken["complete"])
+
+    def test_an_incomplete_classification_stops_the_run(self):
+        kept = operations.READS
+        operations.READS = tuple(name for name in kept if name != "owner_of")
+        try:
+            built = operations.build(ROOT)
+        finally:
+            operations.READS = kept
+        self.assertFalse(built["consistent"])
+        self.assertEqual(built["methodClassification"]["unclassified"], ["owner_of"])
+
+    def test_every_read_has_arguments_to_be_called_with(self):
+        """A read with no argument entry raises rather than being skipped."""
+        called = {entry["method"] for entry in
+                  operations.read_only_moves_nothing()["reads"]}
+        self.assertEqual(called, set(operations.READS))
+
 
 if __name__ == "__main__":
     unittest.main()

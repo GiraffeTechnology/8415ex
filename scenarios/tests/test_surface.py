@@ -33,7 +33,10 @@ class AsMeasured(unittest.TestCase):
                          sorted(surface.NOT_EXERCISED_LOCALLY))
         self.assertEqual(self.coverage["exercisedCount"]
                          + len(self.coverage["notExercised"]),
-                         self.coverage["methodCount"])
+                         self.coverage["countedCount"])
+        self.assertEqual(self.coverage["countedCount"],
+                         self.coverage["methodCount"]
+                         + self.coverage["functionCount"])
         self.assertTrue(self.coverage["everyMethodAccountedFor"])
 
     def test_every_adapter_role_is_counted(self):
@@ -44,7 +47,8 @@ class AsMeasured(unittest.TestCase):
         """
         per_subject = {entry["subject"]: entry
                        for entry in self.coverage["perSubject"]}
-        self.assertEqual(sorted(per_subject), sorted(surface.SUBJECTS))
+        self.assertEqual(sorted(per_subject),
+                         sorted(surface.SUBJECTS + surface.FUNCTION_MODULES))
         for subject, entry in sorted(per_subject.items()):
             with self.subTest(subject=subject):
                 self.assertGreater(entry["methodCount"], 0,
@@ -57,8 +61,9 @@ class AsMeasured(unittest.TestCase):
 
     def test_what_cannot_be_measured_says_why(self):
         self.assertEqual(self.coverage["notMeasured"], dict(surface.NOT_MEASURED))
-        self.assertIn("module-level functions", self.coverage["notMeasured"])
         self.assertIn("inherited methods", self.coverage["notMeasured"])
+        self.assertIn("a function held somewhere other than a module global",
+                      self.coverage["notMeasured"])
         for limit, reason in self.coverage["notMeasured"].items():
             with self.subTest(limit=limit):
                 self.assertTrue(reason)
@@ -66,7 +71,7 @@ class AsMeasured(unittest.TestCase):
     def test_each_exemption_names_a_counted_method_and_says_why(self):
         for name, reason in surface.NOT_EXERCISED_LOCALLY.items():
             with self.subTest(method=name):
-                self.assertIn(name, self.coverage["methods"])
+                self.assertIn(name, self.coverage["counted"])
                 self.assertTrue(reason)
                 self.assertIn(name, self.coverage["notExercised"])
 
@@ -105,8 +110,16 @@ class RestoringTheClass(unittest.TestCase):
     """Leaving the domain wrapped would make every later report describe it."""
 
     def originals(self):
-        return {name: getattr(subject, attribute)
-                for name, subject, attribute in surface.methods()}
+        found = {name: getattr(subject, attribute)
+                 for name, subject, attribute in surface.methods()}
+        # Every project binding of every counted function, which is what the
+        # measurement replaces and therefore has to put back.
+        for label, function in surface.functions():
+            for holder in surface._binding_holders():
+                for name, value in list(vars(holder).items()):
+                    if value is function:
+                        found["%s:%s.%s" % (label, holder.__name__, name)] = value
+        return found
 
     def test_the_classes_are_the_same_afterwards(self):
         before = self.originals()
@@ -125,6 +138,67 @@ class RestoringTheClass(unittest.TestCase):
                          "a failure must not leave the domain instrumented")
 
 
+class CountingModuleFunctions(unittest.TestCase):
+    """The limitation this closes, and why it needed closing properly.
+
+    A function reached through ``from exchange.ids import digest`` is held by
+    the caller's module, so replacing the attribute on the defining module
+    observes nothing. That was once stated as a reason not to count module
+    functions at all, which left twelve domain functions outside the report.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.coverage = surface.coverage(GROUPS, run_all)
+
+    def test_every_counted_function_is_entered(self):
+        self.assertEqual(self.coverage["functionCount"], 12)
+        self.assertEqual(tuple(self.coverage["functions"]),
+                         tuple(name for name, _ in surface.functions()))
+        for name in self.coverage["functions"]:
+            with self.subTest(function=name):
+                self.assertIn(name, self.coverage["exercised"])
+
+    def test_the_caller_holds_the_binding_that_has_to_be_replaced(self):
+        """The negative control for the search, stated as the fact it rests on.
+
+        If ``digest`` were replaced only on ``exchange.ids``, the call made
+        through this binding would not be seen and the function would read as
+        unentered while the delivery called it on every run.
+        """
+        from exchange import ids
+        from scenarios import harness
+
+        self.assertIs(vars(harness)["digest"], ids.digest)
+        holders = surface._binding_holders()
+        self.assertIn(harness, holders)
+        self.assertIn(ids, holders)
+        elsewhere = [holder for holder in holders
+                     if holder is not ids
+                     and vars(holder).get("digest") is ids.digest]
+        self.assertTrue(elsewhere,
+                        "the binding that matters is not in the defining module")
+
+    def test_only_this_project_is_searched(self):
+        import json
+
+        holders = surface._binding_holders()
+        self.assertNotIn(json, holders)
+        for holder in holders:
+            with self.subTest(module=holder.__name__):
+                self.assertIn(holder.__name__.split(".")[0],
+                              surface.BINDING_NAMESPACES)
+
+    def test_a_function_defined_elsewhere_is_not_counted_twice(self):
+        counted = [name for name, _ in surface.functions()]
+        self.assertEqual(len(counted), len(set(counted)))
+        for name, function in surface.functions():
+            with self.subTest(function=name):
+                module, _, attribute = name.rpartition(".")
+                self.assertEqual(function.__module__, module)
+                self.assertEqual(function.__name__, attribute)
+
+
 class FailingClosed(unittest.TestCase):
     """The negative controls. Each one is a way this could report a false pass."""
 
@@ -135,33 +209,54 @@ class FailingClosed(unittest.TestCase):
         measured = surface.coverage(
             ((Scenario("SURFACE-EMPTY", "enters nothing", ("T-01",), "REG_DIRECT",
                        touches_nothing),),), run_all)
-        self.assertEqual(measured["exercised"], [])
-        self.assertEqual(measured["notExercised"], measured["methods"])
+        # The runner digests its own report, so three domain functions are
+        # entered by the measurement's own harness whatever the contract does.
+        # Naming them is the point: anything else entered would be the contract.
+        self.assertEqual(measured["exercised"],
+                         ["exchange.errors.require", "exchange.ids.canonical_json",
+                          "exchange.ids.digest"])
+        for name in measured["methods"]:
+            with self.subTest(method=name):
+                self.assertIn(name, measured["notExercised"])
         self.assertEqual(measured["notAccountedFor"],
-                         [name for name in measured["methods"]
-                          if name not in surface.NOT_EXERCISED_LOCALLY])
+                         [name for name in measured["counted"]
+                          if name not in measured["exercised"]
+                          and name not in surface.NOT_EXERCISED_LOCALLY])
         self.assertFalse(measured["everyMethodAccountedFor"],
                          "entering nothing is not every method accounted for")
 
-    def test_an_accounted_for_method_is_not_a_finding_but_is_still_named(self):
+    def test_an_accounted_for_name_is_not_a_finding_but_is_still_named(self):
+        """Accounting for a name makes it not a finding; it does not hide it.
+
+        The exemption set is taken from the measurement itself: exactly what a
+        contract entering nothing leaves unentered, and no more. Exempting
+        anything the run does enter would be a stale exemption, which is its
+        own finding and is tested separately.
+        """
+        def touches_nothing(recorder):
+            recorder.expect("a contract that enters no domain method", ("T-01",),
+                            1, 1)
+
+        empty = ((Scenario("SURFACE-EMPTY", "enters nothing", ("T-01",),
+                           "REG_DIRECT", touches_nothing),),)
+        unentered = surface.coverage(empty, run_all)["notExercised"]
         kept = dict(surface.NOT_EXERCISED_LOCALLY)
         surface.NOT_EXERCISED_LOCALLY.clear()
         surface.NOT_EXERCISED_LOCALLY.update(
-            {name: "a stated reason" for name, _, _ in surface.methods()})
+            {name: "a stated reason" for name in unentered})
         try:
-            def touches_nothing(recorder):
-                recorder.expect("a contract that enters no domain method", ("T-01",),
-                                1, 1)
-
-            measured = surface.coverage(
-                ((Scenario("SURFACE-EMPTY", "enters nothing", ("T-01",), "REG_DIRECT",
-                           touches_nothing),),), run_all)
+            measured = surface.coverage(empty, run_all)
         finally:
             surface.NOT_EXERCISED_LOCALLY.clear()
             surface.NOT_EXERCISED_LOCALLY.update(kept)
         self.assertEqual(measured["notAccountedFor"], [])
-        self.assertEqual(measured["notExercised"], measured["methods"],
+        self.assertEqual(measured["staleExemptions"], [])
+        self.assertEqual(sorted(measured["notExercised"] + measured["exercised"]),
+                         sorted(measured["counted"]),
                          "accounted for is not the same as hidden")
+        for name in measured["methods"]:
+            with self.subTest(method=name):
+                self.assertIn(name, measured["notExercised"])
         self.assertTrue(measured["everyMethodAccountedFor"])
 
     def test_a_stale_exemption_is_a_finding(self):

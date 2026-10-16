@@ -185,7 +185,12 @@ class ExternalLogs(unittest.TestCase):
 class PublishedSummaryScope(unittest.TestCase):
     def test_prepublication_text_does_not_claim_delivery_pass(self):
         bundle = cli._bundle(ROOT)
-        bundle.update(calculationPassed=True, allLocalPassed=True,
+        # A passing calculation means no blocking item as well as the verdict
+        # fields: sealing compares the two, and a record saying it passed while
+        # listing what blocked it is the contradiction it refuses. The worktree
+        # is dirty while this suite runs from a working copy, so the list is
+        # cleared here to express what the fixture means.
+        bundle.update(calculationPassed=True, allLocalPassed=True, blocking=[],
                       outputDeliveryStatus="NOT_CAPTURED_IN_PROCESS")
         text = cli.summary_text(cli.seal(bundle, 0))
         self.assertIn("calculation passed: True", text)

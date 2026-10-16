@@ -67,6 +67,9 @@ DEVELOPED_HERE = {
         {"deliverable": "the measured share of the domain's own public API that this "
                         "delivery enters, with any unexercised method accounted for",
          "where": "scenarios/surface.py"},
+        {"deliverable": "the comparison of the finished record with itself, which "
+                        "refuses a published copy that contradicts another",
+         "where": "scenarios/agreement.py"},
     ),
     1: (
         {"deliverable": "the six scenarios as recorded expectations over the domain",

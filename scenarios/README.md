@@ -422,6 +422,95 @@ bound only inside a function or a class body (importable from neither, so
 counting it would make a missing name look present), and an undecidable name.
 A surface that depends on nothing is not a finding.
 
+## Whether the published record agrees with itself
+
+Every report in the bundle is built from the same run, so they must say the same
+thing about it. Twice they did not, both times for one reason: a report rebuilt
+at sealing time with fewer inputs than it was first built with. The first time
+the artifact leg was dropped from the evidence index; the second time the
+guarantee contracts were, so the published index said ten cases were evidenced
+only by the domain's own suite while the matrix in the same bundle said they
+passed. A reviewer reads the published copy, not the bundle that existed
+mid-run, so a contradiction there is the worst kind.
+
+Both fixes were a parameter, passed more carefully. `seal` even carries a
+comment recording the first lesson, and the second mistake was made under it.
+What was missing is a check that compares the finished record with itself and
+refuses a contradiction whatever caused it, so `agreement.py` does that: ten
+comparisons over the sealed bundle, each between two copies of the same fact -
+the cases the matrix and the index cover, each case's outcome, runners and
+assertion counts, the runners the index lists against the runners the run
+recorded, the index's own count, a workload observation per report, the sealed
+digest against the report's, the manifest's commands against the bundle's, and
+the unsound cases in both. Replaying the real defect makes four of them fail at
+once.
+
+The reports it compares are discovered by their schema rather than listed,
+because a list of report keys is exactly what the rebuilds got wrong. Sealing
+carries any disagreement into the blocking list and the verdict, so the
+published files hold both. The existing guard against a verdict nobody acts on
+ran only over the bundle as built, which left anything added at sealing outside
+it, including this check itself; the sealed record is scanned too now, and a
+report that appears only there has to be declared.
+
+One of the eleven comparisons is not between two copies of a fact: the verdict
+against the blocking list. It was written, dropped as a restatement of how both
+places derive the verdict from that list, and restored when the very next run
+disproved that reasoning. The publication stage recomputes the verdict from its
+own factors and then appends to the list, so a sealed refusal was being
+overwritten: the record said the calculation had not passed while the process
+exited 0. Nothing else was watching. The stage now carries the sealed verdict
+forward, and a report that fabricates a verdict to exercise its own rendering
+has to clear the list to mean what it says.
+
+The rescan of the sealed record found a second real thing on its first run: the
+pre-publication source reconciliation carries a verdict and was acted on, but
+nothing declared it, because the original scan ran before it existed. It is
+declared now, with the rule that acts on it.
+
+And nothing to compare is a third answer, not agreement and not a
+contradiction. A recorded bundle from an earlier run may legitimately carry no
+scenario reports; a run that just executed them and carries none is wrong in a
+way this module cannot diagnose. So `comparable` is reported separately from
+`consistent`, a comparison is only made where both sides are present, and
+`run-all` - which has just executed the scenarios - blocks on a record with
+nothing to compare, while another command sealing a recorded bundle does not.
+
+## Which domain methods read, and that every read moves nothing
+
+PRD 10.1 says a read must not move money or an asset. That is the one rule in
+the section that can be demonstrated rather than declared, so it is: each read
+is called against a funded chain that also holds asset control, and the payment
+movements, asset returns, audit-trail length, owner and holder position are
+compared across the call.
+
+It covered the section's own three reads plus eleven hand-picked names, and
+nothing checked that the eleven were all of them. A read added to the domain
+would have sat outside the rule, exempt because nobody remembered to extend a
+list. So every public method of the domain class is now classified as reading or
+changing, and the two buckets together have to account for the whole class,
+exactly once. An unclassified method is a finding, a name in both buckets is a
+finding, and a classified name that is not on the class is a finding - three
+different mistakes, reported separately. The rule now runs over all 30 reads
+rather than 14, with 21 methods declared as changing.
+
+The fixture files one registration request per leg and registers a redemption
+grant before any counter is read. Those are changes, done in setup: a read that
+needs a filed request to be callable at all would otherwise be reported as
+uncallable, which hides it from the rule instead of subjecting it to it. A read
+with no argument entry raises rather than being skipped, for the same reason.
+
+Two negative controls, because one was not enough. The first shows the counters
+notice a real release. The second shows the *check* notices: a read patched to
+move money is named in `movedSomething`, the verdict goes false, and the run
+blocks - without it, a read that quietly moved something could still have
+passed.
+
+Classifying a method as changing is not a claim that it changes anything. The
+classification exists so that every read is covered and no method sits silently
+outside both buckets; what a changing method does is answered by the acceptance
+cases that exercise it.
+
 ## How much of the domain this delivery actually enters
 
 The acceptance matrix answers coverage per requirement. Nothing answered the
@@ -461,13 +550,34 @@ delivery can take. It is accounted for with that reason, and the three
 overriding versions are each entered.
 
 It is a measurement, not a source scan: a name appearing in a file proves
-nothing about being called. Two things it cannot observe are named with their
-reasons rather than left as an unexplained narrower count. A module-level
-function is invisible to it, because a caller that wrote `from .errors import
-require` holds the original and replacing the module attribute observes nothing
-- every such function would read as unentered. An inherited method is invisible
-too, because wrapping it sets the wrapper on the subclass and shadows the base,
-so only methods a class defines itself are counted. The instrumented execution is a second run of the
+nothing about being called.
+
+Module-level functions were outside the report at first, for a real reason: a
+caller that wrote `from exchange.ids import digest` holds the original, so
+replacing the attribute on the defining module observes nothing. That is a
+reason to look in the right place rather than to leave twelve domain functions
+uncounted. The call reaches the function through the name the *caller's* module
+holds, so every binding of the object in this project's own modules is replaced
+- 58 of them for those twelve functions - and all twelve turn out to be
+entered. The search is restricted to the `exchange`, `scenarios` and
+`integration` namespaces, because nothing outside them can call into the domain
+in this run and a search over every loaded module would also reach the
+measurement's own bookkeeping. Counted names are now 80: 68 methods and 12
+functions, of which 79 are entered.
+
+What remains unobservable is named with its reason rather than narrowing the
+count silently. An inherited method is invisible, because wrapping it sets the
+wrapper on the subclass and shadows the base, so only methods a class defines
+itself are counted and an override is counted on the class that defines it. A
+function held somewhere other than a module global - in a list, a dict, a
+default argument or a local alias taken before the run - is invisible too. The
+record classes and the fixtures are not counted at all, being data and
+scaffolding rather than behaviour this delivery has to demonstrate.
+
+One detail worth keeping in view: a contract that enters no domain method still
+enters `digest`, `canonical_json` and `require`, because the runner digests its
+own report. The negative control names those three rather than asserting an
+empty set, so anything else entered is the contract's doing. The instrumented execution is a second run of the
 same groups and says so - the reported digest and the resource observation come
 from the primary run, and the instrumented run's own scenario results are
 discarded, though it still has to pass, because a scenario that stopped early
