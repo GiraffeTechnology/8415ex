@@ -408,6 +408,32 @@ bound only inside a function or a class body (importable from neither, so
 counting it would make a missing name look present), and an undecidable name.
 A surface that depends on nothing is not a finding.
 
+## What the secret scan reads
+
+The scan decided what was text by file suffix, which exempted exactly the
+names a credential is most likely to carry. A `.env`, an extensionless
+`credentials` file, a `Dockerfile` or a `key.pem` was skipped with a tidy
+recorded reason, and the run still reported `clean` - over the files most
+worth reading. Only one file in this tree was skipped, so the exemption cost
+nothing yet; it was a clean result that did not depend on the content of
+anything it declined to read.
+
+The bytes decide now. A file is read when it decodes as UTF-8 and carries no
+NUL byte, and anything else is binary, where a text pattern certifies nothing
+and a skip is the honest answer. Coverage went from 110 of 111 tracked files
+to 111 of 111.
+
+A file too large to read in full is kept apart from a binary skip, in
+`notReadInFull`, and refuses a clean result the way an unreadable file does: a
+tracked file nobody read is a hole in the coverage, not a reason. Nothing in
+this tree reaches the limit, so a test lowers it to prove the branch fails
+closed rather than leaving it to be discovered later.
+
+The non-English rule was applied to `.py`, `.md` and `.yml`. The rule is not
+three suffixes - it is that no non-English prose reaches this public source -
+so every file that is read is checked, which is where a `.json`, a shell
+script or a `NOTICE` had sat outside it.
+
 ## Keeping the instructions true
 
 Usage documentation drifts the same way an outline does, with worse

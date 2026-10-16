@@ -59,9 +59,14 @@ NON_ENGLISH_RANGES = (
 NON_ENGLISH_PROSE = re.compile(
     "[" + "".join(f"{chr(low)}-{chr(high)}" for low, high in NON_ENGLISH_RANGES) + "]")
 
-#: Text this scan reads. Anything else is skipped and reported as skipped, with
-#: its reason, rather than silently ignored.
-TEXT_SUFFIXES = (".py", ".md", ".yml", ".yaml", ".json", ".txt", ".cfg", ".toml", ".sh")
+#: What this scan reads is decided by the bytes, not by the file name. A suffix
+#: allow-list exempted exactly the names a credential is most likely to carry -
+#: ``.env``, a Dockerfile, an extensionless key file - and reported the exemption
+#: as an ordinary skip, so the scan stayed clean over a file nobody had read.
+#: Anything that decodes as UTF-8 and carries no NUL byte is read; anything else
+#: is binary, where a text pattern certifies nothing, and is reported as skipped
+#: with that reason.
+SCAN_BYTE_LIMIT = 8 * 1024 * 1024
 
 #: The environment variable through which the approved private mechanism may
 #: supply fingerprints to look for. Its contents are never written to this
@@ -107,6 +112,37 @@ def tracked_files(root="."):
     return {"ok": True, "state": "enumerated", "error": None, "files": names}
 
 
+def _read_text(target):
+    """The file's text, or the reason it was not read.
+
+    Exactly one of the two is returned. A file that does not decode as UTF-8,
+    or that carries a NUL byte, is binary: reading a text pattern over it
+    certifies nothing, so it is skipped with that reason. A file too large to
+    read in full is kept apart from that, because it is a gap in coverage
+    rather than a file with no text in it.
+    """
+    try:
+        size = target.stat().st_size
+    except OSError as problem:
+        return None, {"kind": "unreadable", "reason": "unreadable: %s" % problem}
+    if size > SCAN_BYTE_LIMIT:
+        return None, {"kind": "notReadInFull",
+                      "reason": "%d bytes exceeds the %d byte scan limit, so the "
+                                "file was not read" % (size, SCAN_BYTE_LIMIT)}
+    try:
+        data = target.read_bytes()
+    except OSError as problem:
+        return None, {"kind": "unreadable", "reason": "unreadable: %s" % problem}
+    if b"\x00" in data:
+        return None, {"kind": "skipped",
+                      "reason": "binary: the file carries a NUL byte"}
+    try:
+        return data.decode("utf-8"), None
+    except UnicodeDecodeError as problem:
+        return None, {"kind": "skipped",
+                      "reason": "binary: not valid utf-8 (%s)" % problem.reason}
+
+
 def _private_markers(supplied=None):
     """Fingerprints to look for, from the approved private mechanism only."""
     if supplied is not None:
@@ -124,17 +160,20 @@ def coverage_statement(coverage, marker_count, enumeration_state):
     scanned = coverage["scanned"]
     skipped = len(coverage["skipped"])
     unreadable = len(coverage["unreadable"])
+    partial = len(coverage["notReadInFull"])
     return {
         "inventoryTotal": enumerated,
         "scannedCount": scanned,
         "skippedCount": skipped,
         "unreadableCount": unreadable,
-        "accountedFor": scanned + skipped + unreadable == enumerated,
+        "notReadInFullCount": partial,
+        "accountedFor": scanned + skipped + unreadable + partial == enumerated,
         "enumerationState": enumeration_state,
         "suppliedPrivateMarkers": marker_count,
         "boundedCoverage": (
             f"{scanned} of {enumerated} tracked files were read; {skipped} were "
-            f"skipped with a recorded reason and {unreadable} were unreadable"),
+            f"skipped as binary with a recorded reason, {unreadable} were "
+            f"unreadable and {partial} were too large to read in full"),
         "isNot": [
             "not a private-fingerprint certification: "
             + ("no private markers were supplied, so detection was generic only"
@@ -158,30 +197,29 @@ def secret_scan(root=".", private_markers=None):
     markers = _private_markers(private_markers)
     if not enumeration["ok"]:
         return {
-            "schema": "8415ex-secret-scan/2", "cases": ["T-39"], "ok": False,
+            "schema": "8415ex-secret-scan/4", "cases": ["T-39"], "ok": False,
             "enumerationState": enumeration["state"], "error": enumeration["error"],
-            "coverage": {"enumerated": 0, "scanned": 0, "skipped": [], "unreadable": []},
+            "coverage": {"enumerated": 0, "scanned": 0, "skipped": [],
+                         "unreadable": [], "notReadInFull": []},
             "coverageStatement": coverage_statement(
-                {"enumerated": 0, "scanned": 0, "skipped": [], "unreadable": []},
+                {"enumerated": 0, "scanned": 0, "skipped": [], "unreadable": [],
+                 "notReadInFull": []},
                 len(markers), enumeration["state"]),
             "findings": [], "clean": False,
             "privateMarkerCount": len(markers),
             "scope": "the source file list could not be established, so nothing is certified",
         }
     base = Path(root)
-    findings, skipped, unreadable, scanned = [], [], [], 0
+    findings, skipped, unreadable, partial, scanned = [], [], [], [], 0
+    buckets = {"skipped": skipped, "unreadable": unreadable, "notReadInFull": partial}
     for name in enumeration["files"]:
         target = base / name
-        if not name.endswith(TEXT_SUFFIXES):
-            skipped.append({"path": name, "reason": "not a scanned text suffix"})
-            continue
         if not target.is_file():
             unreadable.append({"path": name, "reason": "tracked but missing from the worktree"})
             continue
-        try:
-            text = target.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as problem:
-            unreadable.append({"path": name, "reason": f"unreadable: {problem}"})
+        text, refusal = _read_text(target)
+        if refusal is not None:
+            buckets[refusal["kind"]].append({"path": name, "reason": refusal["reason"]})
             continue
         scanned += 1
         for label, pattern in SECRET_PATTERNS + PRIVATE_CONTENT_PATTERNS:
@@ -198,18 +236,27 @@ def secret_scan(root=".", private_markers=None):
                 findings.append({"path": name, "kind": "private-content",
                                  "pattern": "configured private fingerprint",
                                  "line": text[:index].count("\n") + 1})
-        if name.endswith((".py", ".md", ".yml")):
-            for number, line in enumerate(text.splitlines(), start=1):
-                if NON_ENGLISH_PROSE.search(line):
-                    findings.append({"path": name, "kind": "non-english",
-                                     "pattern": "non-english prose in public source",
-                                     "line": number})
-    clean = findings == [] and scanned > 0 and unreadable == []
+        # Every file read is checked, not three suffixes of them. The rule is
+        # that no non-English prose reaches the public source, and a rule that
+        # only covered .py, .md and .yml left a .json, a .txt, a shell script
+        # and every extensionless file outside it.
+        for number, line in enumerate(text.splitlines(), start=1):
+            if NON_ENGLISH_PROSE.search(line):
+                findings.append({"path": name, "kind": "non-english",
+                                 "pattern": "non-english prose in public source",
+                                 "line": number})
+    # A file that was not read in full is a hole in the coverage, so it refuses
+    # a clean result in the same way an unreadable file does. A binary file is
+    # not: there is no text in it for a text pattern to certify.
+    clean = (findings == [] and scanned > 0 and unreadable == [] and partial == [])
     coverage = {"enumerated": len(enumeration["files"]), "scanned": scanned,
                 "skipped": skipped, "unreadable": unreadable,
-                "scannedSuffixes": list(TEXT_SUFFIXES)}
+                "notReadInFull": partial,
+                "textDecidedBy": ("content: read when it decodes as utf-8 and "
+                                  "carries no NUL byte, never by file name"),
+                "byteLimit": SCAN_BYTE_LIMIT}
     return {
-        "schema": "8415ex-secret-scan/3", "cases": ["T-39"], "ok": True,
+        "schema": "8415ex-secret-scan/4", "cases": ["T-39"], "ok": True,
         "enumerationState": enumeration["state"], "error": None,
         "coverage": coverage,
         "coverageStatement": coverage_statement(coverage, len(markers),
