@@ -422,6 +422,41 @@ bound only inside a function or a class body (importable from neither, so
 counting it would make a missing name look present), and an undecidable name.
 A surface that depends on nothing is not a finding.
 
+## What establishes each requirement section, not just what addresses it
+
+The section ledger answers the question a reviewer asks of a whole requirements
+document: is any section of it addressed by nothing? It answered by checking
+that each section's declared deliverables exist on disk. That is a real check,
+and it is a different question from whether anything establishes the section.
+
+Two sections read as addressed while no local result stood behind them. One has
+three requirements, and all three await execution on the public test network.
+The other carries a not-run obligation beside two requirements evidenced only by
+test suites. The deliverable paths existed, so the ledger said addressed - on
+the one page whose purpose is to say whether the document is covered.
+
+The evidence axis is read from the acceptance matrix now and reported beside the
+deliverables: which cases back each section, their recorded outcomes, the
+weakest of those, and, where that is not a pass, what is still owed and by whom.
+The two questions stay apart - `addressedHere` and `locallyEstablished` - because
+collapsing them is what produced the wrong reading. Six sections rest on a local
+result; two are reported as awaiting real evidence, naming the cases and what
+each owes; ten are addressed by deliverables and carry no requirement identifier
+at all, which is true of a section about process rather than requirements and is
+now visible rather than implied.
+
+Awaiting real evidence is not a defect of this surface, so it is not a finding.
+A section whose weakness is accounted for by nothing is: a failed, blocked or
+incomplete case under a section, or a not-run case that no longer says what it
+is owed, each stops the run. A section is no stronger than its weakest case,
+which is why the floor is what gets reported.
+
+Without a matrix the evidence reads `NOT_SUPPLIED` rather than passing: the
+deliverables can be checked from any working copy, but what a section rests on
+is a result, and a result cannot be inferred from a file being present. The
+`sections` subcommand therefore performs a run, as the `reuse` subcommand
+already does for its adapter half.
+
 ## Whether the published record agrees with itself
 
 Every report in the bundle is built from the same run, so they must say the same

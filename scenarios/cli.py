@@ -239,7 +239,7 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
         "dossier": dossier.build(scenario_report),
         "storyboard": storyboard.check(root),
         "operations": operations.build(root),
-        "sectionLedger": prd.build(root),
+        "sectionLedger": prd.build(root, acceptance),
         "usage": docs.check(root),
         "evidenceIndex": evidence_index.build(
             scenario_report, path_report, root,
@@ -641,7 +641,14 @@ def main(argv=None):
         print(canonical_json(decisions.register()))
         return 0
     if arguments.command == "sections":
-        built = prd.build(arguments.root)
+        # The deliverable half reads the disk; the evidence half is a result, so
+        # a run is performed to supply it. Without one the ledger would report
+        # the evidence as not supplied, which answers less than the question
+        # asks.
+        built = prd.build(arguments.root, matrix.build(
+            manifest.source_identity(arguments.root), {"runId": _run_id()},
+            run_all(list(DEMOS)), run_all(list(PATH_CONTRACTS)),
+            run_all(list(GUARANTEE_CONTRACTS))))
         print(canonical_json(built))
         return 0 if built["consistent"] else 1
     if arguments.command == "completion":
