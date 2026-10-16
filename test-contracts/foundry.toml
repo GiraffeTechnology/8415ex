@@ -1,0 +1,14 @@
+[profile.default]
+src = "src"
+test = "test"
+script = "script"
+out = "out"
+cache_path = "cache"
+libs = ["lib"]
+solc_version = "0.8.24"
+auto_detect_solc = false
+evm_version = "shanghai"
+optimizer = true
+optimizer_runs = 200
+offline = true
+remappings = ["@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"]
