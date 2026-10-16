@@ -101,6 +101,8 @@ CONSISTENCY_CHECKS = (
      "reason": "a logical operation does not resolve, or a read moved something"},
     {"key": "stageMap", "flag": ("agreesWithMatrix",), "blocks": True,
      "reason": "the stage map disagrees with the acceptance matrix"},
+    {"key": "stageMap", "flag": ("everyShippedModuleIsClaimed",), "blocks": True,
+     "reason": "a module is shipped and no stage says it is developed here"},
     {"key": "eventContract", "flag": ("conformance", "accountedFor"), "blocks": True,
      "reason": "the event vocabulary does not account for what the domain records"},
     {"key": "dossier", "flag": ("allItemsCarried",), "blocks": True,

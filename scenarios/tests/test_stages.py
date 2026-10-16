@@ -4,10 +4,11 @@ A stage map reads as authoritative, so these tests insist it cannot claim a
 module that is not there, cannot disagree with the acceptance matrix, and cannot
 present a stage's local half as the whole of it.
 """
+import tempfile
 import unittest
 from pathlib import Path
 
-from scenarios import handoff, matrix, stages
+from scenarios import cli, handoff, matrix, stages
 
 ROOT = str(Path(__file__).resolve().parents[2])
 
@@ -68,6 +69,100 @@ class StageMap(unittest.TestCase):
         self.assertEqual(baseline["cases"], [],
                          "the baseline stage has no acceptance case of its own")
         self.assertGreater(baseline["developedHereCount"], 0)
+
+
+class EveryShippedModuleIsClaimed(unittest.TestCase):
+    """The other direction of the path check, which was missing.
+
+    Checking only that a claimed path exists caught a map pointing at nothing
+    and said nothing about a module that is there and claimed by nothing. Three
+    shipped modules were absent from the map that way, one of them a whole
+    contract group, while the map still read as what is developed here.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.map = stages.build(ROOT)
+
+    def test_the_package_is_read_from_the_disk(self):
+        shipped = stages.shipped_modules(ROOT)
+        self.assertTrue(shipped["readable"])
+        self.assertIsNone(shipped["error"])
+        self.assertEqual(shipped["modules"], self.map["shippedModules"])
+        self.assertGreater(self.map["shippedModuleCount"], 20)
+        for name in shipped["modules"]:
+            with self.subTest(module=name):
+                self.assertTrue(name.startswith(stages.PACKAGE + "/"))
+                self.assertTrue(Path(ROOT, name).is_file())
+
+    def test_every_shipped_module_is_claimed_by_a_stage(self):
+        self.assertEqual(self.map["shippedButClaimedByNoStage"], [])
+        self.assertTrue(self.map["everyShippedModuleIsClaimed"])
+
+    def test_a_module_no_stage_claims_is_reported(self):
+        """The negative control: dropping a claim must surface its module."""
+        kept = stages.DEVELOPED_HERE[1]
+        dropped = tuple(entry for entry in kept
+                        if entry["where"] != "scenarios/guarantees.py")
+        self.assertNotEqual(len(dropped), len(kept), "the fixture must drop a claim")
+        stages.DEVELOPED_HERE[1] = dropped
+        try:
+            broken = stages.build(ROOT)
+        finally:
+            stages.DEVELOPED_HERE[1] = kept
+        # Stages 2 and 3 still claim it, so dropping stage 1's claim alone must
+        # not make it unclaimed; that is the point of checking the union.
+        self.assertEqual(broken["shippedButClaimedByNoStage"], [])
+        for stage in (1, 2, 3):
+            kept_stage = stages.DEVELOPED_HERE[stage]
+            stages.DEVELOPED_HERE[stage] = tuple(
+                entry for entry in kept_stage
+                if entry["where"] != "scenarios/guarantees.py")
+            self.addCleanup(_restore, stage, kept_stage)
+        unclaimed = stages.build(ROOT)
+        self.assertEqual(unclaimed["shippedButClaimedByNoStage"],
+                         ["scenarios/guarantees.py"])
+        self.assertFalse(unclaimed["everyShippedModuleIsClaimed"])
+
+    def test_an_unreadable_package_is_not_a_silent_pass(self):
+        with tempfile.TemporaryDirectory() as directory:
+            shipped = stages.shipped_modules(directory)
+            empty = stages.build(directory)
+        self.assertFalse(shipped["readable"])
+        self.assertEqual(shipped["error"], "EX_PACKAGE_UNREADABLE")
+        self.assertEqual(shipped["modules"], [])
+        self.assertFalse(empty["packageReadable"])
+        self.assertFalse(empty["everyShippedModuleIsClaimed"],
+                         "no modules found is not every module claimed")
+
+    def test_a_test_module_is_not_a_deliverable(self):
+        shipped = stages.shipped_modules(ROOT)
+        self.assertTrue(Path(ROOT, "scenarios/tests/test_stages.py").is_file())
+        for name in shipped["modules"]:
+            with self.subTest(module=name):
+                self.assertNotIn("tests/", name)
+                self.assertFalse(Path(name).name.startswith("test_"))
+
+    def test_each_exemption_says_why_it_is_not_a_deliverable(self):
+        self.assertTrue(stages.NOT_A_DELIVERABLE, "an empty record hides nothing")
+        self.assertEqual(self.map["notADeliverable"], dict(stages.NOT_A_DELIVERABLE))
+        for name, reason in stages.NOT_A_DELIVERABLE.items():
+            with self.subTest(module=name):
+                self.assertIn(name, self.map["shippedModules"],
+                              "an exemption for a module that is not shipped is stale")
+                self.assertNotIn(name, self.map["claimedPaths"])
+                self.assertTrue(reason)
+
+    def test_the_new_verdict_is_acted_on_rather_than_reported(self):
+        gated = [check for check in cli.CONSISTENCY_CHECKS
+                 if check["key"] == "stageMap"
+                 and check["flag"] == ("everyShippedModuleIsClaimed",)]
+        self.assertEqual(len(gated), 1, "a verdict nothing acts on changes nothing")
+        self.assertTrue(gated[0]["blocks"])
+
+
+def _restore(stage, entries):
+    stages.DEVELOPED_HERE[stage] = entries
 
 
 class Ownership(unittest.TestCase):

@@ -419,6 +419,27 @@ bound only inside a function or a class body (importable from neither, so
 counting it would make a missing name look present), and an undecidable name.
 A surface that depends on nothing is not a finding.
 
+## What the stage map is checked against
+
+Every deliverable in the stage map names a path, and the path was checked
+against the disk. That caught a map pointing at a module that is not there and
+said nothing about the opposite: a module that is there and claimed by nothing.
+Three shipped modules were missing from the map that way - `commands.py`,
+`stages.py` and `guarantees.py`, the last a whole contract group added in this
+same round - while the map still read as "what is developed here".
+
+Both directions are checked now. The package's modules are read off the disk,
+and a module no stage claims is a finding with its own gate, because it is a gap
+in the map rather than in the code. The verdict is acted on rather than
+reported: a test asserts there is a blocking check reading it, and that two
+checks on one report do not collapse into one.
+
+Test modules are not deliverables - a test is the check on one - and
+`__init__.py` is exempt with its reason recorded in `notADeliverable`, where an
+exemption can be argued with instead of being invisible. An unreadable package
+fails the gate rather than passing it, since finding no modules is not the same
+as every module being claimed.
+
 ## The domain guarantees the six scenarios never asserted
 
 Ten acceptance cases reached the matrix as `unit-suite-only`: the domain's own
