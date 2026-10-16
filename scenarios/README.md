@@ -52,6 +52,13 @@ python3 -B -m scenarios.cli run-all --json-out /tmp/ex-run.json --text-out /tmp/
 # also really execute the two unit suites and record their true status
 python3 -B -m scenarios.cli run-all --execute-suites
 
+# name the source tree every report resolves against: its git identity, its
+# file inventory and its secret scan. It defaults to the working directory, and
+# it has to be the tree this code is executing from - a root pointing at any
+# other checkout is refused, because the reported source would not be the
+# source that ran
+python3 -B -m scenarios.cli run-all --root .
+
 # the nine-group candidate receipt for a completed run
 python3 -B -m scenarios.cli receipt [--execute-suites]
 
@@ -407,6 +414,33 @@ existing, a module that stopped existing, a file that cannot be parsed, a name
 bound only inside a function or a class body (importable from neither, so
 counting it would make a missing name look present), and an undecidable name.
 A surface that depends on nothing is not a finding.
+
+## What the documented options are checked against
+
+The usage check knew the subcommands and nothing about what they accept. A
+subcommand existing says nothing about its options: rename one and every
+documented instruction carrying it is broken, with nothing going red. So the
+options shown on a documented invocation are now compared with the options the
+command line's own source accepts, in both directions.
+
+The comparison found one of each kind worth looking at on its first run.
+`--root` was accepted and shown in no guide, and documenting it turned up a
+second thing: it cannot name another checkout, because the provenance rule
+refuses a reported source that is not the tree the code executed from. The
+guide now says that, which is the opposite of what an undocumented option
+invites a reader to assume.
+
+An invocation is read as a logical line, with a backslash continuation joined
+to what continues it, because the options of a multi-line invocation are
+written on their own lines and reading physical lines would attribute none of
+them. An option appearing in prose, on a line with no invocation on it, is not
+attributed to any tool.
+
+The domain command line's options are reported but not gated here. Its guide
+is not written from this package, so `--registration-path` being undocumented
+is recorded as an observation with that reason attached, rather than asserted
+as this package's defect or dropped from the report - which would be the quiet
+version of the same mistake.
 
 ## What the secret scan reads
 

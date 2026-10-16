@@ -27,6 +27,7 @@ class _Copy:
         self.directory = Path(tempfile.mkdtemp())
         wanted = set(docs.guides(str(ROOT))["read"])
         wanted.add(docs.DOMAIN_CLI)
+        wanted.update(docs.TOOL_SOURCES.values())
         wanted.update(entry["path"] for entry in docs.entry_points(str(ROOT)))
         for name in sorted(wanted):
             target = self.directory / name
@@ -246,6 +247,130 @@ class WhenEntryPointsDrift(unittest.TestCase):
                       _findings(check))
         self.assertIn("exchange.demo_package", check["entryPointsUndocumented"])
         self.assertIn("exchange.demo_ui", check["entryPointsUndocumented"])
+
+
+class Options(unittest.TestCase):
+    """One level below a subcommand, and it was not being checked.
+
+    A renamed option breaks every documented instruction that carries it, and
+    an option no guide shows is a capability nobody will use. Neither made
+    anything go red: the check knew the subcommands existed and nothing about
+    what they accept.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.check = docs.check(str(ROOT))
+
+    def test_the_scenario_options_and_the_guides_agree(self):
+        tool = self.check["options"]["scenarios"]
+        self.assertTrue(tool["gatedHere"])
+        self.assertEqual(tool["documentedButNotAccepted"], [])
+        self.assertEqual(tool["acceptedButUndocumented"], [])
+        self.assertTrue(tool["consistent"])
+        for option in tool["optionsAccepted"]:
+            with self.subTest(option=option):
+                self.assertTrue(tool["whereEachIsShown"][option],
+                                "every option names the guide that shows it")
+
+    def test_the_accepted_options_are_read_from_the_command_line_source(self):
+        self.assertEqual(self.check["optionSources"], dict(docs.TOOL_SOURCES))
+        self.assertEqual(self.check["optionSourcesUnreadable"], [])
+        self.assertEqual(self.check["options"]["scenarios"]["optionsAccepted"],
+                         ["--execute-suites", "--json", "--json-out", "--root",
+                          "--text-out"])
+
+    def test_the_domain_options_are_observed_and_say_why_they_are_not_gated(self):
+        """A one-sided finding is kept visible without being claimed as ours.
+
+        The domain command line's guide is not written from this package, so an
+        option undocumented there is reported rather than asserted as this
+        package's defect. Reporting it as nothing at all would be the quiet
+        version of the same mistake.
+        """
+        self.assertFalse(self.check["options"]["exchange"]["gatedHere"])
+        observed = self.check["optionsObservedNotGated"]
+        self.assertTrue(observed)
+        for entry in observed:
+            with self.subTest(option=entry["option"]):
+                self.assertEqual(entry["tool"], "exchange")
+                self.assertTrue(entry["notGatedBecause"])
+                self.assertIn(entry["observation"],
+                              ("accepted but shown in no guide",
+                               "shown in a guide but not accepted"))
+        self.assertNotIn("an option exists and no guide shows it",
+                         _findings(self.check))
+
+    def test_a_copy_of_the_tree_is_consistent_too(self):
+        with _Copy() as directory:
+            self.assertTrue(docs.check(str(directory))["consistent"])
+
+
+class WhenOptionsDrift(unittest.TestCase):
+    """The negative controls. A check that only passes proves nothing."""
+
+    def test_an_option_no_guide_shows_is_caught(self):
+        with _Copy() as directory:
+            source = directory / docs.TOOL_SOURCES["scenarios"]
+            source.write_text(
+                source.read_text(encoding="utf-8").replace(
+                    'parser.add_argument("--root", default=".")',
+                    'parser.add_argument("--root", default=".")\n'
+                    '    parser.add_argument("--undocumented-switch")'),
+                encoding="utf-8")
+            check = docs.check(str(directory))
+        self.assertIn("an option exists and no guide shows it", _findings(check))
+        self.assertIn("--undocumented-switch",
+                      check["options"]["scenarios"]["acceptedButUndocumented"])
+        self.assertFalse(check["consistent"])
+
+    def test_an_option_the_command_line_does_not_accept_is_caught(self):
+        with _Copy() as directory:
+            guide = directory / "scenarios/README.md"
+            guide.write_text(
+                guide.read_text(encoding="utf-8").replace(
+                    "python3 -B -m scenarios.cli run-all --execute-suites",
+                    "python3 -B -m scenarios.cli run-all --no-such-option"),
+                encoding="utf-8")
+            check = docs.check(str(directory))
+        self.assertIn("a guide shows an option the command line does not accept",
+                      _findings(check))
+        self.assertIn("--no-such-option",
+                      check["options"]["scenarios"]["documentedButNotAccepted"])
+
+    def test_an_unreadable_command_line_source_is_a_finding_not_an_empty_set(self):
+        with _Copy() as directory:
+            (directory / docs.TOOL_SOURCES["scenarios"]).unlink()
+            check = docs.check(str(directory))
+        self.assertIn("a command line's option list could not be read",
+                      _findings(check))
+        self.assertEqual([entry["tool"] for entry in check["optionSourcesUnreadable"]],
+                         ["scenarios"])
+        self.assertFalse(check["consistent"])
+
+    def test_an_option_on_its_own_line_is_attributed_to_the_invocation(self):
+        """Without joining continuations, exactly these would be missed."""
+        joined = docs._logical_lines(
+            "python3 -B -m scenarios.cli run-all \\\n"
+            "  --json-out /tmp/one.json \\\n"
+            "  --text-out /tmp/one.txt\n"
+            "unrelated --flag\n")
+        self.assertEqual(len(joined), 2)
+        self.assertIn("--json-out", joined[0])
+        self.assertIn("--text-out", joined[0])
+        self.assertEqual(joined[1], "unrelated --flag")
+
+    def test_an_option_outside_an_invocation_is_not_attributed_to_a_tool(self):
+        with _Copy() as directory:
+            guide = directory / "scenarios/README.md"
+            guide.write_text(
+                guide.read_text(encoding="utf-8")
+                + "\n\nProse mentioning --not-an-option on its own line.\n",
+                encoding="utf-8")
+            check = docs.check(str(directory))
+        self.assertEqual(check["options"]["scenarios"]["documentedButNotAccepted"],
+                         [])
+        self.assertTrue(check["consistent"])
 
 
 if __name__ == "__main__":

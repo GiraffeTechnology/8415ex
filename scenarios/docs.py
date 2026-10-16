@@ -24,6 +24,16 @@ four of the eight runnable entry points are documented only under ``docs/``,
 which it never opened. A check that is green because it is not looking is worse
 than no check, so the guide set now includes that folder and the entry points
 are read out of the source.
+
+The options shown on a documented invocation are compared the same way, in both
+directions, because the subcommand existing says nothing about what it accepts:
+a renamed option breaks every instruction carrying it, and an option no guide
+shows is a capability nobody will use. The first run of that comparison found
+one of each kind to look at, which is what a check being worth adding looks
+like. The domain command line's options are reported but not gated here: its
+guide is not written from this package, so an undocumented option there is an
+observation rather than this package's defect, and the reason is carried in the
+report instead of being left to be inferred from its absence.
 """
 import pathlib
 import re
@@ -68,6 +78,25 @@ INVOCATION = re.compile(r"python3 -B -m (scenarios|exchange)\.cli ([a-z][a-z-]*)
 #: Commands that exist for a reason other than being followed by a reader, and
 #: so are not required to appear in a guide. Each says why.
 NOT_REQUIRED_IN_GUIDES = {}
+
+#: Where each command line's accepted options are read from. The source is
+#: parsed rather than imported: this module is imported by the scenario command
+#: line, so importing it back would be circular, and the domain's module
+#: belongs to another surface.
+TOOL_SOURCES = {"scenarios": "scenarios/cli.py", "exchange": "exchange/cli.py"}
+
+#: An option as a guide writes it, and an option as a parser accepts it.
+OPTION_IN_GUIDE = re.compile(r"(?<![\w-])(--[a-z][a-z0-9-]*)")
+ACCEPTED_OPTION = re.compile(r'add_argument\(\s*"(--[a-z][a-z0-9-]*)"')
+
+#: Tools whose option findings are reported but not enforced here, with the
+#: reason. The domain command line's options belong in the domain's own guide,
+#: which is not written from this package, so an undocumented option there is
+#: visible as an observation rather than asserted as this package's defect.
+OPTIONS_NOT_GATED = {
+    "exchange": "the option belongs to the domain command line, whose guide is "
+                "not written from this package",
+}
 
 
 def guides(root="."):
@@ -132,6 +161,62 @@ def invoked_modules(root="."):
         for module in ANY_INVOCATION.findall(text):
             found.setdefault(module, []).append(name)
     return {module: sorted(set(names)) for module, names in sorted(found.items())}
+
+
+def _logical_lines(text):
+    """Guide lines, with a backslash continuation joined to what continues it.
+
+    A documented invocation usually puts each option on its own line. Reading
+    physical lines would find the command on one and its options on others, and
+    attribute none of them to it.
+    """
+    joined, pending = [], ""
+    for line in text.splitlines():
+        stripped = line.rstrip()
+        if stripped.endswith("\\"):
+            pending += stripped[:-1] + " "
+            continue
+        joined.append(pending + stripped)
+        pending = ""
+    if pending:
+        joined.append(pending)
+    return joined
+
+
+def documented_options(root="."):
+    """Every option the guides show on an invocation, by tool."""
+    base = pathlib.Path(root)
+    found = {tool: {} for tool in TOOL_SOURCES}
+    for guide in guides(root)["read"]:
+        text = (base / guide).read_text(encoding="utf-8")
+        for logical in _logical_lines(text):
+            match = INVOCATION.search(logical)
+            if match is None:
+                continue
+            for option in OPTION_IN_GUIDE.findall(logical):
+                found[match.group(1)].setdefault(option, []).append(guide)
+    return {tool: {option: sorted(set(names))
+                   for option, names in sorted(options.items())}
+            for tool, options in sorted(found.items())}
+
+
+def accepted_options(root="."):
+    """Every option each command line accepts, read from its own source."""
+    base = pathlib.Path(root)
+    found, unreadable = {}, []
+    for tool, source in sorted(TOOL_SOURCES.items()):
+        path = base / source
+        if not path.is_file():
+            # Not a silent empty set: an unread source would make every
+            # documented option look invented and every real one look absent.
+            unreadable.append({"tool": tool, "source": source,
+                               "error": "EX_CLI_SOURCE_UNREADABLE"})
+            found[tool] = []
+            continue
+        found[tool] = sorted(set(
+            ACCEPTED_OPTION.findall(path.read_text(encoding="utf-8"))))
+    return {"options": found, "sources": dict(TOOL_SOURCES),
+            "unreadable": unreadable}
 
 
 def domain_commands(root="."):
@@ -233,9 +318,61 @@ def check(root="."):
             "finding": "a guide invokes a module that is not runnable",
             "detail": "%s, in %s" % (module, ", ".join(invoked[module]))})
 
+    # One level below a subcommand. A renamed option breaks every documented
+    # instruction that carries it, and an option no guide shows is a capability
+    # nobody will use, and neither made anything go red.
+    documented_flags = documented_options(root)
+    accepted = accepted_options(root)
+    for entry in accepted["unreadable"]:
+        findings.append({
+            "finding": "a command line's option list could not be read",
+            "detail": "%s (%s): %s" % (entry["tool"], entry["source"],
+                                       entry["error"])})
+    options, observed = {}, []
+    for tool in sorted(TOOL_SOURCES):
+        shown_here = documented_flags[tool]
+        accepts = set(accepted["options"][tool])
+        invented = sorted(set(shown_here) - accepts)
+        unshown = sorted(accepts - set(shown_here))
+        reason = OPTIONS_NOT_GATED.get(tool)
+        for option in invented:
+            detail = "%s.cli %s, in %s" % (tool, option,
+                                           ", ".join(shown_here[option]))
+            if reason is None:
+                findings.append({"finding": "a guide shows an option the "
+                                            "command line does not accept",
+                                 "detail": detail})
+            else:
+                observed.append({"tool": tool, "option": option,
+                                 "observation": "shown in a guide but not accepted",
+                                 "detail": detail, "notGatedBecause": reason})
+        for option in unshown:
+            detail = "%s.cli %s" % (tool, option)
+            if reason is None:
+                findings.append({"finding": "an option exists and no guide "
+                                            "shows it",
+                                 "detail": detail})
+            else:
+                observed.append({"tool": tool, "option": option,
+                                 "observation": "accepted but shown in no guide",
+                                 "detail": detail, "notGatedBecause": reason})
+        options[tool] = {
+            "optionsAccepted": sorted(accepts),
+            "optionsDocumented": sorted(shown_here),
+            "documentedButNotAccepted": invented,
+            "acceptedButUndocumented": unshown,
+            "whereEachIsShown": shown_here,
+            "gatedHere": reason is None,
+            "consistent": not invented and not unshown,
+        }
+
     return {
-        "schema": "8415ex-usage-check/2",
+        "schema": "8415ex-usage-check/3",
         "tools": tools,
+        "options": options,
+        "optionsObservedNotGated": observed,
+        "optionSources": accepted["sources"],
+        "optionSourcesUnreadable": accepted["unreadable"],
         "entryPoints": entries,
         "entryPointCount": len(entries),
         "entryPointsUndocumented": sorted(entry["module"] for entry in entries
@@ -255,6 +392,10 @@ def check(root="."):
             "exists and is documented, never that following it succeeds",
             "not a review of the explanation around a command",
             "not a check of every shell line in a guide: it covers the module "
-            "invocations and the two subcommand lists, not arbitrary prose",
+            "invocations, the two subcommand lists and the options shown on an "
+            "invocation, not arbitrary prose",
+            "not a check that an option is explained or that its documented "
+            "value is valid: it checks that the command line accepts the "
+            "option and that some guide shows it",
         ],
     }
