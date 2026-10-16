@@ -412,5 +412,92 @@ class ReuseMapIsPartOfTheRun(unittest.TestCase):
             self.assertEqual(cli.main(["reuse", "--root", ROOT]), 0)
 
 
+class EveryVerdictIsActedOn(unittest.TestCase):
+    """A report that disagrees with the code must stop the run, not sit in it.
+
+    The bundle carries several reports that state whether they still agree with
+    the code. A verdict nobody reads is worse than no verdict: it reads as
+    authoritative and changes nothing.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.bundle = cli._bundle(ROOT)
+
+    def test_every_declared_check_is_present_and_passing(self):
+        checks = {entry["key"]: entry for entry in self.bundle["consistencyChecks"]}
+        self.assertEqual(sorted(checks),
+                         sorted(entry["key"] for entry in cli.CONSISTENCY_CHECKS))
+        for key, entry in sorted(checks.items()):
+            with self.subTest(check=key):
+                self.assertIn(key, self.bundle, "the report it reads must exist")
+                self.assertTrue(entry["blocks"])
+                self.assertTrue(entry["reason"])
+                self.assertIs(entry["verdict"], True)
+
+    def test_no_report_states_a_verdict_the_run_ignores(self):
+        self.assertEqual(self.bundle["unclassifiedVerdicts"], [])
+
+    def test_a_verdict_handled_by_an_earlier_rule_names_that_rule(self):
+        handled = self.bundle["verdictsHandledElsewhere"]
+        self.assertEqual(sorted(handled), sorted(cli.HANDLED_ELSEWHERE))
+        for key, where in sorted(handled.items()):
+            with self.subTest(report=key):
+                self.assertIn(key, self.bundle)
+                self.assertTrue(where)
+
+    def test_a_failing_check_blocks_the_run(self):
+        # The negative control. Without it, the passing result above would only
+        # show that nothing currently disagrees, not that a disagreement stops
+        # the run.
+        broken = dict(self.bundle, usage=dict(self.bundle["usage"],
+                                              consistent=False))
+        for check in cli.CONSISTENCY_CHECKS:
+            with self.subTest(check=check["key"]):
+                self.assertIsNotNone(cli._verdict(self.bundle, check))
+        self.assertIs(cli._verdict(broken, {"key": "usage",
+                                            "flag": ("consistent",)}), False)
+
+    def test_an_undeclared_report_with_a_verdict_is_reported(self):
+        invented = dict(self.bundle, inventedReport={"consistent": True})
+        self.assertEqual(cli.unclassified_verdicts(invented), ["inventedReport"])
+
+    def test_a_nested_verdict_is_found_too(self):
+        invented = dict(self.bundle,
+                        inventedReport={"coverage": {"accountedFor": True}})
+        self.assertEqual(cli.unclassified_verdicts(invented), ["inventedReport"])
+
+    def test_a_report_without_a_verdict_is_not_reported(self):
+        invented = dict(self.bundle, inventedReport={"count": 3})
+        self.assertEqual(cli.unclassified_verdicts(invented), [])
+
+    def test_a_missing_report_is_not_silently_treated_as_passing(self):
+        self.assertIsNone(cli._verdict({}, {"key": "usage",
+                                            "flag": ("consistent",)}))
+        self.assertIsNone(cli._verdict({"reuse": {}},
+                                       {"key": "reuse",
+                                        "flag": ("declaredCoverage", "complete")}))
+
+
+class TheCommandListHasOneHome(unittest.TestCase):
+
+    def test_the_parser_and_the_usage_check_read_the_same_list(self):
+        from scenarios import commands, docs
+
+        self.assertIs(cli.COMMANDS, commands.COMMANDS)
+        self.assertIs(docs.SCENARIO_COMMANDS, commands.COMMANDS)
+
+    def test_the_list_module_imports_nothing_from_this_package(self):
+        source = Path(ROOT, "scenarios/commands.py").read_text(encoding="utf-8")
+        self.assertNotIn("import", source.replace("# ", "").split('"""')[-1],
+                         "a list with dependencies could reintroduce the loop")
+
+    def test_every_declared_command_is_accepted_by_the_parser(self):
+        for command in cli.COMMANDS:
+            with self.subTest(command=command):
+                self.assertIsInstance(command, str)
+                self.assertTrue(command.replace("-", "").isalnum())
+
+
 if __name__ == "__main__":
     unittest.main()

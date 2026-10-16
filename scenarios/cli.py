@@ -36,9 +36,10 @@ import uuid
 
 from exchange.ids import canonical_json
 
-from . import (decisions, evidence_index, execution, handoff, manifest, matrix,
-               reuse,
-               observations, receipt, validation)
+from .commands import COMMANDS, STDOUT_ONLY
+from . import (completion, decisions, docs, dossier, events, evidence_index,
+               execution, handoff, manifest, matrix, observations, operations,
+               prd, receipt, reuse, stages, storyboard, validation)
 from .demos import DEMOS
 from .harness import report_text, run_all
 from .paths import PATH_CONTRACTS, coverage_map
@@ -82,6 +83,78 @@ def _suite_records(root, execute):
         record["title"] = title
         records.append(record)
     return records
+
+
+#: The self-consistency checks this bundle carries, and what a failure means.
+#:
+#: A report that quietly disagrees with the code is worse than no report, so a
+#: failing check blocks the run rather than sitting in the record as a field
+#: nobody reads. ``flag`` is the path to the verdict inside that report.
+CONSISTENCY_CHECKS = (
+    {"key": "usage", "flag": ("consistent",), "blocks": True,
+     "reason": "the guides and the commands that exist disagree"},
+    {"key": "storyboard", "flag": ("consistent",), "blocks": True,
+     "reason": "the presentation outline no longer describes the code"},
+    {"key": "operations", "flag": ("consistent",), "blocks": True,
+     "reason": "a logical operation does not resolve, or a read moved something"},
+    {"key": "stageMap", "flag": ("agreesWithMatrix",), "blocks": True,
+     "reason": "the stage map disagrees with the acceptance matrix"},
+    {"key": "eventContract", "flag": ("conformance", "accountedFor"), "blocks": True,
+     "reason": "the event vocabulary does not account for what the domain records"},
+    {"key": "dossier", "flag": ("allItemsCarried",), "blocks": True,
+     "reason": "a scenario does not record something a demonstration must carry"},
+    {"key": "sectionLedger", "flag": ("consistent",), "blocks": True,
+     "reason": "a requirement section is addressed by nothing, or names "
+               "something that is not there"},
+    {"key": "completion", "flag": ("notMeantHolds",), "blocks": True,
+     "reason": "something this round explicitly does not mean was observed in "
+               "the run: a main network, a real adapter or a live quote asset"},
+)
+
+#: Verdict field names a report uses to say it agrees with the code. Any report
+#: in the bundle carrying one of these must be accounted for, so a new check
+#: cannot be added and then left out of the run's verdict.
+VERDICT_FIELDS = ("consistent", "agreesWithMatrix", "allItemsCarried",
+                  "accountedFor")
+
+#: Reports whose verdict an earlier rule already acts on. They are named here
+#: rather than checked twice, so there is still one place to look for what
+#: happens to every verdict in the bundle.
+HANDLED_ELSEWHERE = {
+    "manifest": "the file inventory rule",
+    "secretScan": "the secret scan rule",
+    "sourceReconciliation": "the source-held-still rule",
+    "reuse": "the reuse-map rule, which reads the stricter top-level verdict",
+    "evidenceValidation": "the evidence record rule",
+}
+
+def _verdict(bundle, check):
+    """The verdict one consistency check reports, or None if it is absent."""
+    found = bundle.get(check["key"])
+    for step in check["flag"]:
+        found = found.get(step) if isinstance(found, dict) else None
+    return found
+
+
+def unclassified_verdicts(bundle):
+    """Reports that state a verdict about the code which nothing acts on.
+
+    A report added to the bundle with a verdict field, and not declared in
+    CONSISTENCY_CHECKS, would be a check whose failure the run ignores. That is
+    the failure mode this guards: the check exists, reads as authoritative, and
+    changes nothing.
+    """
+    declared = ({check["key"] for check in CONSISTENCY_CHECKS}
+                | set(HANDLED_ELSEWHERE))
+    found = []
+    for key, value in sorted(bundle.items()):
+        if key in declared or not isinstance(value, dict):
+            continue
+        nested = [value] + [inner for inner in value.values()
+                            if isinstance(inner, dict)]
+        if any(field in level for level in nested for field in VERDICT_FIELDS):
+            found.append(key)
+    return found
 
 
 def _bundle(root, execute_suites=False, run_id=None, started_at=None,
@@ -128,6 +201,13 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
                                for entry in (artifacts or []) if entry],
         "outputArtifacts": artifacts or [],
         "reuse": reuse.build(scenario_report, root),
+        "eventContract": events.build(root=root),
+        "stageMap": stages.build(root),
+        "dossier": dossier.build(scenario_report),
+        "storyboard": storyboard.check(root),
+        "operations": operations.build(root),
+        "sectionLedger": prd.build(root),
+        "usage": docs.check(root),
         "evidenceIndex": evidence_index.build(
             scenario_report, path_report, root,
             {"runId": run_id, "startedAt": started_at},
@@ -167,6 +247,11 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
         "notRun": [],
         "transactionHashes": "NOT_RUN",
     }
+    # The ledger reads the reports this bundle already carries, so it is built
+    # from the bundle rather than beside it - and after the reconciliation it
+    # reads, because a signal pointing at a report that is not there yet would
+    # resolve to None and look like a clause that is not evidenced.
+    bundle["completion"] = completion.build(bundle)
     blocking = receipt.source_binding_errors(bundle)
     if not bundle["reuse"]["complete"]:
         blocking.append("the reuse map is incomplete")
@@ -205,6 +290,20 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
     for reason in checked["notPassing"]:
         if reason not in blocking:
             blocking.append(reason)
+    for check in CONSISTENCY_CHECKS:
+        verdict = bundle.get(check["key"])
+        for step in check["flag"]:
+            verdict = verdict.get(step) if isinstance(verdict, dict) else None
+        if verdict is not True and check["blocks"]:
+            blocking.append("%s (%s)" % (check["reason"], check["key"]))
+    bundle["consistencyChecks"] = [
+        dict(check, flag=list(check["flag"]),
+             verdict=_verdict(bundle, check))
+        for check in CONSISTENCY_CHECKS]
+    bundle["verdictsHandledElsewhere"] = dict(HANDLED_ELSEWHERE)
+    bundle["unclassifiedVerdicts"] = unclassified_verdicts(bundle)
+    for key in bundle["unclassifiedVerdicts"]:
+        blocking.append("a report states a verdict that the run ignores: " + key)
     bundle["blocking"] = blocking
     bundle["allLocalPassed"] = blocking == []
     bundle["meaning"] = ("every local expectation passed over a confirmed source tree; it is "
@@ -438,10 +537,7 @@ def summary_text(bundle):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Local Stage 5 preparation for 8415ex.")
-    parser.add_argument("command", choices=("run-all", "scenarios", "paths", "matrix",
-                                            "manifest", "handoff", "validate-config",
-                                            "observations", "evidence-index",
-                                            "decisions", "receipt", "reuse"))
+    parser.add_argument("command", choices=COMMANDS)
     parser.add_argument("--root", default=".")
     parser.add_argument("--json", action="store_true", help="print the canonical record only")
     parser.add_argument("--json-out", help="write the canonical record of this same run here")
@@ -466,11 +562,49 @@ def main(argv=None):
         built = manifest.build(arguments.root, run_id=_run_id())
         print(canonical_json(built))
         return 0 if built["consistent"] else 1
-    if arguments.command in ("receipt", "decisions", "reuse") and (arguments.json_out or arguments.text_out):
-        parser.error("receipt, decisions and reuse publish JSON to stdout only; capture stdout externally")
+    if arguments.command in STDOUT_ONLY and (arguments.json_out or arguments.text_out):
+        parser.error("%s publish JSON to stdout only; capture stdout externally"
+                     % ", ".join(sorted(STDOUT_ONLY)))
     if arguments.command == "decisions":
         print(canonical_json(decisions.register()))
         return 0
+    if arguments.command == "sections":
+        built = prd.build(arguments.root)
+        print(canonical_json(built))
+        return 0 if built["consistent"] else 1
+    if arguments.command == "completion":
+        # The ledger describes a completed run, so one is performed and then
+        # read; nothing in it is recomputed from the run.
+        bundle = _bundle(arguments.root, execute_suites=arguments.execute_suites)
+        print(canonical_json(bundle["completion"]))
+        return 0 if bundle["completion"]["notMeantHolds"] else 1
+    if arguments.command == "usage":
+        built = docs.check(arguments.root)
+        print(canonical_json(built))
+        return 0 if built["consistent"] else 1
+    if arguments.command == "operations":
+        built = operations.build(arguments.root)
+        print(canonical_json(built))
+        return 0 if built["consistent"] else 1
+    if arguments.command == "storyboard":
+        built = storyboard.check(arguments.root)
+        print(canonical_json(built))
+        return 0 if built["consistent"] else 1
+    if arguments.command == "dossier":
+        built = dossier.build(run_all(list(DEMOS)))
+        print(canonical_json(built))
+        return 0 if built["allItemsCarried"] else 1
+    if arguments.command == "stages":
+        built = stages.build(arguments.root)
+        print(canonical_json(built))
+        return 0 if built["agreesWithMatrix"] else 1
+    if arguments.command == "events":
+        # The contract and its conformance need no run. The coverage and replay
+        # halves do, so one demonstration timeline is built and read.
+        exchange, receipt_id = events.demonstration_timeline()
+        built = events.build(exchange, receipt_id, arguments.root, _run_id())
+        print(canonical_json(built))
+        return 0 if built["conformance"]["accountedFor"] else 1
     if arguments.command == "reuse":
         # The adapter half is read from a real run, so one is performed; the
         # domain half is read from the imported modules and the package source.

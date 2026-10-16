@@ -240,15 +240,104 @@ def measure(run):
     }
 
 
+#: Step facts that measure a backlog. ``outstandingLegs`` is how many legs are
+#: still unresolved; ``deferredLegs`` is how many registration results are
+#: buffered waiting for a gap. Both are read from the facts the scenarios
+#: already record, so nothing is instrumented specially for this.
+BACKLOG_FACTS = ("outstandingLegs", "deferredLegs")
+
+
+def _rate(part, whole):
+    """A rate in parts per thousand, as an integer. No floating point appears
+    anywhere in these records, and a rate over nothing is reported as None
+    rather than as zero: zero would read as a measurement."""
+    if not whole:
+        return None
+    return (part * 1000 + whole // 2) // whole
+
+
+def _backlog(report):
+    """The highest backlog each scenario reached, from the facts it recorded.
+
+    A backlog is read as a count, never as a failure: a deferred result waiting
+    for a gap is the normal serial-registration state, and an outstanding leg is
+    work in flight.
+
+    The second figure is the *last recorded* value, not the end state. A
+    scenario stops recording a fact once it is no longer what a step is about,
+    so a non-zero last value means the scenario stopped mentioning the backlog,
+    not necessarily that it ended with one. Calling it final would be the kind
+    of small overstatement that a reader then builds on.
+    """
+    observed = {}
+    for scenario in report["scenarios"]:
+        for fact in BACKLOG_FACTS:
+            seen = [step["facts"][fact] for step in scenario["steps"]
+                    if isinstance(step["facts"].get(fact), (int, list))
+                    and not isinstance(step["facts"].get(fact), bool)]
+            counts = [value if isinstance(value, int) else len(value) for value in seen]
+            if not counts:
+                continue
+            entry = observed.setdefault(fact, {"observedIn": [], "peak": 0,
+                                               "lastRecordedByScenario": {},
+                                               "lastRecordedStepByScenario": {}})
+            entry["observedIn"].append(scenario["scenarioId"])
+            entry["peak"] = max(entry["peak"], max(counts))
+            entry["lastRecordedByScenario"][scenario["scenarioId"]] = counts[-1]
+            entry["lastRecordedStepByScenario"][scenario["scenarioId"]] = max(
+                step["index"] for step in scenario["steps"]
+                if fact in step["facts"])
+    for fact, entry in observed.items():
+        entry["observedIn"] = sorted(set(entry["observedIn"]))
+        entry["clearedWhereLastRecorded"] = sorted(
+            scenario for scenario, value
+            in entry["lastRecordedByScenario"].items() if value == 0)
+        entry["stillCountedWhenLastRecorded"] = sorted(
+            scenario for scenario, value
+            in entry["lastRecordedByScenario"].items() if value != 0)
+        entry["lastRecordedIsNotTheEndState"] = True
+    return {fact: observed.get(fact) for fact in BACKLOG_FACTS}
+
+
 def workload_observation(report):
-    """The size of the workload that produced a report, for later comparison."""
+    """T-40: the load that produced a report, its backlog and its rates.
+
+    EX-NFR-08 asks for a recorded test load, execution time, queue backlog and
+    failure rate before any throughput or latency figure is spoken about, and
+    these are those four. Two things are kept strictly apart. A ``not-run``
+    obligation is not a failure, so it has its own rate and is excluded from the
+    failure rate; counting it as a failure would make an honest outstanding duty
+    look like a defect. And none of this is a target: one observation on one
+    machine is a load record, not a baseline distribution and not an SLA.
+    """
     expectations = sum(len(scenario["expectations"]) for scenario in report["scenarios"])
     steps = sum(len(scenario["steps"]) for scenario in report["scenarios"])
+    totals = report["totals"]
+    recorded = sum(totals.get(outcome, 0) for outcome in
+                   ("passed", "failed", "blocked", "not-run"))
+    elapsed = [scenario["elapsedMs"] for scenario in report["scenarios"]]
     return {
         "scenarios": report["scenariosTotal"],
         "recordedExpectations": expectations,
         "recordedSteps": steps,
-        "outcomeTotals": report["totals"],
-        "slowestScenarioMs": max((scenario["elapsedMs"] for scenario in report["scenarios"]),
-                                 default=0),
+        "outcomeTotals": totals,
+        "slowestScenarioMs": max(elapsed, default=0),
+        "totalScenarioMs": sum(elapsed),
+        "ratesPerThousand": {
+            "passed": _rate(totals.get("passed", 0), recorded),
+            "failed": _rate(totals.get("failed", 0), recorded),
+            "blocked": _rate(totals.get("blocked", 0), recorded),
+            "notRun": _rate(totals.get("not-run", 0), recorded),
+        },
+        "rateDenominator": recorded,
+        "failureRateExcludesNotRun": True,
+        "backlog": _backlog(report),
+        "isNot": [
+            "not a service level: one observation on one machine is a load "
+            "record, never a throughput or latency target",
+            "not a defect count: a not-run obligation has its own rate and is "
+            "excluded from the failure rate",
+            "not a backlog problem: a deferred result waiting for a gap is the "
+            "normal serial-registration state",
+        ],
     }

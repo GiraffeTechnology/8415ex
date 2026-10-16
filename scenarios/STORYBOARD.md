@@ -30,6 +30,27 @@ and authorized test-network execution.
 | 5 | DEMO-05, route REG_ELECTRONIC | intermediate wallets without gas; one return operation that does not walk them; the blocked, resumable state; no custody, no forced sale, no liquidation | Local | T-35, T-36 |
 | 6 | DEMO-06, route REG_INTERMEDIARY | the stop-trading instant; a new trade refused; in-flight registration and settlement continuing; the eligible exit checked | Local | T-35, T-36 |
 
+## What the status slide draws on
+
+Slide 8 is the slide an audience should trust, so it is assembled from records
+rather than written from memory. Each line below says which command produces the
+figures and what that command refuses to claim.
+
+| On the slide | Produced by | What it refuses to say |
+| --- | --- | --- |
+| the obligations that are still NOT_RUN, verbatim | `scenarios.cli run-all` | nothing is substituted for an empty slot |
+| which audit groups are recorded, derived, or waiting on a chain | `scenarios.cli events` | a local record is not a chain observation, and a derivation is not a record |
+| what each scenario carries, and the two items no local run can carry | `scenarios.cli dossier` | a rendered page is not the page state, and nothing stands in for a transaction hash |
+| per stage, what is developed here and what is owed elsewhere | `scenarios.cli stages` | a finished local half is not a finished stage |
+| the open decisions, and what each one does not block | `scenarios.cli decisions` | an open decision is not a defect, and it blocks less than it appears to |
+| the exact source and the diff under review | `scenarios.cli receipt` | a candidate is not a deployment, and the chain and deployment groups stay NOT_RUN |
+
+The outline itself is checked against the code by `scenarios.cli storyboard`:
+every panel must name a scenario that exists, on the route that scenario really
+runs, and every case a panel says is still owed must be a real case that
+genuinely still owes real evidence. The check verifies the identifiers, the
+routes and the obligations; the prose stays the author's.
+
 ## Deck outline
 
 1. **What this is.** An application-layer infrastructure model for one whole

@@ -266,7 +266,8 @@ def demo_02(recorder):
 
     _, bc = F.confirm(exchange, requests[1], "res-bc")
     recorder.step("BC confirmed, draining the buffered CD result",
-                  disposition=bc["disposition"], **_positions(exchange))
+                  disposition=bc["disposition"],
+                  deferredLegs=exchange.deferred_legs(RECEIPT), **_positions(exchange))
     recorder.expect("filling the gap drains the buffer in order", ("T-04",),
                     {"holderPosition": 3, "holder": F.D, "deferredLegs": ()},
                     {"holderPosition": exchange.holder_index(RECEIPT),
@@ -314,6 +315,7 @@ def demo_03(recorder):
     exchange.begin_rollback(RECEIPT, 0, F.rollback_authority(exchange, 0, "rb-1"))
     report = exchange.advance_rollback(RECEIPT)
     recorder.step("rollback advanced", state=report["state"], complete=report["complete"],
+                  segmentFunds=_segment_funds(exchange),
                   affectedLegs=report["affectedLegs"], boundary=report["returnBoundaryAccount"],
                   **_positions(exchange))
     recorder.expect("every unfinished segment is in the interval", ("T-17",),
@@ -401,6 +403,7 @@ def demo_04(recorder):
     exchange.begin_rollback(RECEIPT, 1, F.rollback_authority(exchange, 1, "rb-2"))
     report = exchange.advance_rollback(RECEIPT)
     recorder.step("rollback advanced", affectedLegs=report["affectedLegs"],
+                  segmentFunds=_segment_funds(exchange),
                   boundary=report["returnBoundaryAccount"], complete=report["complete"],
                   **_positions(exchange))
     recorder.expect("only the later two segments unwind", ("T-18",),
@@ -480,7 +483,8 @@ def demo_05(recorder):
     exchange._budgets[F.D] = 100_000
     second = exchange.advance_rollback(RECEIPT)
     recorder.step("rollback resumed once the budget allowed", state=second["state"],
-                  complete=second["complete"], **_positions(exchange))
+                  complete=second["complete"], segmentFunds=_segment_funds(exchange),
+                  **_positions(exchange))
     recorder.expect("the rollback resumes and completes", ("T-23",),
                     {"complete": True, "owner": F.A}, 
                     {"complete": second["complete"], "owner": exchange.owner_of(RECEIPT)})
@@ -547,7 +551,8 @@ def demo_06(recorder):
                     1, exchange.recorded_legs(RECEIPT))
 
     F.confirm(exchange, request, "res-ab")
-    recorder.step("the in-flight registration completed after the cutoff", **_positions(exchange))
+    recorder.step("the in-flight registration completed after the cutoff",
+                  segmentFunds=_segment_funds(exchange), **_positions(exchange))
     recorder.expect("in-flight registration continues under its own rules", ("T-24",),
                     {"holderPosition": 1, "holder": F.B},
                     {"holderPosition": exchange.holder_index(RECEIPT),
