@@ -422,6 +422,41 @@ bound only inside a function or a class body (importable from neither, so
 counting it would make a missing name look present), and an undecidable name.
 A surface that depends on nothing is not a finding.
 
+## Which domain methods read, and that every read moves nothing
+
+PRD 10.1 says a read must not move money or an asset. That is the one rule in
+the section that can be demonstrated rather than declared, so it is: each read
+is called against a funded chain that also holds asset control, and the payment
+movements, asset returns, audit-trail length, owner and holder position are
+compared across the call.
+
+It covered the section's own three reads plus eleven hand-picked names, and
+nothing checked that the eleven were all of them. A read added to the domain
+would have sat outside the rule, exempt because nobody remembered to extend a
+list. So every public method of the domain class is now classified as reading or
+changing, and the two buckets together have to account for the whole class,
+exactly once. An unclassified method is a finding, a name in both buckets is a
+finding, and a classified name that is not on the class is a finding - three
+different mistakes, reported separately. The rule now runs over all 30 reads
+rather than 14, with 21 methods declared as changing.
+
+The fixture files one registration request per leg and registers a redemption
+grant before any counter is read. Those are changes, done in setup: a read that
+needs a filed request to be callable at all would otherwise be reported as
+uncallable, which hides it from the rule instead of subjecting it to it. A read
+with no argument entry raises rather than being skipped, for the same reason.
+
+Two negative controls, because one was not enough. The first shows the counters
+notice a real release. The second shows the *check* notices: a read patched to
+move money is named in `movedSomething`, the verdict goes false, and the run
+blocks - without it, a read that quietly moved something could still have
+passed.
+
+Classifying a method as changing is not a claim that it changes anything. The
+classification exists so that every read is covered and no method sits silently
+outside both buckets; what a changing method does is answered by the acceptance
+cases that exercise it.
+
 ## How much of the domain this delivery actually enters
 
 The acceptance matrix answers coverage per requirement. Nothing answered the
