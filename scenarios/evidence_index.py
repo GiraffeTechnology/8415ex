@@ -148,7 +148,8 @@ def _artifact_references(position, slots):
 
 
 def build(scenario_report=None, path_report=None, root=".", run_identity=None,
-          commands=None, observations=None, source=None, artifacts=None):
+          commands=None, observations=None, source=None, artifacts=None,
+          guarantee_report=None):
     """One index over supplied evidence, including missing execution records.
 
     JSON pointers are relative to this index. Optional command and observation
@@ -161,8 +162,9 @@ def build(scenario_report=None, path_report=None, root=".", run_identity=None,
     run_identity = dict(run_identity or {})
     commands = deepcopy(commands or [])
     observations = deepcopy(observations or {})
-    acceptance = matrix.build(source, run_identity, scenario_report, path_report)
-    assertions = _assertions_by_case([scenario_report, path_report])
+    acceptance = matrix.build(source, run_identity, scenario_report, path_report,
+                              guarantee_report)
+    assertions = _assertions_by_case([scenario_report, path_report, guarantee_report])
     checklist = handoff.build(acceptance)
     slots = _artifact_slots(artifacts)
 

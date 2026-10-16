@@ -46,9 +46,20 @@ DOMAIN_REUSE = (
     },
     {
         "module": "exchange.model",
-        "uses": ("REGISTRATION_PATHS", "Asset"),
-        "purpose": "the three registrar route identifiers and the asset type, taken "
-                   "from the domain so the route list cannot drift from it",
+        "uses": ("REGISTRATION_PATHS", "Asset", "WHOLE_RECEIPT_UNITS",
+                 "WarehouseReceipt", "TradeIntent"),
+        "purpose": "the three registrar route identifiers, the asset type, the "
+                   "whole-receipt unit count and the two records a guarantee "
+                   "contract has to build directly, taken from the domain so "
+                   "neither the route list nor a record shape can drift from it",
+        "kind": "domain contract",
+        "simulated": False,
+    },
+    {
+        "module": "exchange.errors",
+        "uses": ("DomainError",),
+        "purpose": "the domain's own error type, so a contract records the code the "
+                   "domain raised instead of matching on the text of a message",
         "kind": "domain contract",
         "simulated": False,
     },

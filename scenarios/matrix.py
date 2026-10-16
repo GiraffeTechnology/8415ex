@@ -195,11 +195,15 @@ def _demos():
     return DEMOS
 
 
-def build(source_identity, run_identity, scenario_report=None, path_report=None):
+def build(source_identity, run_identity, scenario_report=None, path_report=None,
+          guarantee_report=None):
     """One matrix row per case, bound to the exact source and run.
 
-    ``scenario_report`` and ``path_report`` are the harness reports; when given,
-    each row carries the recorded local outcome for its scenarios.
+    The arguments are the harness reports; when given, each row carries the
+    recorded local outcome for its scenarios. ``guarantee_report`` holds the
+    domain-guarantee contracts, which exist precisely to give ten cases a local
+    outcome where the matrix previously had only the domain's own suite to point
+    at, so leaving it out would reinstate the gap it closes.
     """
     scenario_cases = _scenario_cases()
     # A scenario may assert against a case it does not list in its own header,
@@ -208,7 +212,7 @@ def build(source_identity, run_identity, scenario_report=None, path_report=None)
     # exercise a case and a reviewer cannot find the evidence from the row.
     observed_cases = {}
     recorded, problems = {}, {}
-    for report in (scenario_report, path_report):
+    for report in (scenario_report, path_report, guarantee_report):
         for scenario in (report or {}).get("scenarios", []):
             touched = set(scenario.get("cases", ()))
             for expectation in scenario["expectations"]:

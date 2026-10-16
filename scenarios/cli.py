@@ -42,6 +42,8 @@ from . import (completion, decisions, docs, dossier, events, evidence_index,
                prd, receipt, reuse, stages, storyboard, validation)
 from .demos import DEMOS
 from .harness import report_text, run_all
+from .guarantees import GUARANTEE_CONTRACTS
+from .guarantees import coverage_map as guarantee_coverage
 from .paths import PATH_CONTRACTS, coverage_map
 
 #: The suites whose real status this bundle can carry, and the case they serve.
@@ -174,12 +176,13 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
     # packaging, so an earlier clean reading cannot be combined with a later,
     # different one.
     before = manifest.snapshot(root)
-    (scenario_report, path_report), measured = observations.measure(
-        lambda: (run_all(list(DEMOS)), run_all(list(PATH_CONTRACTS))))
+    (scenario_report, path_report, guarantee_report), measured = observations.measure(
+        lambda: (run_all(list(DEMOS)), run_all(list(PATH_CONTRACTS)),
+                 run_all(list(GUARANTEE_CONTRACTS))))
     source = manifest.source_identity(root)
     source["ancestry"] = manifest.parent_identity(root, head=source["commit"])
     acceptance = matrix.build(source, {"runId": run_id, "startedAt": started_at},
-                              scenario_report, path_report)
+                              scenario_report, path_report, guarantee_report)
     commands = _suite_records(root, execute_suites)
     scan = observations.secret_scan(root)
     package = manifest.build(root, commands=commands, run_id=run_id)
@@ -191,7 +194,9 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
         "runtime": manifest.runtime_identity(),
         "scenarioReport": scenario_report,
         "pathReport": path_report,
+        "guaranteeReport": guarantee_report,
         "coverage": coverage_map(),
+        "guaranteeCoverage": guarantee_coverage(),
         "matrix": acceptance,
         "manifest": package,
         "commands": commands,
@@ -211,14 +216,15 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
         "evidenceIndex": evidence_index.build(
             scenario_report, path_report, root,
             {"runId": run_id, "startedAt": started_at},
-            artifacts=artifacts),
+            artifacts=artifacts, guarantee_report=guarantee_report),
         "configuration": {"template": validation.local_config_template(),
                           "validation": validation.validate_config(
                               validation.local_config_template())},
         "secretScan": scan,
         "resourceObservation": measured,
         "workload": {"scenarios": observations.workload_observation(scenario_report),
-                     "paths": observations.workload_observation(path_report)},
+                     "paths": observations.workload_observation(path_report),
+                     "guarantees": observations.workload_observation(guarantee_report)},
         "notRun": [{"obligation": row["case"], "status": "NOT_RUN",
                     "requires": row["remainingRealEvidence"]}
                    for row in acceptance["rows"] if row.get("remainingRealEvidence")]
@@ -259,6 +265,8 @@ def _bundle(root, execute_suites=False, run_id=None, started_at=None,
         blocking.append("a scenario did not pass")
     if not path_report["allPassed"]:
         blocking.append("a path contract did not pass")
+    if not guarantee_report["allPassed"]:
+        blocking.append("a domain guarantee contract did not pass")
     if not scan["clean"]:
         blocking.append(f"the secret scan is not clean ({scan['enumerationState']})")
     if not acceptance["allCasesSound"]:
@@ -505,6 +513,7 @@ def summary_text(bundle):
     scan = bundle["secretScan"]
     lines = [report_text(bundle["scenarioReport"]), "",
              report_text(bundle["pathReport"]), "",
+             report_text(bundle["guaranteeReport"]), "",
              f"run id: {bundle['runId']}",
              f"acceptance matrix: {bundle['matrix']['localOutcomeCounts']}",
              f"secret scan: {'clean' if scan['clean'] else 'FINDINGS'} over "
@@ -552,6 +561,10 @@ def main(argv=None):
         return 0 if report["allPassed"] else 1
     if arguments.command == "paths":
         report = run_all(list(PATH_CONTRACTS))
+        print(canonical_json(report) if arguments.json else report_text(report))
+        return 0 if report["allPassed"] else 1
+    if arguments.command == "guarantees":
+        report = run_all(list(GUARANTEE_CONTRACTS))
         print(canonical_json(report) if arguments.json else report_text(report))
         return 0 if report["allPassed"] else 1
     if arguments.command == "matrix":
@@ -643,7 +656,8 @@ def main(argv=None):
         # artifact. The index then says so rather than naming a file that was
         # never going to be written; ``run-all`` is where the plan is real.
         built = evidence_index.build(run_all(list(DEMOS)), run_all(list(PATH_CONTRACTS)),
-                                     arguments.root, {"runId": _run_id()})
+                                     arguments.root, {"runId": _run_id()},
+                                     guarantee_report=run_all(list(GUARANTEE_CONTRACTS)))
         print(canonical_json(built))
         return 0 if built["allCasesSound"] else 1
     if arguments.command == "handoff":

@@ -59,6 +59,10 @@ python3 -B -m scenarios.cli run-all --execute-suites
 # source that ran
 python3 -B -m scenarios.cli run-all --root .
 
+# the seven domain-guarantee contracts: the cases the matrix had only the
+# domain's own suite to point at
+python3 -B -m scenarios.cli guarantees
+
 # the nine-group candidate receipt for a completed run
 python3 -B -m scenarios.cli receipt [--execute-suites]
 
@@ -414,6 +418,37 @@ existing, a module that stopped existing, a file that cannot be parsed, a name
 bound only inside a function or a class body (importable from neither, so
 counting it would make a missing name look present), and an undecidable name.
 A surface that depends on nothing is not a finding.
+
+## The domain guarantees the six scenarios never asserted
+
+Ten acceptance cases reached the matrix as `unit-suite-only`: the domain's own
+suite exercised them and no local scenario did, so the delivery report said
+nothing about them. That was not a defect in the domain, and the matrix was
+right to name it rather than let a reader assume the six scenarios covered
+everything - but a reader of the delivery report had no local evidence for a
+quarter of the cases.
+
+`guarantees.py` adds seven contracts, in the same shape as the three route
+contracts: the whole-receipt rule, the wallet grant and its bounds, the pairing
+rule, the single valid head, each segment's own settlement evidence,
+reproducibility, and idempotence under repeated or re-ordered observations.
+Each drives the real domain API with the same labelled synthetic fixtures and
+records what the domain reports, so the acceptance matrix now reads 34 cases
+passed and 2 `unit-suite-only` - T-39 and T-40, which are this package's own
+scan and observations and are not scenario-shaped.
+
+None of them re-implements or relaxes a domain rule. A refusal is recorded as
+the code the domain raised, and `accepted` is recorded when nothing was refused,
+so an expectation that wanted a refusal fails loudly rather than passing because
+an exception happened to carry no code. They are exactly as limited as the
+scenarios: no deployment, no chain transaction, no real wallet, registrar or
+payment provider, and the two obligations that need real execution are recorded
+as `NOT_RUN` rather than glossed.
+
+Adding them was itself caught by two of the checks in this package: the reuse
+map refused the run until the three new domain names and the domain error type
+were declared, and the usage check refused it until the new subcommand was
+documented here. Neither was noticed by eye.
 
 ## What the documented options are checked against
 
