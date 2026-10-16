@@ -422,6 +422,51 @@ bound only inside a function or a class body (importable from neither, so
 counting it would make a missing name look present), and an undecidable name.
 A surface that depends on nothing is not a finding.
 
+## Whether the published record agrees with itself
+
+Every report in the bundle is built from the same run, so they must say the same
+thing about it. Twice they did not, both times for one reason: a report rebuilt
+at sealing time with fewer inputs than it was first built with. The first time
+the artifact leg was dropped from the evidence index; the second time the
+guarantee contracts were, so the published index said ten cases were evidenced
+only by the domain's own suite while the matrix in the same bundle said they
+passed. A reviewer reads the published copy, not the bundle that existed
+mid-run, so a contradiction there is the worst kind.
+
+Both fixes were a parameter, passed more carefully. `seal` even carries a
+comment recording the first lesson, and the second mistake was made under it.
+What was missing is a check that compares the finished record with itself and
+refuses a contradiction whatever caused it, so `agreement.py` does that: ten
+comparisons over the sealed bundle, each between two copies of the same fact -
+the cases the matrix and the index cover, each case's outcome, runners and
+assertion counts, the runners the index lists against the runners the run
+recorded, the index's own count, a workload observation per report, the sealed
+digest against the report's, the manifest's commands against the bundle's, and
+the unsound cases in both. Replaying the real defect makes four of them fail at
+once.
+
+The reports it compares are discovered by their schema rather than listed,
+because a list of report keys is exactly what the rebuilds got wrong. Sealing
+carries any disagreement into the blocking list and the verdict, so the
+published files hold both. The existing guard against a verdict nobody acts on
+ran only over the bundle as built, which left anything added at sealing outside
+it, including this check itself; the sealed record is scanned too now, and a
+report that appears only there has to be declared.
+
+Two decisions worth stating. A comparison of the verdict against the blocking
+list was written and then dropped: both places that set the verdict derive it
+from that list, so it restates a construction rather than checking it, and it
+fired on a test that fabricates a verdict to exercise its own rendering. A
+comparison that cannot fail for the reason it names does not belong.
+
+And nothing to compare is a third answer, not agreement and not a
+contradiction. A recorded bundle from an earlier run may legitimately carry no
+scenario reports; a run that just executed them and carries none is wrong in a
+way this module cannot diagnose. So `comparable` is reported separately from
+`consistent`, a comparison is only made where both sides are present, and
+`run-all` - which has just executed the scenarios - blocks on a record with
+nothing to compare, while another command sealing a recorded bundle does not.
+
 ## Which domain methods read, and that every read moves nothing
 
 PRD 10.1 says a read must not move money or an asset. That is the one rule in

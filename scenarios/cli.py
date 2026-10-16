@@ -37,9 +37,10 @@ import uuid
 from exchange.ids import canonical_json
 
 from .commands import COMMANDS, STDOUT_ONLY
-from . import (completion, decisions, docs, dossier, events, evidence_index,
-               execution, handoff, manifest, matrix, observations, operations,
-               prd, receipt, reuse, stages, storyboard, surface, validation)
+from . import (agreement, completion, decisions, docs, dossier, events,
+               evidence_index, execution, handoff, manifest, matrix,
+               observations, operations, prd, receipt, reuse, stages,
+               storyboard, surface, validation)
 from .demos import DEMOS
 from .harness import report_text, run_all
 from .guarantees import GUARANTEE_CONTRACTS
@@ -135,6 +136,18 @@ HANDLED_ELSEWHERE = {
     "evidenceValidation": "the evidence record rule",
 }
 
+#: Reports that only exist once the run is sealed, with the rule that acts on
+#: each. They are declared apart from HANDLED_ELSEWHERE because that record is
+#: of reports the bundle carries all along, and a key naming a report that is
+#: not there yet would make its own check vacuous.
+HANDLED_AT_SEALING = {
+    "selfAgreement": "the sealing rule, which compares the finished record with "
+                     "itself and blocks on a contradiction; it cannot be a "
+                     "consistency check because the published copies of the "
+                     "reports do not exist until sealing",
+}
+
+
 def _verdict(bundle, check):
     """The verdict one consistency check reports, or None if it is absent."""
     found = bundle.get(check["key"])
@@ -152,7 +165,7 @@ def unclassified_verdicts(bundle):
     changes nothing.
     """
     declared = ({check["key"] for check in CONSISTENCY_CHECKS}
-                | set(HANDLED_ELSEWHERE))
+                | set(HANDLED_ELSEWHERE) | set(HANDLED_AT_SEALING))
     found = []
     for key, value in sorted(bundle.items()):
         if key in declared or not isinstance(value, dict):
@@ -369,6 +382,31 @@ def seal(bundle, exit_code, finished_at=None, command="python3 -B -m scenarios.c
         source=bundle["source"],
         artifacts=bundle.get("outputArtifacts", bundle.get("outputDeliveryPlan")),
         guarantee_report=bundle.get("guaranteeReport"))
+    # Now that the published copies exist, compare the record with itself. A
+    # rebuild that lost an input has produced a self-contradicting published
+    # record twice, and each time the fix was a parameter passed more
+    # carefully; this refuses the contradiction whatever caused it. It runs
+    # here, before the bundle is rendered, so the published files carry both
+    # the disagreement and the verdict it forces.
+    bundle["selfAgreement"] = agreement.check(bundle)
+    if not bundle["selfAgreement"]["consistent"]:
+        for comparison in bundle["selfAgreement"]["disagreements"]:
+            bundle.setdefault("blocking", []).append(
+                "the sealed record contradicts itself: " + comparison)
+        bundle["allLocalPassed"] = False
+        bundle["calculationPassed"] = False
+    # The guard against a verdict nobody acts on was applied to the bundle as
+    # built, which left anything added at sealing outside it - including this
+    # one. Scanning again here means a report that appears only in the sealed
+    # record has to be declared too.
+    sealed_unclassified = unclassified_verdicts(bundle)
+    bundle["unclassifiedVerdicts"] = sealed_unclassified
+    for key in sealed_unclassified:
+        message = "a report states a verdict that the run ignores: " + key
+        if message not in bundle.get("blocking", []):
+            bundle.setdefault("blocking", []).append(message)
+            bundle["allLocalPassed"] = False
+            bundle["calculationPassed"] = False
     return bundle
 
 
@@ -656,6 +694,10 @@ def main(argv=None):
         seal(bundle, code, command=shlex.join(
             ["python3", "-B", "-m", "scenarios.cli"]
             + list(argv if argv is not None else sys.argv[1:])))
+        # Sealing compares the published record with itself, so it can refuse a
+        # run whose status was already decided. The exit code follows the
+        # sealed verdict rather than the one computed before it.
+        code = 0 if bundle["allLocalPassed"] else 1
         try:
             built = receipt.build(bundle, arguments.root)
         except ValueError as problem:
@@ -741,7 +783,19 @@ def main(argv=None):
     source_held = bundle["finalSourceReconciliation"]["consistent"]
     if not source_held:
         bundle["blocking"].append("source changed during output delivery")
-    bundle["allLocalPassed"] = calculation_passed and delivered and source_held
+    # The sealed record's own agreement is part of the verdict: sealing may
+    # have found a contradiction after the calculation status was decided.
+    # This run did execute the scenarios, so a record with nothing to compare
+    # is wrong here, whatever it may legitimately mean for a recorded bundle
+    # sealed by another command.
+    agreement_report = bundle["selfAgreement"]
+    agreed = agreement_report["consistent"] and agreement_report["comparable"]
+    if not agreement_report["comparable"]:
+        bundle["blocking"].append(
+            "the sealed record carried nothing to compare: "
+            + ", ".join(agreement_report["nothingToCompare"]))
+    bundle["allLocalPassed"] = (calculation_passed and agreed and delivered
+                                and source_held)
     if not delivered:
         for entry in delivery:
             if not entry["ok"]:
