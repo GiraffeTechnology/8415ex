@@ -1079,6 +1079,8 @@ class Exchange:
         for other in shared:
             self.leg(receipt_id, other)
         entry = {"kind": kind, "legIndex": leg_index, "bearer": escrow.payer,
+                 "asset": "ETH", "unit": "wei",
+                 "chainId": self.receipt(receipt_id).asset.chain_id,
                  "amount": spent, "sharedWith": shared,
                  "sharedOperation": len(shared) > 1,
                  "apportionment": "undecided" if len(shared) > 1 else "single-leg",
@@ -1117,6 +1119,7 @@ class Exchange:
                 "legIndex": leg.leg_index, "transferId": leg.transfer_id,
                 "seller": leg.seller, "buyer": leg.buyer,
                 "principal": str(leg.price), "quoteAsset": leg.quote_asset,
+                "principalAsset": leg.quote_asset, "principalUnit": "base-units",
                 "escrowId": escrow_id,
                 "escrowStatus": escrow.status if escrow else "not-funded",
                 "paymentStatus": escrow.payment_status if escrow else None,
@@ -1127,6 +1130,7 @@ class Exchange:
                 "rollbackStatus": leg.rollback_status,
                 "gasEntries": gas,
                 "gasBorneBy": leg.buyer,
+                "gasAsset": "ETH", "gasUnit": "wei",
                 "gasTotal": str(gas_total),
                 "netToPayee": str(leg.price) if escrow and escrow.status == "released" else "0",
                 "netToPayer": str(leg.price) if escrow and escrow.status == "refunded" else "0",
@@ -1472,11 +1476,15 @@ class Exchange:
             gas_total = sum(entry["amount"] for entry in gas)
             funds.append({"legIndex": index, "originalBuyer": leg.buyer,
                           "principal": str(leg.price),
+                          "principalAsset": leg.quote_asset, "principalUnit": "base-units",
                           "escrowStatus": escrow.status if escrow else "not-funded",
                           "paymentStatus": escrow.payment_status if escrow else None,
                           "refundedToOriginalBuyer": bool(escrow and escrow.status == "refunded"),
                           "gasBorneBy": leg.buyer, "gasTotal": str(gas_total),
-                          "netToOriginalBuyer": str(leg.price - gas_total)
+                          "gasAsset": "ETH", "gasUnit": "wei",
+                          # Principal and gas are different assets. Consumed ETH
+                          # remains charged separately; it cannot reduce a token refund.
+                          "netToOriginalBuyer": str(leg.price)
                           if escrow and escrow.status == "refunded" else "0",
                           "rollbackStatus": leg.rollback_status})
         outstanding = [{"stepId": step.step_id, "kind": step.kind, "legIndex": step.leg_index,
