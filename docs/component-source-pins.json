@@ -1,0 +1,683 @@
+{
+  "schema": "ex-component-source-assembly/1",
+  "baseCommit": "4d66c0f1aa4398850d642c030f08b8c7dd13e3b4",
+  "baseTree": "ae423d33bc1bec667b2e54f77128aadfa73569e9",
+  "canonicalPRD": "v1.2",
+  "publicPrdSHA256": "62850f615e8afad087aeb6fc0fd1aa79682c65c8fa18c5693b74348052c44b58",
+  "executionPlanSHA256": "5a56774be0d8451d99c58a3ca712f5b45e373ff70f78903d6af70ca07e69c10b",
+  "preservedBaseBlobs": 138,
+  "workflow": "UNCHANGED",
+  "files": [
+    {
+      "path": "docs/native-workbench.md",
+      "sourcePR": 25,
+      "sourceCommit": "86efcdc884babd89f99a9c064bd6f2460f69de74",
+      "sourceBlob": "03d31f833981f94d02754b69e4b74216a11559d0",
+      "candidateBlob": "03d31f833981f94d02754b69e4b74216a11559d0",
+      "bytes": 4196,
+      "sha256": "7167ac9399ad74b23d67380418d41ba8d26aa1e93da8ffe198afc72bfbc3700f",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "exchange/workbench.py",
+      "sourcePR": 25,
+      "sourceCommit": "86efcdc884babd89f99a9c064bd6f2460f69de74",
+      "sourceBlob": "f608fd0f80b628ae6c7de64e150f5ce7008b66ea",
+      "candidateBlob": "f608fd0f80b628ae6c7de64e150f5ce7008b66ea",
+      "bytes": 14024,
+      "sha256": "5f6a14aedb08ed38c24fe65d512a3914bec6147908d0027bddbdfae48cc68313",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "integration/test_workbench.py",
+      "sourcePR": 25,
+      "sourceCommit": "86efcdc884babd89f99a9c064bd6f2460f69de74",
+      "sourceBlob": "681dcb20e29d318028048d6d04b1e9b226dfd638",
+      "candidateBlob": "681dcb20e29d318028048d6d04b1e9b226dfd638",
+      "bytes": 3322,
+      "sha256": "cc95387699b9055b74c3ce6af928cc87f819644ea130d9f565e4c22b81197a73",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "docs/browser-materials.md",
+      "sourcePR": 26,
+      "sourceCommit": "872e1c88cd0b4b9b113a0b86b8c594818539a0b5",
+      "sourceBlob": "313c293fde33cce6e58bace2d4afd4a077e0c02c",
+      "candidateBlob": "313c293fde33cce6e58bace2d4afd4a077e0c02c",
+      "bytes": 2794,
+      "sha256": "4aa1cc66aa0e8da82f3619f7f8013a73f609d41f1cb8aa4fa302e3c5877a2caf",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "exchange/browser_materials.py",
+      "sourcePR": 26,
+      "sourceCommit": "872e1c88cd0b4b9b113a0b86b8c594818539a0b5",
+      "sourceBlob": "a6c68b142a610e26a4287b90fbc44b8264c2baff",
+      "candidateBlob": "a6c68b142a610e26a4287b90fbc44b8264c2baff",
+      "bytes": 9421,
+      "sha256": "70e38a6625458d77b98caefd5a68167408f6bbb31f244bc0c46b0a9048bd1c92",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "docs/runtime-references.md",
+      "sourcePR": 27,
+      "sourceCommit": "44b8fda92790ea387a255e5df192121add77fc0f",
+      "sourceBlob": "f79f69bd4969a109e08cbd0e71ed79a1dcfd9afb",
+      "candidateBlob": "f79f69bd4969a109e08cbd0e71ed79a1dcfd9afb",
+      "bytes": 1617,
+      "sha256": "d71b3614f8836695da23594b5361e29146ab85dd761be56e1fad40c62cc6ebe5",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "exchange/runtime_references.py",
+      "sourcePR": 27,
+      "sourceCommit": "44b8fda92790ea387a255e5df192121add77fc0f",
+      "sourceBlob": "6d61d49afcc7118dfc9fc80f4043b04ad3f95493",
+      "candidateBlob": "6d61d49afcc7118dfc9fc80f4043b04ad3f95493",
+      "bytes": 2727,
+      "sha256": "76174a3cd288f68df7e627651656a91c81252584885c679a97f15b4c211a1e3d",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "integration/test_runtime_references.py",
+      "sourcePR": 27,
+      "sourceCommit": "44b8fda92790ea387a255e5df192121add77fc0f",
+      "sourceBlob": "897bfcb3c16e74fc5dc06721d25422ee93c532f5",
+      "candidateBlob": "897bfcb3c16e74fc5dc06721d25422ee93c532f5",
+      "bytes": 1919,
+      "sha256": "9fc888fdd1f0d0e1b570380e630795cd9a8a7bc75f58e27f2a1a0652601ffdbb",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "docs/original-receipt-task-consumer.md",
+      "sourcePR": 28,
+      "sourceCommit": "ad521053f8f213f055d411beb19453937bc69a48",
+      "sourceBlob": "84813ca1fb8862d24cf756d8c05dc5ca3d01b672",
+      "candidateBlob": "84813ca1fb8862d24cf756d8c05dc5ca3d01b672",
+      "bytes": 3452,
+      "sha256": "1e404bc6c935434c6912ff5a0df953fbfd0bedd8367fce4a966c863f4434e2d7",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "exchange/receipt_task_projection.py",
+      "sourcePR": 28,
+      "sourceCommit": "ad521053f8f213f055d411beb19453937bc69a48",
+      "sourceBlob": "b1ff6392bf83f937b7c873e61510e2476b2acf8d",
+      "candidateBlob": "b1ff6392bf83f937b7c873e61510e2476b2acf8d",
+      "bytes": 4052,
+      "sha256": "fb5648c9f95d0682d39cdbb8b974a07f9a07517645a75f84a56deb4b0f555049",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "integration/test_receipt_task_projection.py",
+      "sourcePR": 28,
+      "sourceCommit": "ad521053f8f213f055d411beb19453937bc69a48",
+      "sourceBlob": "12419e90cc6230db190c02514d015f69c1da196d",
+      "candidateBlob": "12419e90cc6230db190c02514d015f69c1da196d",
+      "bytes": 2440,
+      "sha256": "064d1a9342128d64a4f27f3c7d02e8a5a751da8619263089d68692532e1c0e21",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "docs/native-presentation-export.md",
+      "sourcePR": 29,
+      "sourceCommit": "f82d7ad6981a0bfd6c30f75565baffd1723e9527",
+      "sourceBlob": "e5965f07ed2bfe351bb374a27505cbfc37cbd6cb",
+      "candidateBlob": "e5965f07ed2bfe351bb374a27505cbfc37cbd6cb",
+      "bytes": 3942,
+      "sha256": "56652cc5698ce26c812e67b6a77dffb6e93bb4e18c78415e63378896076d35f1",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "materials/native-presentation.mjs",
+      "sourcePR": 29,
+      "sourceCommit": "f82d7ad6981a0bfd6c30f75565baffd1723e9527",
+      "sourceBlob": "923717718001a9a0993f4b205ea69c76792c42d7",
+      "candidateBlob": "923717718001a9a0993f4b205ea69c76792c42d7",
+      "bytes": 11584,
+      "sha256": "66944530bb3f553ef05a48b2217f470655dd09c6c78cf9672a3d201745913235",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "materials/test_native-presentation.mjs",
+      "sourcePR": 29,
+      "sourceCommit": "f82d7ad6981a0bfd6c30f75565baffd1723e9527",
+      "sourceBlob": "cccab1d00630110a16e07c263837f48fab38ecf0",
+      "candidateBlob": "cccab1d00630110a16e07c263837f48fab38ecf0",
+      "bytes": 4117,
+      "sha256": "db921694f813d31fa8a0a296b4aa16221e2876eda64f756511a7e2d2c82cb1fe",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "docs/native-film-preparation.md",
+      "sourcePR": 30,
+      "sourceCommit": "be213ebc7ed42c1f78337f6fd9c5ba7426eca88a",
+      "sourceBlob": "d9e04a0799e7d8640f3acf39cb5c76a3cf251cbb",
+      "candidateBlob": "d9e04a0799e7d8640f3acf39cb5c76a3cf251cbb",
+      "bytes": 3186,
+      "sha256": "f3c0f8a138496a31cb0f6d65f18e4631c1229eb7168264b2d7fe59c33cbc7648",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "materials/native-film.mjs",
+      "sourcePR": 30,
+      "sourceCommit": "be213ebc7ed42c1f78337f6fd9c5ba7426eca88a",
+      "sourceBlob": "aaea5c85785050d98a8ca483f9b2eb328077e104",
+      "candidateBlob": "aaea5c85785050d98a8ca483f9b2eb328077e104",
+      "bytes": 6407,
+      "sha256": "dfa63cee1d829f2f063dd4c42b1a4fc4ee54a58728f29f3cadbe1b22889162b3",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "materials/test_native-film.mjs",
+      "sourcePR": 30,
+      "sourceCommit": "be213ebc7ed42c1f78337f6fd9c5ba7426eca88a",
+      "sourceBlob": "b6a9fb657456c4692e9f83bbd007de535a516ad6",
+      "candidateBlob": "b6a9fb657456c4692e9f83bbd007de535a516ad6",
+      "bytes": 3525,
+      "sha256": "15251c4ff4c0644b03b970ff3f074b6d45a7c7428c64524b1de3c743fcad73ee",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "docs/runtime-observations.md",
+      "sourcePR": 31,
+      "sourceCommit": "cce8797ff2c42e4862a7229d6f3bcffe11c29c06",
+      "sourceBlob": "4b8cd2877cb08b883e96a83c33bcbe8884cb803f",
+      "candidateBlob": "4b8cd2877cb08b883e96a83c33bcbe8884cb803f",
+      "bytes": 3696,
+      "sha256": "b1f9b5a4432d8b26899dcbeb214eb2d9510e946ad9698b400e7a3adacb75dc47",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "exchange/runtime_metrics.py",
+      "sourcePR": 31,
+      "sourceCommit": "cce8797ff2c42e4862a7229d6f3bcffe11c29c06",
+      "sourceBlob": "2070e05a772c7eafc4f440e0d64cdc50ce3135e5",
+      "candidateBlob": "2070e05a772c7eafc4f440e0d64cdc50ce3135e5",
+      "bytes": 7057,
+      "sha256": "cce445e93196892f23fa073c7f5c2dd9b56e196f577ab69115d0cde74aae0ff2",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "integration/test_runtime_metrics.py",
+      "sourcePR": 31,
+      "sourceCommit": "cce8797ff2c42e4862a7229d6f3bcffe11c29c06",
+      "sourceBlob": "942b2279473eaf6f1e710bccc3ca2cc621f34d13",
+      "candidateBlob": "942b2279473eaf6f1e710bccc3ca2cc621f34d13",
+      "bytes": 5689,
+      "sha256": "65fabd936ad6165cadabf8a9f4411de41021cc205d0e3798bc07b7348a2c40a4",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "docs/observation-configuration.md",
+      "sourcePR": 32,
+      "sourceCommit": "4c222102c688c6c9873dfea0759abca2d7579f74",
+      "sourceBlob": "227b53d32c8899d2720bc7137b29615e2040e10b",
+      "candidateBlob": "227b53d32c8899d2720bc7137b29615e2040e10b",
+      "bytes": 3641,
+      "sha256": "b5ba0af030886a43e4197c49306be2a3f51686a00bea9279d5bf25a2342da1cb",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "exchange/observation_policy.py",
+      "sourcePR": 32,
+      "sourceCommit": "4c222102c688c6c9873dfea0759abca2d7579f74",
+      "sourceBlob": "8cb8960232487efe78377f0eafdaf38f3ee0ae99",
+      "candidateBlob": "8cb8960232487efe78377f0eafdaf38f3ee0ae99",
+      "bytes": 3339,
+      "sha256": "20e8bb614451a847182a1b0883a09cc4866ac672e024cd52625a2f0adfdc618b",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "integration/test_observation_policy.py",
+      "sourcePR": 32,
+      "sourceCommit": "4c222102c688c6c9873dfea0759abca2d7579f74",
+      "sourceBlob": "af47ccd586b3263acb82d9681ffcf9a97a0e6efa",
+      "candidateBlob": "af47ccd586b3263acb82d9681ffcf9a97a0e6efa",
+      "bytes": 4486,
+      "sha256": "245284523a619d89c7dcce44075da6c746fd527ab30dd31b1abfa35252e9832d",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "docs/unsigned-intent-workspace.md",
+      "sourcePR": 33,
+      "sourceCommit": "8c56ab1abaf7ad6b3178c7415a8449d23ff90d7a",
+      "sourceBlob": "52cf905173c2ce6653711975626728afabdc63b7",
+      "candidateBlob": "52cf905173c2ce6653711975626728afabdc63b7",
+      "bytes": 3314,
+      "sha256": "fbe7f5c9a2e080d698f4939ece55daa048ab17f7cf23e45149d68e4173ac1a2c",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "exchange/intent_workspace.py",
+      "sourcePR": 33,
+      "sourceCommit": "8c56ab1abaf7ad6b3178c7415a8449d23ff90d7a",
+      "sourceBlob": "c919e8e257f04c5993c9b1cae66d036da070456e",
+      "candidateBlob": "c919e8e257f04c5993c9b1cae66d036da070456e",
+      "bytes": 6958,
+      "sha256": "daf13a974da093993a340b247da586f77c45b7d2bf6babc586b8011613d3d3b5",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "integration/test_intent_workspace.py",
+      "sourcePR": 33,
+      "sourceCommit": "8c56ab1abaf7ad6b3178c7415a8449d23ff90d7a",
+      "sourceBlob": "5def043d83ebef6a23d5729122cdccb9c4e7a193",
+      "candidateBlob": "5def043d83ebef6a23d5729122cdccb9c4e7a193",
+      "bytes": 4640,
+      "sha256": "b3e8e5eddab6fa28bf5bef275f365bf71f06d440246b5f5ff9d771982f09a0d3",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "docs/gas-disclosure.md",
+      "sourcePR": 36,
+      "sourceCommit": "b419eebcaada9b2406f3ed0f5a64fddecc6ba12b",
+      "sourceBlob": "4c94dc99c46734043683b68178d5215e86e5fa31",
+      "candidateBlob": "4c94dc99c46734043683b68178d5215e86e5fa31",
+      "bytes": 2381,
+      "sha256": "21a09541a01eed37aa72c8a341d9ecf571dfc03058e562c9a3450943b0cf2d86",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "exchange/gas_disclosure.py",
+      "sourcePR": 36,
+      "sourceCommit": "b419eebcaada9b2406f3ed0f5a64fddecc6ba12b",
+      "sourceBlob": "ecb916f6167caca4bb5c9719e8fb5daa4b0e3764",
+      "candidateBlob": "ecb916f6167caca4bb5c9719e8fb5daa4b0e3764",
+      "bytes": 5694,
+      "sha256": "15069dc6d1dcfc6916abc294c65e565465812857098c8a574907b0eb53ca878d",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "integration/test_gas_disclosure.py",
+      "sourcePR": 36,
+      "sourceCommit": "b419eebcaada9b2406f3ed0f5a64fddecc6ba12b",
+      "sourceBlob": "cd0bc0e06e1fb900df449d856d36d0fb7def379f",
+      "candidateBlob": "cd0bc0e06e1fb900df449d856d36d0fb7def379f",
+      "bytes": 2793,
+      "sha256": "a61b1dbf8ec064f59931c779f9cd266b0054d66bfd25677285e07aec37820dcc",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "docs/price-time-proposals.md",
+      "sourcePR": 37,
+      "sourceCommit": "5a81572eb27156cd0c9c70bcfd55fdbc08b4ad65",
+      "sourceBlob": "d8d9e6f72fb1b105b3093ad7ee9cda332a3d82b0",
+      "candidateBlob": "d8d9e6f72fb1b105b3093ad7ee9cda332a3d82b0",
+      "bytes": 2746,
+      "sha256": "8c1837074217210a80745a737fe4a4300827df7e431cf7423559feb7d915915c",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "integration/test_priority_exchange.py",
+      "sourcePR": 37,
+      "sourceCommit": "5a81572eb27156cd0c9c70bcfd55fdbc08b4ad65",
+      "sourceBlob": "c8f3adba9796a5cec4605fecf93ae1be1f851012",
+      "candidateBlob": "c8f3adba9796a5cec4605fecf93ae1be1f851012",
+      "bytes": 4403,
+      "sha256": "84fca1768e4a1d5baeb3c8f4a7ad90f37936878f7f60863d0721f0d125fcd579",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "docs/gas-budget-contract.md",
+      "sourcePR": 38,
+      "sourceCommit": "48f8ffe680ccea6825be0e708e0a28a19a338c81",
+      "sourceBlob": "a7da67cb6c72049c1a2333c0b4cd3879b5d926da",
+      "candidateBlob": "a7da67cb6c72049c1a2333c0b4cd3879b5d926da",
+      "bytes": 3979,
+      "sha256": "4b4e43dbedd9733bc32455676cef7dd2fa0dfb9a06d7cdfded3300117a0b16bd",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "exchange/gas_budget.py",
+      "sourcePR": 38,
+      "sourceCommit": "48f8ffe680ccea6825be0e708e0a28a19a338c81",
+      "sourceBlob": "134033da7fbcbe1d1b77e7dffd8c36e92f572de3",
+      "candidateBlob": "134033da7fbcbe1d1b77e7dffd8c36e92f572de3",
+      "bytes": 13256,
+      "sha256": "051ae65c20e87b41a88e4848670e529ee6b1c8e99a091e0c473cfc858691c1aa",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "integration/test_gas_budget.py",
+      "sourcePR": 38,
+      "sourceCommit": "48f8ffe680ccea6825be0e708e0a28a19a338c81",
+      "sourceBlob": "a4e42653b6081b9e4314e074929acec429f44716",
+      "candidateBlob": "a4e42653b6081b9e4314e074929acec429f44716",
+      "bytes": 7089,
+      "sha256": "9ed93785d0db2418ddfdfefd0af3253e6aad42809a3fa6436fa8fcf6669e1952",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "docs/gas-confirmation-ui.md",
+      "sourcePR": 39,
+      "sourceCommit": "45cd956461c495b8762a545b2918fa4cd11926e5",
+      "sourceBlob": "c39a76c57de2db935e295b1f20e67d5d4d67ab8c",
+      "candidateBlob": "c39a76c57de2db935e295b1f20e67d5d4d67ab8c",
+      "bytes": 2764,
+      "sha256": "363f6d61fa43c4eeb62ed592452c737348ca7a649fe26b182817ae2962cab75a",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "exchange/gas_confirmation_ui.py",
+      "sourcePR": 39,
+      "sourceCommit": "45cd956461c495b8762a545b2918fa4cd11926e5",
+      "sourceBlob": "b2fe8f7a399680189e1ea6f13bee40b69a206d02",
+      "candidateBlob": "b2fe8f7a399680189e1ea6f13bee40b69a206d02",
+      "bytes": 7217,
+      "sha256": "84783d11cde564e4b909fb9765db04675195055f5f037c0241ed848d5362ec75",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "integration/test_gas_confirmation_ui.py",
+      "sourcePR": 39,
+      "sourceCommit": "45cd956461c495b8762a545b2918fa4cd11926e5",
+      "sourceBlob": "39de75f1b3a5f2585b475b4101e753b57cbd5dea",
+      "candidateBlob": "39de75f1b3a5f2585b475b4101e753b57cbd5dea",
+      "bytes": 3880,
+      "sha256": "21584e39d79e00e2c801189f7ad808f9425e33b499dae5819564484b3657f1f6",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "docs/gas-reconfirmation.md",
+      "sourcePR": 40,
+      "sourceCommit": "894b83b4ccac5b05a0c48c952cc54a596ed2b6f1",
+      "sourceBlob": "ea781e738549159b1c5c0a6542412c6819363d98",
+      "candidateBlob": "ea781e738549159b1c5c0a6542412c6819363d98",
+      "bytes": 2694,
+      "sha256": "e257984ec5372dc8787eda46ddbb8a0e38f8b484ef5993cf8488ab9a8782093a",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "exchange/gas_reconfirmation.py",
+      "sourcePR": 40,
+      "sourceCommit": "894b83b4ccac5b05a0c48c952cc54a596ed2b6f1",
+      "sourceBlob": "cc0771fa622aa873861b74a7acbd42ba13e701fb",
+      "candidateBlob": "cc0771fa622aa873861b74a7acbd42ba13e701fb",
+      "bytes": 4268,
+      "sha256": "c7983105353807bccf0d538c4fa08250f4b724d80caf17600a4b6d325cf66d4b",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "integration/test_gas_reconfirmation.py",
+      "sourcePR": 40,
+      "sourceCommit": "894b83b4ccac5b05a0c48c952cc54a596ed2b6f1",
+      "sourceBlob": "834bd0f38598448a1ef41ff7bbbd635c5ee62e2c",
+      "candidateBlob": "834bd0f38598448a1ef41ff7bbbd635c5ee62e2c",
+      "bytes": 4808,
+      "sha256": "e203551320f55ac2ca36c926e22723d043b3bd61ac28143c5f8092ad97e83881",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "docs/mint-declaration-view.md",
+      "sourcePR": 42,
+      "sourceCommit": "7d2bcc8438a670b33399bba6519cb7eb74e9fdfb",
+      "sourceBlob": "87eebdfb91a200c0755b916859f07de34254463e",
+      "candidateBlob": "87eebdfb91a200c0755b916859f07de34254463e",
+      "bytes": 1993,
+      "sha256": "786c032081e27532534678ec87ba60075f27fc7b61a13ad9eaf0f853af7a1d24",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "exchange/mint_declaration_view.py",
+      "sourcePR": 42,
+      "sourceCommit": "7d2bcc8438a670b33399bba6519cb7eb74e9fdfb",
+      "sourceBlob": "32c4e96ba4133cc65cd03e193193a30159125f2e",
+      "candidateBlob": "32c4e96ba4133cc65cd03e193193a30159125f2e",
+      "bytes": 3842,
+      "sha256": "6676e3eb2e89ce4577d6a7d2b7997b262bf54da7e8a5b06a74324313aa1f6e49",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "integration/test_mint_declaration_view.py",
+      "sourcePR": 42,
+      "sourceCommit": "7d2bcc8438a670b33399bba6519cb7eb74e9fdfb",
+      "sourceBlob": "9078ec3b69f9a28df04160f0f7deae51aace6699",
+      "candidateBlob": "9078ec3b69f9a28df04160f0f7deae51aace6699",
+      "bytes": 2475,
+      "sha256": "be78874d058ad377e5ca1f56efeed0ffcbe20261a696bdd6e002a2a7c55cd955",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "docs/gas-replay-reference.md",
+      "sourcePR": 43,
+      "sourceCommit": "e4bff1318cbe8e1ddaf9266da1c7c6c335f55cfb",
+      "sourceBlob": "9b6ad0d2e652b1b0cf5cd1f6cb6a337c867f4e4b",
+      "candidateBlob": "57910efdbaf17036fb9452f0192cb8c059b66418",
+      "bytes": 4017,
+      "sha256": "e1f8d8f4de83f6f7d57033208f2840a51ba890a9d120bafa119646147a23ec94",
+      "change": "targeted neutralization of deployment label"
+    },
+    {
+      "path": "exchange/gas_budget_journal.py",
+      "sourcePR": 43,
+      "sourceCommit": "e4bff1318cbe8e1ddaf9266da1c7c6c335f55cfb",
+      "sourceBlob": "b8bc3cd2d070d453280f7d85552f20078a211fc9",
+      "candidateBlob": "b8bc3cd2d070d453280f7d85552f20078a211fc9",
+      "bytes": 8760,
+      "sha256": "cded613da1ce0d356e20c0a1867b359cc6b0f96be1860ea6a9dd220c773ee1c2",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "integration/test_gas_budget_journal.py",
+      "sourcePR": 43,
+      "sourceCommit": "e4bff1318cbe8e1ddaf9266da1c7c6c335f55cfb",
+      "sourceBlob": "a92f26df12301613e9786ffb5f7561deb19687a0",
+      "candidateBlob": "a92f26df12301613e9786ffb5f7561deb19687a0",
+      "bytes": 7995,
+      "sha256": "e97a2e6fab0e58d4ab1baa1c80f98fe14cf5778da116662f9b6d01c2fb750340",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "docs/original-task-journal-reader.md",
+      "sourcePR": 44,
+      "sourceCommit": "c0d0614550ea39136936d466d60f20d81083e73e",
+      "sourceBlob": "2510884ad0dc18afe3fe7f93d2cc3924f7c12593",
+      "candidateBlob": "2510884ad0dc18afe3fe7f93d2cc3924f7c12593",
+      "bytes": 3761,
+      "sha256": "059c0934d80853b1d97fe160c77854ccea9d57d7bcc5e2eba85c9c266004a942",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "exchange/original_task_journal_reader.py",
+      "sourcePR": 44,
+      "sourceCommit": "c0d0614550ea39136936d466d60f20d81083e73e",
+      "sourceBlob": "8f04b0b6e9a94fa506177463c9311c5e4fce9608",
+      "candidateBlob": "8f04b0b6e9a94fa506177463c9311c5e4fce9608",
+      "bytes": 6347,
+      "sha256": "45646b7082c223fb76efbcfe6b92f273395d7f2e2e35f2862e33e548a540aad2",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "integration/test_original_task_journal_reader.py",
+      "sourcePR": 44,
+      "sourceCommit": "c0d0614550ea39136936d466d60f20d81083e73e",
+      "sourceBlob": "622e58a30ee6208320e6663c8b3e7033eef1a69b",
+      "candidateBlob": "622e58a30ee6208320e6663c8b3e7033eef1a69b",
+      "bytes": 5865,
+      "sha256": "92d2bf9d08a9902a7e9ec327d27acabfc4f9726e569e657f7dffce366474ab70",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "docs/registration-source-workbench.md",
+      "sourcePR": 45,
+      "sourceCommit": "cf1b7bb3a8037e483e8aaa297dd5e3f72b821eb7",
+      "sourceBlob": "9f124ac115dd10b5d3fcaf52b34bc7bc5e3462d7",
+      "candidateBlob": "9f124ac115dd10b5d3fcaf52b34bc7bc5e3462d7",
+      "bytes": 3164,
+      "sha256": "3b6312b11dc808867c352eab04b57ccce32f4586d2aebeaa90c8bff70fb1e671",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "exchange/registration_source_workbench.py",
+      "sourcePR": 45,
+      "sourceCommit": "cf1b7bb3a8037e483e8aaa297dd5e3f72b821eb7",
+      "sourceBlob": "d4b068af1e31ea1ac3a79c5c5fee292ed2bc529a",
+      "candidateBlob": "d4b068af1e31ea1ac3a79c5c5fee292ed2bc529a",
+      "bytes": 6450,
+      "sha256": "a9ab1ca41ccfd0d391b6ccb00a170aa348f0376a7ca73d6f77846208bbc51bf7",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "integration/test_registration_source_workbench.py",
+      "sourcePR": 45,
+      "sourceCommit": "cf1b7bb3a8037e483e8aaa297dd5e3f72b821eb7",
+      "sourceBlob": "15a3fb7a4dcf77d7827c354b8a20b39b5d78c485",
+      "candidateBlob": "15a3fb7a4dcf77d7827c354b8a20b39b5d78c485",
+      "bytes": 4998,
+      "sha256": "6bc91e946af3b91d278276483d0b647ee87b86e9196816ebda819c79efad440b",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "docs/receipt-gas-observer.md",
+      "sourcePR": 46,
+      "sourceCommit": "e6373036e1de3c4db0160442b2277fb9ebc26499",
+      "sourceBlob": "ab56c5b70d67827b1adbdd008009123ceab0ca85",
+      "candidateBlob": "ab56c5b70d67827b1adbdd008009123ceab0ca85",
+      "bytes": 3028,
+      "sha256": "a4c20698b636c605481cd3c7a739fe73e51eff2619ea36b76efbdda943c8d02b",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "exchange/receipt_gas_observer.py",
+      "sourcePR": 46,
+      "sourceCommit": "e6373036e1de3c4db0160442b2277fb9ebc26499",
+      "sourceBlob": "2fd396bf03e58184e0800bfa7cecfdc54617a39f",
+      "candidateBlob": "2fd396bf03e58184e0800bfa7cecfdc54617a39f",
+      "bytes": 5405,
+      "sha256": "beaf10b51ed4758e380ee7d983839bd71aeaec7273947bb5690c953330450125",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "integration/test_receipt_gas_observer.py",
+      "sourcePR": 46,
+      "sourceCommit": "e6373036e1de3c4db0160442b2277fb9ebc26499",
+      "sourceBlob": "0bb8ce963839c0a95635847d071c076886fbf29e",
+      "candidateBlob": "0bb8ce963839c0a95635847d071c076886fbf29e",
+      "bytes": 3836,
+      "sha256": "8a5df8614a6fd8b0987b1a83178e587091321a11d37fefd9a4e2352424164b7e",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "docs/original-gas-receipt-reader.md",
+      "sourcePR": 47,
+      "sourceCommit": "c04838343a370d2f59d2aec0565f7f15641693d2",
+      "sourceBlob": "30c4cae44b71fb5c9557de796edb41350e388c26",
+      "candidateBlob": "30c4cae44b71fb5c9557de796edb41350e388c26",
+      "bytes": 2965,
+      "sha256": "d785319f302d11ee380385dc476c9816f34f819bedd3a69ba9d68ab80c0f4450",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "exchange/original_gas_receipt_reader.py",
+      "sourcePR": 47,
+      "sourceCommit": "c04838343a370d2f59d2aec0565f7f15641693d2",
+      "sourceBlob": "ecd01b3b2b6505b7a6463102a301c4a98634b3aa",
+      "candidateBlob": "ecd01b3b2b6505b7a6463102a301c4a98634b3aa",
+      "bytes": 4352,
+      "sha256": "0b838f9db74b50fb63d3042a504f3cf83edb24a63928c595bfc44bfb2232a9ce",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "integration/test_original_gas_receipt_reader.py",
+      "sourcePR": 47,
+      "sourceCommit": "c04838343a370d2f59d2aec0565f7f15641693d2",
+      "sourceBlob": "6f6b5df625e544bacedf5449e57a48cb5ec4bd34",
+      "candidateBlob": "6f6b5df625e544bacedf5449e57a48cb5ec4bd34",
+      "bytes": 4357,
+      "sha256": "122d671385d944116b2a4e241b7dd5c79db66b23e67ded858b8dbf4bc0da5c5a",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "docs/TESTONLY-NFT-MINT.md",
+      "sourcePR": 48,
+      "sourceCommit": "751325b2016dbf9fe74d918e89e1c88de671408c",
+      "sourceBlob": "82596d57e6c8344fb6d3075d347160e5708dc4ad",
+      "candidateBlob": "82596d57e6c8344fb6d3075d347160e5708dc4ad",
+      "bytes": 7401,
+      "sha256": "64fbea37d672601f24fddff21fa7de23a750ebcadfa75368d71a6aedca8360ae",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "test-contracts/.gitignore",
+      "sourcePR": 48,
+      "sourceCommit": "751325b2016dbf9fe74d918e89e1c88de671408c",
+      "sourceBlob": "7ed0d86bc3e604c57bce2cbcac7131b3c59ae493",
+      "candidateBlob": "7ed0d86bc3e604c57bce2cbcac7131b3c59ae493",
+      "bytes": 28,
+      "sha256": "23cb9a518d8961912d010c0f096db7ad0f56764aa12763cd31680e0fdeae535a",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "test-contracts/dependencies.lock.json",
+      "sourcePR": 48,
+      "sourceCommit": "751325b2016dbf9fe74d918e89e1c88de671408c",
+      "sourceBlob": "8b9a6ac92a5bfad079f2007656644da2be49d835",
+      "candidateBlob": "8b9a6ac92a5bfad079f2007656644da2be49d835",
+      "bytes": 805,
+      "sha256": "04f5255a979d4532180d2ccc9ef768babb773d8adb26b86d6cb9feafa446859e",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "test-contracts/foundry.toml",
+      "sourcePR": 48,
+      "sourceCommit": "751325b2016dbf9fe74d918e89e1c88de671408c",
+      "sourceBlob": "2e35cd612e90ff141a1cff306d0408964236e270",
+      "candidateBlob": "2e35cd612e90ff141a1cff306d0408964236e270",
+      "bytes": 317,
+      "sha256": "cae938bb771e83c1b6f2c2c70f7e49339a660e59ecc4bed89c297d2633e5f786",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "test-contracts/script/DeployEXSepoliaTestNFT.s.sol",
+      "sourcePR": 48,
+      "sourceCommit": "751325b2016dbf9fe74d918e89e1c88de671408c",
+      "sourceBlob": "34254094969df3d4785d52735ebdb5f31bf7040a",
+      "candidateBlob": "34254094969df3d4785d52735ebdb5f31bf7040a",
+      "bytes": 1238,
+      "sha256": "1f1ea2ee20cc624dcd02ac8b2b3d55683734b3f2bb12f2a29d1d2fc67c3bf1ea",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "test-contracts/src/EXSepoliaTestNFT.sol",
+      "sourcePR": 48,
+      "sourceCommit": "751325b2016dbf9fe74d918e89e1c88de671408c",
+      "sourceBlob": "b3518bcc64e88a8b9f7f0949ea36f0c96e1a6fb7",
+      "candidateBlob": "b3518bcc64e88a8b9f7f0949ea36f0c96e1a6fb7",
+      "bytes": 4105,
+      "sha256": "4e7255bb0aacee7ccf808bb8573deedc3fab4f98fc023f8eaeba84a7292002d9",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "test-contracts/test/EXSepoliaTestNFT.t.sol",
+      "sourcePR": 48,
+      "sourceCommit": "751325b2016dbf9fe74d918e89e1c88de671408c",
+      "sourceBlob": "d150c57de35de7e4d4eda609929a74bdaf0265ca",
+      "candidateBlob": "d150c57de35de7e4d4eda609929a74bdaf0265ca",
+      "bytes": 5871,
+      "sha256": "8581e4f07588545ccf02b08b277d8eee119d315984ab40001f0497d1870e46fd",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "docs/mint-specification.md",
+      "sourcePR": 41,
+      "sourceCommit": "2862a5add7c1df5be51ea24195513cdcb0332f9c",
+      "sourceBlob": "8ec89c8bdc0dc2a2cd7408a6e946d99f520e8985",
+      "candidateBlob": "8ec89c8bdc0dc2a2cd7408a6e946d99f520e8985",
+      "bytes": 3560,
+      "sha256": "4e8effa569fabe0b8bd62d7fce77b8267dee02e69070d4c43d254fedccb5440d",
+      "change": "exact original bytes"
+    },
+    {
+      "path": "integration/test_mint_specification.py",
+      "sourcePR": 41,
+      "sourceCommit": "2862a5add7c1df5be51ea24195513cdcb0332f9c",
+      "sourceBlob": "4abaa12443e87c6aa43d3d15063a1038dd785efa",
+      "candidateBlob": "4abaa12443e87c6aa43d3d15063a1038dd785efa",
+      "bytes": 6980,
+      "sha256": "194194549540770d2f2b91517cfd63f845a12d22e45afecefb03617d762494e4",
+      "change": "exact original bytes"
+    }
+  ],
+  "validation": "SOURCE_IDENTITY_ONLY; combined imports/tests/runtime NOT_RUN; no earlier PASS inherited"
+}
