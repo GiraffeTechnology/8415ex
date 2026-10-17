@@ -36,11 +36,15 @@ class PrincipalBinding:
         require(type(self.position) is EscrowPosition and type(self.asset) is Asset,
                 CODE, "original escrow and whole asset required")
         require(self.asset.chain_id == 11155111, CODE, "EX Sepolia binding required")
-        address(self.payment_token, CODE)
-        require(self.payment_token != "0x" + "0" * 40, CODE, "configured payment token required")
-        # The original position must name the configured token, not an ETH or
-        # symbolic asset label whose mapping was guessed here.
-        require(self.position.quote_asset == self.payment_token, CODE, "principal token mismatch")
+        if self.payment_token == "ETH":
+            require(type(self.token_decimals) is int and self.token_decimals == 18,
+                    CODE, "native ETH principal must use wei")
+        else:
+            address(self.payment_token, CODE)
+            require(self.payment_token != "0x" + "0" * 40, CODE, "configured payment token required")
+        # ETH is the existing canonical native identity, never the zero-address
+        # token or an alias. The escrow must already select this exact asset.
+        require(self.position.quote_asset == self.payment_token, CODE, "principal currency mismatch")
         require(type(self.token_decimals) is int and 0 <= self.token_decimals <= 255,
                 CODE, "verified token decimals required")
         for value in (self.transfer_id, self.operation_id, self.journal_reference):
@@ -54,13 +58,16 @@ class PrincipalBinding:
     @property
     def terms(self):
         p = self.position
-        return {"schema": SCHEMA, "chainId": self.asset.chain_id,
+        result = {"schema": SCHEMA, "chainId": self.asset.chain_id,
                 "contract": self.asset.contract, "tokenId": str(self.asset.token_id),
                 "receiptId": p.receipt_id, "globalLegId": p.leg_index,
                 "transferId": self.transfer_id, "escrowId": p.escrow_id,
                 "buyer": p.payer, "seller": p.payee, "paymentToken": self.payment_token,
                 "tokenDecimals": self.token_decimals, "principalBaseUnits": str(p.principal),
                 "nativeOperationId": self.operation_id, "journalReference": self.journal_reference}
+        if self.payment_token == "ETH":
+            result.update(principalAssetKind="native-ETH", principalUnit="wei")
+        return result
 
     @property
     def binding_digest(self):
@@ -170,7 +177,7 @@ class PrincipalJournalBridge:
         # Freeze needs authentic buyer intent, balance and gas confirmation;
         # refund needs canonical rejection/cutoff and asset return ordering.
         # Both checks belong to the original native gate, not a local string.
-        require(self._verify_authority(action, binding, deepcopy(s), proof) is True,
+        require(self._verify_authority(action, binding, deepcopy(s), deepcopy(proof)) is True,
                 CODE, "original action authority refused")
         request = {"principalAsset": binding.payment_token,
                    "principalBaseUnits": str(binding.position.principal),
@@ -182,6 +189,9 @@ class PrincipalJournalBridge:
                    "restoreConsumedGas": False,
                    "requiresNativeCASAndRecheck": True,
                    "authorityBindingRequired": True}
+        if binding.payment_token == "ETH":
+            request.update(principalAssetKind="native-ETH", principalUnit="wei",
+                           combinePrincipalWithGas=False)
         # This digest is an EX request identity only. It is not a native task,
         # grant, EIP-712 signature, calldata hash or Oracle commitment.
         return dict(base, disposition="PREPARED_NOT_DISPATCHED", request=request,
