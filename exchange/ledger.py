@@ -19,6 +19,7 @@ from .errors import DomainError, require
 from .ids import address, amount, digest, identifier, instant
 from .model import WHOLE_RECEIPT_UNITS, Asset, AuthorizationReference, TradeIntent, WarehouseReceipt
 from .mint_specification import MintSpecification, MintDeclarationBook
+from .priority_exchange import PriorityBook, PriorityRefused
 from .registration import (DISPOSITIONS, RegistrationEvidence, RegistrationRequest,
                            default_registrars)
 from .rollback import (ROLLBACK_STATES, WITHDRAWN_MECHANISMS, GasBudget, RollbackAuthority,
@@ -130,6 +131,7 @@ class Exchange:
         self._authorizations = {}
         self._sessions = {}
         self._intents = {}
+        self._order_books = {}
         self._used_nonces = set()
         self._legs = {}
         self._holder_index = {}
@@ -261,6 +263,8 @@ class Exchange:
                     f"intent {intent.intent_id} was already submitted with different signed terms")
             return previous
         self._intents[intent.intent_id] = intent
+        if intent.counterparty is None and self.validate_intent(intent.intent_id)["executable"]:
+            self.enter_order(intent.intent_id)
         return intent
 
     def intent(self, intent_id):
@@ -312,8 +316,8 @@ class Exchange:
                 reasons.append("EX_AUTH_AMOUNT_REFUSED")
             if auth.quote_asset != intent.quote_asset:
                 reasons.append("EX_AUTH_QUOTE_ASSET_REFUSED")
-            if auth.counterparties and (intent.counterparty is None
-                                        or intent.counterparty not in auth.counterparties):
+            if auth.counterparties and intent.counterparty is not None and (
+                    intent.counterparty not in auth.counterparties):
                 reasons.append("EX_AUTH_COUNTERPARTY_REFUSED")
         ordered = tuple(dict.fromkeys(reasons))
         return {"intentId": intent.intent_id, "side": intent.side, "signer": intent.signer,
@@ -321,32 +325,76 @@ class Exchange:
                 "executable": ordered == (), "reasons": ordered,
                 "authorization": auth_state, "observedAt": now}
 
-    def match_intents(self, sell_intent_id, buy_intent_id, now=None):
-        """Deterministically pair two explicitly paired intents.
+    def enter_order(self, intent_id):
+        """Accept into the existing price/time book with server sequence only."""
+        intent = self.intent(intent_id)
+        receipt_id = self._asset_keys.get(intent.asset.key)
+        require(receipt_id is not None, "EX_ASSET_UNKNOWN", str(intent.asset.key))
+        key = (receipt_id, intent.quote_asset)
+        if key not in self._order_books:
+            self._order_books[key] = PriorityBook(self, receipt_id, intent.quote_asset, self._clock)
+        try:
+            return self._order_books[key].enter(intent_id)
+        except PriorityRefused as error:
+            raise DomainError("EX_ORDER_REFUSED", str(error)) from None
 
-        This is the Stage 1 demonstration fixture, not a decision about the final
-        matching algorithm. It never changes a signed limit or condition.
+    def match_intents(self, sell_intent_id, buy_intent_id, now=None):
+        """Match the best executable pair, preserving limits and server FIFO.
+
+        For crossing orders, execution uses the older accepted order's limit:
+        an arriving buyer gets the best eligible resting ask; an arriving seller
+        gets the best eligible resting bid. A caller cannot name a worse pair.
         """
         now = self._now(now)
         sell, buy = self.intent(sell_intent_id), self.intent(buy_intent_id)
         require(sell.side == "sell" and buy.side == "buy", "EX_MATCH_SIDE_REFUSED",
                 "one sell and one buy are required")
-        require(sell.asset.key == buy.asset.key, "EX_MATCH_ASSET_REFUSED", "both sides must name one asset")
-        require(sell.quote_asset == buy.quote_asset, "EX_MATCH_QUOTE_ASSET_REFUSED", "quote assets must agree")
+        require(sell.asset.key == buy.asset.key, "EX_MATCH_ASSET_REFUSED",
+                "both sides must name one asset")
+        require(sell.quote_asset == buy.quote_asset, "EX_MATCH_QUOTE_ASSET_REFUSED",
+                "quote assets must agree")
         require(sell.units == buy.units == WHOLE_RECEIPT_UNITS, "EX_WHOLE_RECEIPT_REFUSED",
-                "a match covers exactly one whole receipt")
-        require(sell.counterparty == buy.signer and buy.counterparty == sell.signer,
-                "EX_MATCH_PAIRING_REFUSED", "this fixture requires an explicit, mutual pairing")
-        for report in (self.validate_intent(sell.intent_id, now), self.validate_intent(buy.intent_id, now)):
-            require(report["executable"], "EX_MATCH_UNEXECUTABLE",
-                    f"{report['intentId']}: {','.join(report['reasons'])}")
-        require(buy.limit_price >= sell.limit_price, "EX_MATCH_PRICE_REFUSED",
-                "the buy limit does not reach the sell limit")
-        price = sell.limit_price
-        basis = {"rule": "explicit-pairing-limit-fixture", "sellLimit": str(sell.limit_price),
-                 "buyLimit": str(buy.limit_price), "executionPrice": str(price),
-                 "quoteAsset": sell.quote_asset, "units": sell.units,
-                 "sellIntentId": sell.intent_id, "buyIntentId": buy.intent_id,
+                "one whole receipt is required")
+        receipt_id = self._asset_keys.get(sell.asset.key)
+        require(receipt_id is not None, "EX_ASSET_UNKNOWN", str(sell.asset.key))
+        book = self._order_books.get((receipt_id, sell.quote_asset))
+        require(book is not None, "EX_ORDER_NOT_ACCEPTED", "server book acceptance is required")
+        require(now == book._now(), "EX_ORDER_OBSERVATION_REFUSED",
+                "matching uses the current trusted server observation")
+        proposal = book.proposal()
+        chosen = None
+        for ask_id in proposal["askPriority"]:
+            ask = self.intent(ask_id)
+            ask_grant = self.authorization(ask.authorization_id)
+            for bid_id in proposal["bidPriority"]:
+                bid = self.intent(bid_id)
+                if bid.limit_price < ask.limit_price:
+                    break
+                bid_grant = self.authorization(bid.authorization_id)
+                if ask_grant.counterparties and bid.signer not in ask_grant.counterparties:
+                    continue
+                if bid_grant.counterparties and ask.signer not in bid_grant.counterparties:
+                    continue
+                ask_seq = book._entries[ask_id][1]
+                bid_seq = book._entries[bid_id][1]
+                execution_price = ask.limit_price if ask_seq < bid_seq else bid.limit_price
+                if execution_price > ask_grant.max_amount or execution_price > bid_grant.max_amount:
+                    continue
+                chosen = (ask_id, bid_id)
+                break
+            if chosen:
+                break
+        require(chosen is not None, "EX_MATCH_UNEXECUTABLE", "no executable crossing pair")
+        require(chosen == (sell.intent_id, buy.intent_id), "EX_MATCH_PRIORITY_REFUSED",
+                "caller-selected pair is not the best executable server-priority pair")
+        ask_sequence = book._entries[sell.intent_id][1]
+        bid_sequence = book._entries[buy.intent_id][1]
+        price = sell.limit_price if ask_sequence < bid_sequence else buy.limit_price
+        basis = {"rule": "price-time-resting-order-limit",
+                 "sellLimit": str(sell.limit_price), "buyLimit": str(buy.limit_price),
+                 "executionPrice": str(price), "quoteAsset": sell.quote_asset,
+                 "units": sell.units, "sellIntentId": sell.intent_id, "buyIntentId": buy.intent_id,
+                 "askSequence": ask_sequence, "bidSequence": bid_sequence,
                  "registrationAndSettlement": "not-performed-by-matching"}
         return MatchResult(sell_intent_digest=sell.digest, buy_intent_digest=buy.digest,
                            seller=sell.signer, buyer=buy.signer, asset=sell.asset, price=price,
@@ -358,7 +406,7 @@ class Exchange:
         buy = self._intent_by_digest(match.buy_intent_digest)
         canonical = self.match_intents(sell.intent_id, buy.intent_id, now)
         require(all(getattr(match, name) == getattr(canonical, name)
-                    for name in ("seller", "buyer", "asset", "price", "quote_asset", "units")),
+                    for name in ("seller", "buyer", "asset", "price", "quote_asset", "units", "basis")),
                 "EX_MATCH_BINDING_REFUSED", "match terms differ from the signed pairing")
         return canonical
 
