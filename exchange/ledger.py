@@ -19,8 +19,6 @@ from .ids import address, amount, digest, identifier, instant
 from .model import WHOLE_RECEIPT_UNITS, Asset, AuthorizationReference, TradeIntent, WarehouseReceipt
 from .registration import (DISPOSITIONS, RegistrationEvidence, RegistrationRequest,
                            default_registrars)
-from .exit import (EXIT_STEPS, REQUIRED_OTHER_CHECKS, ExitStep, RedemptionRequest,
-                   SimulatedVoucherDesk, exit_step_key)
 from .rollback import (ROLLBACK_STATES, WITHDRAWN_MECHANISMS, GasBudget, RollbackAuthority,
                        RollbackStep, SimulatedAssetControl, rollback_binding)
 from .settlement import (EscrowPosition, ReleaseAuthority, SimulatedPaymentAdapter,
@@ -1320,7 +1318,7 @@ class Exchange:
             "conflicts": tuple(state["conflicts"]),
             "observedAt": now}
 
-    # -------------------------------------------- deadline, exit and burn
+    # ------------------------------------ deadline and historical exit enquiry
 
     def evaluate_deadline(self, receipt_id, now=None):
         """Whether new trades stop, what is still in flight, and what is undefined.
@@ -1358,148 +1356,50 @@ class Exchange:
                 if self.owner_index(receipt_id) != self._holder_index[receipt_id] else None,
                 "undefinedOrdering": tuple(undefined)}
 
+    def bill_of_lading_view(self, receipt_id, now=None):
+        """Read existing bill terms and positions without physical fulfillment.
+
+        This is the model's recorded view, not independent chain evidence or an
+        assertion that every v1.2 mint field has already been implemented.
+        """
+        view = self.receipt_view(receipt_id, now)
+        return {"prdVersion": "1.2", "receipt": view,
+                "scope": "bill-of-lading-transfer",
+                "physicalFulfillment": "outside-ex-scope",
+                "physicalActions": (), "historyPreserved": True}
+
     def exit_eligibility(self, receipt_id, requester, authorization_id=None, verified_checks=(),
                          now=None):
-        """Every exit condition, each reported separately.
-
-        ``owner == holder`` is necessary and never sufficient. A check this layer
-        cannot establish must arrive as a verified fact; an unsupplied check
-        counts as not met.
-        """
-        now = self._now(now)
-        view = self.receipt_view(receipt_id, now)
-        address(requester, "EX_REDEMPTION_REFUSED")
-        supplied = frozenset(verified_checks)
-        reasons = []
-        if not view["ownerEqualsHolder"]:
-            reasons.append("EX_OWNER_HOLDER_DIVERGED")
-        if view["owner"]["account"] != requester or view["holder"]["account"] != requester:
-            reasons.append("EX_REDEMPTION_REQUESTER_REFUSED")
-        if authorization_id is None:
-            reasons.append("EX_REDEMPTION_AUTHORIZATION_MISSING")
-        else:
-            state = self.authorization_state(authorization_id, now)
-            reasons.extend(state["reasons"])
-            grant = self.authorization(authorization_id)
-            if grant.account != requester:
-                reasons.append("EX_AUTH_ACCOUNT_REFUSED")
-            if "redeem" not in grant.allowed_actions:
-                reasons.append("EX_AUTH_ACTION_REFUSED")
-            if grant.asset.key != self.receipt(receipt_id).asset.key:
-                reasons.append("EX_AUTH_ASSET_REFUSED")
-        existing = self._exits[receipt_id]
-        if existing is not None:
-            reasons.append("EX_REDEMPTION_ALREADY_REQUESTED")
-        missing = tuple(check for check in REQUIRED_OTHER_CHECKS if check not in supplied)
-        if missing:
-            reasons.append("EX_REDEMPTION_CHECKS_NOT_VERIFIED")
-        ordered = tuple(dict.fromkeys(reasons))
-        return {"receiptId": receipt_id, "requester": requester,
-                "ownerEqualsHolder": view["ownerEqualsHolder"],
-                "necessaryConditionMet": view["ownerEqualsHolder"],
-                "eligible": ordered == (), "reasons": ordered,
-                "verifiedChecks": tuple(sorted(supplied)), "missingChecks": missing,
-                "ownerEqualsHolderIsNotSufficient": True, "observedAt": now}
+        """Compatibility report for a retired operation; no fulfillment gate."""
+        view = self.bill_of_lading_view(receipt_id, now)
+        return {"receiptId": receipt_id, "requester": requester, "eligible": False,
+                "reasons": ("EX_PHYSICAL_FULFILLMENT_RETIRED",),
+                "prdVersion": "1.2", "scope": view["scope"],
+                "physicalActions": (), "observedAt": view["receipt"]["observedAt"]}
 
     def request_redemption(self, receipt_id, requester, authorization_id, request_id,
                            verified_checks=(), now=None):
-        """Open an exit, or refuse with every reason it is not available."""
-        now = self._now(now)
-        eligibility = self.exit_eligibility(receipt_id, requester, authorization_id,
-                                            verified_checks, now)
-        require(eligibility["eligible"], "EX_REDEMPTION_REFUSED", ",".join(eligibility["reasons"]))
-        require(self.voucher_desk is not None, "EX_VOUCHER_DESK_REQUIRED",
-                "an exit needs the simulated collection desk to be configured")
-        request = RedemptionRequest(request_id=request_id, receipt_id=receipt_id,
-                                    requester=requester, authorization_id=authorization_id,
-                                    requested_at=now)
-        self._exits[receipt_id] = {
-            "request": request, "state": "requested",
-            "steps": [ExitStep(name=name, key=exit_step_key(name, receipt_id, request_id)) for name in EXIT_STEPS],
-            "verifiedChecks": eligibility["verifiedChecks"], "openedAt": now}
-        self._record(receipt_id, "redemption-requested", {
-            "requestId": request_id, "requester": requester,
-            "authorizationId": authorization_id,
-            "verifiedChecks": list(eligibility["verifiedChecks"]),
-            "ownerEqualsHolderIsNotSufficient": True,
-            "plannedSteps": list(EXIT_STEPS)})
-        return self._exits[receipt_id]
+        """Never create a new retired physical operation, even with a grant."""
+        require(False, "EX_PHYSICAL_FULFILLMENT_RETIRED",
+                "EX v1.2 transfers the bill of lading; physical fulfillment is outside scope")
 
     def advance_exit(self, receipt_id, through=None, now=None):
-        """Run the exit steps in order, one act at a time.
-
-        ``through`` stops after that step, because the confirmation and recovery
-        order inside the hand-over and burn pair is still open: a later step is
-        never completed from an earlier one, and the physical hand-over and the
-        on-chain burn record their own instants.
-        """
-        now = self._now(now)
-        state = self._exits[self.receipt(receipt_id).receipt_id]
-        require(state is not None, "EX_REDEMPTION_NOT_OPEN", receipt_id)
-        if state["state"] == "complete":
-            return self.exit_report(receipt_id, now)
-        request = state["request"]
-        require(self.owner_of(receipt_id) == self.holder_of(receipt_id) == request.requester
-                and self.owner_index(receipt_id) == self.holder_index(receipt_id),
-                "EX_REDEMPTION_REFUSED", "the exit's entitled position changed")
-        auth = self.authorization_state(request.authorization_id, now)
-        grant = self.authorization(request.authorization_id)
-        require(not auth["reasons"] and grant.account == request.requester
-                and grant.asset.key == self.receipt(receipt_id).asset.key
-                and "redeem" in grant.allowed_actions,
-                "EX_REDEMPTION_REFUSED", "the exit's authorization no longer applies")
-        if through is not None:
-            require(through in EXIT_STEPS, "EX_EXIT_STEP_REFUSED", through)
-        limit = EXIT_STEPS.index(through) if through is not None else len(EXIT_STEPS) - 1
-        updated = list(state["steps"])
-        for position, step in enumerate(updated):
-            if position > limit:
-                break
-            if step.status == "done":
-                continue
-            record = self.voucher_desk.lookup(step.key)
-            if record is not None:
-                require(record.get("key") == step.key and record.get("step") == step.name
-                        and record.get("receiptId") == receipt_id
-                        and record.get("account") == state["request"].requester,
-                        "EX_VOUCHER_SUBSTITUTION_REFUSED", "lookup returned another exit's record")
-            if record is None or record["status"] == "failed":
-                record = self.voucher_desk.act(step.key, step.name, receipt_id,
-                                               state["request"].requester)
-            if record["status"] != "done":
-                updated[position] = replace(step, status="blocked",
-                                            detail=(("voucherStatus", record["status"]),))
-                self._record(receipt_id, "exit-step-blocked", {
-                    "step": step.name, "status": record["status"], "secondActSent": False})
-                break
-            updated[position] = replace(step, status="done", completed_at=record["observedAt"],
-                                        detail=(("reference", record["reference"]),))
-            self._record(receipt_id, "exit-step-done", {
-                "step": step.name, "completedAt": record["observedAt"],
-                "reference": record["reference"], "simulated": True,
-                "atomicWithOtherSteps": False})
-            if step.name == "burn":
-                self._replace_leg_free_burn(receipt_id)
-        state["steps"] = updated
-        outstanding = [step for step in updated if step.status != "done"]
-        blocked = [step for step in updated if step.status == "blocked"]
-        state["state"] = ("complete" if not outstanding else
-                          "blocked" if blocked else "in-progress")
-        return self.exit_report(receipt_id, now)
+        """Preserve old records for enquiry; never resume their physical acts."""
+        require(False, "EX_PHYSICAL_FULFILLMENT_RETIRED",
+                "query historical exit evidence without executing a retired step")
 
     def _replace_leg_free_burn(self, receipt_id):
-        """Mark the receipt burned while keeping its whole history readable."""
-        self._record(receipt_id, "receipt-burned", {
-            "historyPreserved": True,
-            "assetLink": "retained", "registrationOrder": "retained",
-            "fundsRecord": "retained", "collectionRecord": "retained"})
+        """Retired private entry must not manufacture a destruction event."""
+        require(False, "EX_PHYSICAL_FULFILLMENT_RETIRED",
+                "collection-driven destruction is outside EX v1.2")
 
     def exit_report(self, receipt_id, now=None):
-        """Each exit step with its own instant, and what is still open."""
+        """Read retained historical evidence without making it executable."""
         now = self._now(now)
         state = self._exits[self.receipt(receipt_id).receipt_id]
         if state is None:
             return {"receiptId": receipt_id, "open": False, "state": None, "complete": False,
+                    "retiredOperation": True, "executable": False, "prdVersion": "1.2",
                     "observedAt": now}
         steps = tuple({"step": step.name, "status": step.status,
                        "completedAt": step.completed_at, "detail": dict(step.detail)}
@@ -1516,10 +1416,9 @@ class Exchange:
                 "physicalAndOnChainAreAtomic": False,
                 "distinctCompletionInstants": tuple(instants),
                 "completionInstantsDiffer": len(instants) > 1,
-                "undefinedOrdering": (
-                    ("D-07: the exact confirmation and recovery order for the voucher hand-over "
-                     "and the burn is not defined in the requirements; no step is completed from "
-                     "a neighbour",)),
+                "undefinedOrdering": (),
+                "retiredOperation": True, "executable": False,
+                "prdVersion": "1.2",
                 "historyPreserved": True,
                 "observedAt": now}
 
@@ -1565,29 +1464,8 @@ class Exchange:
         }
 
     def redemption_readiness(self, receipt_id, requester, now=None):
-        """Whether the necessary condition holds, and what is still unchecked.
-
-        ``owner == holder`` is necessary and never sufficient. This returns the
-        remaining checks by name instead of a verdict; Stage 4 implements the
-        exit flow itself.
-        """
-        now = self._now(now)
-        view = self.receipt_view(receipt_id, now)
-        address(requester, "EX_REDEMPTION_REFUSED")
-        blocking = []
-        if not view["ownerEqualsHolder"]:
-            blocking.append("EX_OWNER_HOLDER_DIVERGED")
-        if view["owner"]["account"] != requester or view["holder"]["account"] != requester:
-            blocking.append("EX_REDEMPTION_REQUESTER_REFUSED")
-        return {"receiptId": receipt_id, "requester": requester,
-                "ownerEqualsHolder": view["ownerEqualsHolder"],
-                "necessaryConditionMet": blocking == [],
-                "blockingReasons": tuple(blocking),
-                "furtherChecksNotPerformedHere": ("rights-holder-verification", "asset-validity",
-                                                  "other-eligibility", "voucher-handover", "burn"),
-                "redeemable": False,
-                "redeemableMeaning": "Stage 1 performs no redemption; this is a readiness report only",
-                "observedAt": now}
+        """Legacy read route reports retirement, not a new acceptance checklist."""
+        return self.exit_eligibility(receipt_id, requester, now=now)
 
     def receipt_timeline(self, receipt_id):
         """Trade, registration, funding and rollback records in one order."""

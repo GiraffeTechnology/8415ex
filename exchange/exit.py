@@ -1,31 +1,13 @@
-"""Stage 4: the trading deadline, exit eligibility, vouchers and the burn.
+"""Historical physical-exit records. EX v1.2 performs no new fulfillment.
 
-Two things this module refuses to pretend.
-
-First, ``owner == holder`` is necessary and never sufficient. Eligibility also
-needs the requester to be that party, a wallet authorization that actually
-covers the exit action, and the other checks the requirements name. Those other
-checks are supplied as verified facts by the caller; an unsupplied check is
-treated as not met, never as passed.
-
-Second, handing over a physical voucher and burning a token are not one atomic
-act. Each exit step records its own completion instant, and the report states
-plainly that they completed at different times.
-
-Where the requirements leave an order undefined - the precedence between a
-registration timeout, the trading deadline and an in-flight result, and the
-exact confirmation and recovery order for the voucher hand-over and the burn -
-this module refuses with a named code and reports the gap instead of inventing
-a rule.
+Old record shapes and enquiry/resolution remain for audit only.
 """
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from .errors import require
 from .ids import address, digest, identifier, instant
 
-#: The exit sequence, in the order the requirements describe it. The exact
-#: confirmation and recovery order inside the hand-over and burn pair is still
-#: open, so a step is never auto-completed from a neighbour.
+#: Historical values for decoding retained evidence only, never an executable plan.
 EXIT_STEPS = ("stop-resale", "voucher-issued", "voucher-handover-confirmed", "burn")
 
 EXIT_STEP_STATUSES = ("pending", "done", "blocked")
@@ -81,19 +63,9 @@ def exit_step_key(step, receipt_id, request_id):
 
 
 class SimulatedVoucherDesk:
-    """A simulated collection desk for one registration path.
+    """Historical simulator storage; new physical attempts are permanently retired.
 
-    It issues a voucher, records a hand-over confirmation and records a burn, as
-    three separate acts with three separate instants. It is a simulated business
-    role; it is not a real warehouse, registrar or custodian.
-
-    ``outcomes`` lets a test drive the next answer for a key. In this simulator,
-    ``failed`` means confirmed not applied and safely retryable. It never means
-    permanent refusal or an uncertain external effect. Real adapters must not
-    map either of those cases to this fixture's retryable failure.
-
-    Unknown and completed acts are never repeated. A confirmed failure can be
-    retried under the same binding and key; every attempt and enquiry is kept.
+    Lookup, history and observed UNKNOWN resolution preserve old evidence only.
     """
 
     def __init__(self, clock, path, outcomes=None):
@@ -120,30 +92,9 @@ class SimulatedVoucherDesk:
         return tuple(dict(record) for record in self._history.get(key, ()))
 
     def act(self, key, step, receipt_id, account):
-        """Retry only a confirmed no-effect failure with exactly the same binding."""
-        identifier(key, "EX_VOUCHER_REFUSED")
-        require(step in EXIT_STEPS, "EX_EXIT_STEP_REFUSED", step)
-        existing = self._records.get(key)
-        if existing is not None:
-            require(existing["step"] == step and existing["account"] == account
-                    and existing["receiptId"] == receipt_id,
-                    "EX_VOUCHER_SUBSTITUTION_REFUSED",
-                    f"{key} was already used for {existing['step']} by {existing['account']}")
-            if existing["status"] != "failed":
-                return dict(existing, repeated=True)
-            require(existing.get("effect") == "not-applied" and existing.get("retryable") is True,
-                    "EX_VOUCHER_OUTCOME_UNRESOLVED", "retry needs a confirmed no-effect failure")
-        outcome = self._outcomes.pop(key, "done")
-        require(outcome in ("done", "failed", "unknown"), "EX_VOUCHER_REFUSED", outcome)
-        record = {"key": key, "step": step, "receiptId": receipt_id, "account": account,
-                  "status": outcome, "path": self.path, "simulated": True,
-                  "attempt": existing["attempt"] + 1 if existing else 1,
-                  "effect": {"done": "applied", "failed": "not-applied", "unknown": "unknown"}[outcome],
-                  "retryable": outcome == "failed", "observedAt": self._clock(),
-                  "reference": f"sim-{step}:{key}"}
-        self._records[key] = record
-        self._history.setdefault(key, []).append(dict(record))
-        return dict(record, repeated=False)
+        """No new attempt or retry of a retired physical operation."""
+        require(False, "EX_PHYSICAL_FULFILLMENT_RETIRED",
+                "EX v1.2 transfers the bill of lading; query old records without executing them")
 
     def resolve_unknown(self, key, status):
         """Record what a later enquiry established. This performs nothing new."""
