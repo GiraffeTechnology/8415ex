@@ -1,0 +1,7 @@
+# ETH-only gas trade admission
+
+ETH is the only gas settlement asset. Every execute_transfer now requires the installed ETHTradeGasGate; absence of the original reader disables trading. A verified zero ETH balance produces EX_ETH_GAS_EMPTY and a warning. Insufficient available ETH after existing reservations produces EX_ETH_GAS_INSUFFICIENT. Missing, stale, wrong-unit, wrong-chain/account/request or unverifiable balance facts produce EX_ETH_GAS_UNVERIFIED. Token principal never substitutes for ETH.
+
+The host installs the original authenticated native reader and verifier. Its observation binds the buyer, chain, NFT and exact sell/buy intents, ETH/wei balance, current reservations and operation fee requirement, canonical block, observation time and original source. No endpoint or credential is selected here. Native execution must still recheck balance, fee, grant, nonce and UNKNOWN under its held gate; this preflight is not a reserve, signature, transfer or atomic execution proof.
+
+Refusal occurs before leg append, owner advancement and nonce consumption. Existing escrow is retained for original reconciliation; refusal does not automatically refund or resend anything. Existing synthetic fixtures explicitly install a synthetic gate, never a real-balance claim. Eight new model regression methods are authored NOT_RUN. Real session/API/UI and chain verification remain required on the approved verified remote Linux server.
