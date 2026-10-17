@@ -1,0 +1,5 @@
+# ETH principal and gas admission
+
+Both lock_escrow and execute_transfer check authenticated ETH gas before creating a principal escrow or leg. NFT0-selected principal is checked independently. For the canonical ETH price identity, separate successful balance checks are insufficient: the same observed block/time must prove disjoint available funds plus this exact operation's original frozen principal can cover principal and the maximum gas amount together. Existing original principal freeze only offsets principal; it never pays gas. Other price currencies are never converted to ETH or added together.
+
+This source change does not install an original wallet reader or verifier and does not replace the native atomic reservation/execute recheck. Original gas prepayment recovery remains a separate unresolved integration. Six synthetic regression definitions are authored NOT_RUN, including exact combined boundary, original escrow reuse, different-block refusal, token-unit separation and zero-ETH refusal before any new escrow. Run only on the existing evidence-bound approved remote Linux provider through the existing boundary check.

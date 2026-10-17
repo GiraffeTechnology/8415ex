@@ -17,6 +17,7 @@ from copy import deepcopy
 
 from .errors import DomainError, require
 from .eth_trade_gas import ETHTradeGasGate
+from .price_balance import NFT0PriceBalanceGate
 from .ids import address, amount, digest, identifier, instant
 from .model import WHOLE_RECEIPT_UNITS, Asset, AuthorizationReference, TradeIntent, WarehouseReceipt
 from .mint_specification import MintSpecification, MintDeclarationBook
@@ -98,7 +99,7 @@ class Exchange:
 
     def __init__(self, clock, payment_adapter=None, release_sources=(), funding_required=False,
                  asset_control=None, rollback_sources=(), gas_budgets=None,
-                 voucher_desk=None, mint_verifier=None, eth_gas_gate=None):
+                 voucher_desk=None, mint_verifier=None, eth_gas_gate=None, price_balance_gate=None):
         """``funding_required`` turns on the Stage 2 rule that a leg only forms
         once its own buyer's money is in escrow. Stage 1 leaves it off and
         records funding as not modelled rather than implying a payment.
@@ -110,6 +111,7 @@ class Exchange:
         require(callable(clock), "EX_CLOCK_REFUSED", "a clock function is required")
         self._clock = clock
         self._eth_gas_gate = eth_gas_gate
+        self._price_balance_gate = price_balance_gate
         self.payments = payment_adapter
         self.funding_required = bool(funding_required)
         self._release_sources = frozenset(identifier(s, "EX_RELEASE_SOURCE_REFUSED")
@@ -130,6 +132,7 @@ class Exchange:
         self._exits = {}
         self._mint_book = MintDeclarationBook(mint_verifier) if callable(mint_verifier) else None
         self._mint_declarations = {}
+        self._nft0_currency_sets = {}
         self._receipts = {}
         self._asset_keys = {}
         self._authorizations = {}
@@ -159,8 +162,11 @@ class Exchange:
         receipt may not map to an NFT that is already mapped.
         """
         require(isinstance(receipt, WarehouseReceipt), "EX_RECEIPT_REFUSED", "receipt type")
+        require(receipt.allowed_price_currencies and receipt.nft0_currency_reference is not None,
+                "EX_NFT0_CURRENCY_REQUIRED",
+                "NFT0 must specify one or more fixed currencies and original schema reference")
         require(isinstance(specification, MintSpecification), "EX_MINT_DECLARATION_REQUIRED",
-                "a bare WarehouseReceipt is not a complete v1.2 mint declaration")
+                "a bare WarehouseReceipt is not a complete mint declaration")
         require(specification.receipt == receipt, "EX_MINT_DECLARATION_BINDING_REFUSED",
                 "declaration and original receipt differ")
         require(self._mint_book is not None, "EX_MINT_VERIFIER_REQUIRED",
@@ -171,6 +177,8 @@ class Exchange:
                 f"{receipt.asset.key} already maps to receipt {existing}")
         declaration = self._mint_book.admit(specification)
         self._mint_declarations[receipt.receipt_id] = deepcopy(declaration)
+        self._nft0_currency_sets[receipt.receipt_id] = (receipt.allowed_price_currencies,
+                                                       receipt.nft0_currency_reference)
         self._receipts[receipt.receipt_id] = receipt
         self._asset_keys[receipt.asset.key] = receipt.receipt_id
         self._legs[receipt.receipt_id] = []
@@ -289,6 +297,14 @@ class Exchange:
         if receipt is None:
             reasons.append("EX_ASSET_UNKNOWN")
         else:
+            try:
+                allowed, reference = self._check_nft0_currencies(receipt_id)
+                if intent.quote_asset not in allowed:
+                    reasons.append("EX_NFT0_CURRENCY_MISMATCH")
+                if intent.currency_set_reference != reference:
+                    reasons.append("EX_NFT0_CURRENCY_REFERENCE_REFUSED")
+            except DomainError as error:
+                reasons.append(error.code)
             if now >= receipt.trade_stop_at:
                 reasons.append("EX_TRADE_WINDOW_CLOSED")
             if self._returned_to[receipt_id] is not None:
@@ -589,11 +605,7 @@ class Exchange:
                     f"{report['intentId']}: {','.join(report['reasons'])}")
         match = self._check_match_binding(match, now)
         require(transfer_id not in self._transfer_ids(), "EX_TRANSFER_DUPLICATE_REFUSED", transfer_id)
-        require(isinstance(self._eth_gas_gate, ETHTradeGasGate),
-                "EX_ETH_GAS_UNVERIFIED",
-                "Warning: authenticated ETH gas balance is unavailable; trading is disabled")
-        gas_admission = self._eth_gas_gate.admit(match, now)
-        require(gas_admission["allowed"], gas_admission["code"], gas_admission["warning"])
+        self._check_trade_funds(match, escrow_id, now)
         funding_status, rollback_status = "not-modelled", "none"
         if self.funding_required or escrow_id is not None:
             require(escrow_id is not None, "EX_SEGMENT_NOT_FUNDED",
@@ -627,6 +639,40 @@ class Exchange:
             "registrationStatus": leg.registration_status, "fundingStatus": leg.funding_status,
             "escrowId": escrow_id})
         return leg
+
+    def _check_nft0_currencies(self, receipt_id):
+        receipt = self.receipt(receipt_id)
+        current = (receipt.allowed_price_currencies, receipt.nft0_currency_reference)
+        stored = self._nft0_currency_sets.get(receipt_id)
+        require(stored is not None and current == stored and stored[0] and stored[1],
+                "EX_NFT0_CURRENCY_IMMUTABILITY_REFUSED",
+                "NFT0 currency set or reference is absent or differs from immutable mint")
+        declaration = self._mint_declarations[receipt_id]["canonicalDeclaration"]["receipt"]
+        require(tuple(declaration.get("allowed_price_currencies", ())) == stored[0]
+                and declaration.get("nft0_currency_reference") == stored[1],
+                "EX_NFT0_CURRENCY_IMMUTABILITY_REFUSED",
+                "currency set differs from the verified original mint declaration")
+        return stored
+
+    def _check_trade_funds(self, match, escrow_id, now):
+        require(isinstance(self._eth_gas_gate, ETHTradeGasGate),
+                "EX_ETH_GAS_UNVERIFIED",
+                "Warning: authenticated ETH gas balance is unavailable; trading is disabled")
+        gas_admission = self._eth_gas_gate.admit(match, now, escrow_id)
+        require(gas_admission["allowed"], gas_admission["code"], gas_admission["warning"])
+        return self._check_price_balance(match, escrow_id, now, gas_admission)
+
+    def _check_price_balance(self, match, escrow_id, now, gas_admission):
+        receipt_id = self._asset_keys.get(match.asset.key)
+        receipt = self.receipt(receipt_id)
+        allowed, reference = self._check_nft0_currencies(receipt_id)
+        require(match.quote_asset in allowed, "EX_NFT0_CURRENCY_MISMATCH",
+                "trade price must use the explicitly selected NFT0 allowed currency")
+        require(isinstance(self._price_balance_gate, NFT0PriceBalanceGate),
+                "EX_PRICE_BALANCE_UNVERIFIED",
+                "NFT0 currency balance is unverified; trading is disabled")
+        report = self._price_balance_gate.admit(match, match.quote_asset, escrow_id, now, gas_admission)
+        require(report["allowed"], report["code"], report["warning"])
 
     def _transfer_ids(self):
         return {leg.transfer_id for legs in self._legs.values() for leg in legs}
@@ -840,6 +886,7 @@ class Exchange:
         require(leg_index not in self._escrow_by_leg[receipt_id], "EX_ESCROW_DUPLICATE_REFUSED",
                 f"leg {leg_index} is already funded")
         require(escrow_id not in self._escrows, "EX_ESCROW_DUPLICATE_REFUSED", escrow_id)
+        self._check_trade_funds(match, None, now)
         position = EscrowPosition(escrow_id=escrow_id, receipt_id=receipt_id, leg_index=leg_index,
                                   payer=match.buyer, payee=match.seller,
                                   quote_asset=match.quote_asset, principal=match.price,
@@ -1636,6 +1683,10 @@ class Exchange:
         owner_index, holder_index = self.owner_index(receipt_id), self._holder_index[receipt_id]
         return {
             "receiptId": receipt.receipt_id,
+            "allowedPriceCurrencies": receipt.allowed_price_currencies,
+            "nft0CurrencyReference": receipt.nft0_currency_reference,
+            "currencySource": "NFT0", "conversionAvailable": False,
+            "gasCurrency": "ETH",
             "mintDeclaration": deepcopy(self._mint_declarations[receipt_id]),
             "asset": {"chainId": receipt.asset.chain_id, "contract": receipt.asset.contract,
                       "tokenId": receipt.asset.token_id},

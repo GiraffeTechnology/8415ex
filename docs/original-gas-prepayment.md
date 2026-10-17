@@ -1,0 +1,7 @@
+# Original gas prepayment recovery
+
+The authenticated native gas adapter request now binds originalEscrowId as well as chain, buyer, NFT and both signed intent digests. The existing original journal verifier must authenticate any optional boundGasWei as unconsumed ETH gas prepayment for exactly this operation, excluding other reservations, gas attempts and the separately counted principal freeze. boundGasWei defaults to zero for a snapshot without that field; a fresh escrow-less operation cannot claim it. Internal adapter mapping is not a new Wallet API or an invented contract ABI.
+
+Recovery may use the original bound gas without demanding a second prepayment when free ETH is zero. A shortage still refuses. For an ETH-priced trade, available cash must cover the remaining principal and gas not already covered by its original prepayment. Excess gas prepayment cannot pay principal. Principal freeze cannot pay gas. No code here transfers, consumes, refunds or unfreezes either balance; the original native atomic reservation and execution checks remain mandatory.
+
+Eight synthetic regression methods are AUTHORED_NOT_RUN. No compiler, import, product test, network call or transaction was run locally. Original server-only testing and evidence-bound provider checks apply. The approved remote toolchain remains Solc 0.8.24 / existing Forge entry; original failed downloads remain failures, not readiness.
