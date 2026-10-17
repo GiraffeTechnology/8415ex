@@ -117,7 +117,11 @@ class RefundsAndGas(unittest.TestCase):
             principal, gas = expected[entry["legIndex"]]
             self.assertEqual(entry["principal"], str(principal))
             self.assertEqual(entry["gasTotal"], str(gas))
-            self.assertEqual(entry["netToOriginalBuyer"], str(principal - gas))
+            self.assertEqual(entry["netToOriginalBuyer"], str(principal))
+            self.assertEqual(entry["principalAsset"], F.QUOTE_ASSET)
+            self.assertEqual(entry["principalUnit"], "base-units")
+            self.assertEqual(entry["gasAsset"], "ETH")
+            self.assertEqual(entry["gasUnit"], "wei")
             self.assertEqual(entry["gasBorneBy"], entry["originalBuyer"])
 
     def test_the_three_principals_do_not_merge_in_the_refund(self):
