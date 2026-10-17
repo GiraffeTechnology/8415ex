@@ -64,9 +64,19 @@ class WarehouseReceipt:
     trade_stop_at: int
     origin_account: str
     minted_at: int
+    allowed_price_currencies: tuple = ()
+    nft0_currency_reference: str = None
 
     def __post_init__(self):
         identifier(self.receipt_id, "EX_RECEIPT_REFUSED")
+        require(type(self.allowed_price_currencies) is tuple
+                and all(type(c) is str for c in self.allowed_price_currencies)
+                and len(set(self.allowed_price_currencies)) == len(self.allowed_price_currencies),
+                "EX_NFT0_CURRENCY_REFUSED", "unique immutable currency tuple required")
+        for currency in self.allowed_price_currencies:
+            identifier(currency, "EX_NFT0_CURRENCY_REFUSED")
+        if self.nft0_currency_reference is not None:
+            identifier(self.nft0_currency_reference, "EX_NFT0_CURRENCY_REFUSED")
         require(isinstance(self.asset, Asset), "EX_RECEIPT_REFUSED", "asset must be an Asset")
         require(isinstance(self.commodity_name, str) and self.commodity_name.strip() != "",
                 "EX_RECEIPT_REFUSED", "commodity name is required")
@@ -157,6 +167,7 @@ class TradeIntent:
     expires_at: int
     authorization_id: str
     counterparty: str = None
+    currency_set_reference: str = None
 
     def __post_init__(self):
         identifier(self.intent_id, "EX_INTENT_REFUSED")
@@ -175,6 +186,8 @@ class TradeIntent:
         identifier(self.authorization_id, "EX_INTENT_REFUSED")
         if self.counterparty is not None:
             address(self.counterparty, "EX_INTENT_REFUSED")
+        if self.currency_set_reference is not None:
+            identifier(self.currency_set_reference, "EX_INTENT_REFUSED")
 
     @property
     def signed_terms(self):
@@ -189,6 +202,7 @@ class TradeIntent:
             "tokenId": self.asset.token_id,
             "limitPrice": str(self.limit_price),
             "quoteAsset": self.quote_asset,
+            "currencySetReference": self.currency_set_reference,
             "units": self.units,
             "nonce": self.nonce,
             "expiresAt": self.expires_at,

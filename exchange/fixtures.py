@@ -18,6 +18,7 @@ D = "0x" + "d" * 40
 CHAIN_ID = 11155111  # the Sepolia test network id; no address or endpoint is configured here
 CONTRACT = "0x" + "11" * 20
 TOKEN_ID = 8415
+NFT0_CURRENCY_SET_REF = "synthetic-nft0-currency-set-v1"
 QUOTE_ASSET = "local-test-quote"  # a fixture label, NOT a deployed token address
 PRICE = 1_000_000  # smallest units, integer only
 
@@ -40,12 +41,15 @@ def asset():
     return Asset(CHAIN_ID, CONTRACT, TOKEN_ID)
 
 
-def receipt(registration_path="REG_DIRECT", trade_stop_at=1_700_900_000, origin=A):
+def receipt(registration_path="REG_DIRECT", trade_stop_at=1_700_900_000, origin=A,
+            allowed_currencies=(QUOTE_ASSET,)):
+    # Explicit synthetic NFT0 declaration, never a production default.
     return WarehouseReceipt(
         receipt_id="rcpt-8415-0001", asset=asset(), commodity_name="Whole painting lot",
         commodity_quantity=1, commodity_unit="piece", receipt_number="WR-8415-0001",
         registration_path=registration_path, trade_stop_at=trade_stop_at,
-        origin_account=origin, minted_at=1_699_000_000)
+        origin_account=origin, minted_at=1_699_000_000, allowed_price_currencies=tuple(allowed_currencies),
+        nft0_currency_reference=NFT0_CURRENCY_SET_REF)
 
 
 def authorization(account, authorization_id, session_id, counterparties=(), actions=("sell", "buy"),
@@ -58,17 +62,19 @@ def authorization(account, authorization_id, session_id, counterparties=(), acti
 
 
 def intent(intent_id, side, signer, authorization_id, counterparty, nonce,
-           limit_price=PRICE, expires_at=1_700_800_000, units=1):
+           limit_price=PRICE, expires_at=1_700_800_000, units=1,
+           quote_asset=QUOTE_ASSET):
     return TradeIntent(intent_id=intent_id, side=side, signer=signer, asset=asset(),
-                       limit_price=limit_price, quote_asset=QUOTE_ASSET, units=units, nonce=nonce,
+                       limit_price=limit_price, quote_asset=quote_asset, units=units, nonce=nonce,
                        expires_at=expires_at, authorization_id=authorization_id,
-                       counterparty=counterparty)
+                       counterparty=counterparty,
+                       currency_set_reference=NFT0_CURRENCY_SET_REF)
 
 
 def minted(registration_path="REG_DIRECT", clock=None):
     """An exchange holding one minted receipt, with A connected."""
     clock = clock or ManualClock()
-    exchange = Exchange(clock, eth_gas_gate=fixture_eth_gas_gate(), mint_verifier=verify_fixture_mint)
+    exchange = Exchange(clock, price_balance_gate=fixture_price_balance_gate(), eth_gas_gate=fixture_eth_gas_gate(), mint_verifier=verify_fixture_mint)
     receipt_record = receipt(registration_path=registration_path)
     exchange.mint(receipt_record, specification=mint_specification(receipt_record))
     exchange.connect_wallet(A, "session-a")
@@ -133,7 +139,7 @@ def funded_exchange(registration_path="REG_DIRECT", clock=None, outcomes=None):
 
     clock = clock or ManualClock()
     payments = SimulatedPaymentAdapter(clock, outcomes=outcomes)
-    exchange = Exchange(clock, eth_gas_gate=fixture_eth_gas_gate(), mint_verifier=verify_fixture_mint, payment_adapter=payments, release_sources=(RELEASE_SOURCE,),
+    exchange = Exchange(clock, price_balance_gate=fixture_price_balance_gate(), eth_gas_gate=fixture_eth_gas_gate(), mint_verifier=verify_fixture_mint, payment_adapter=payments, release_sources=(RELEASE_SOURCE,),
                         funding_required=True)
     receipt_record = receipt(registration_path=registration_path)
     exchange.mint(receipt_record, specification=mint_specification(receipt_record))
@@ -218,7 +224,7 @@ def rollback_exchange(registration_path="REG_DIRECT", clock=None, outcomes=None,
     clock = clock or ManualClock()
     payments = SimulatedPaymentAdapter(clock, outcomes=outcomes)
     control = SimulatedAssetControl(clock, outcomes=return_outcomes)
-    exchange = Exchange(clock, eth_gas_gate=fixture_eth_gas_gate(), mint_verifier=verify_fixture_mint, payment_adapter=payments, release_sources=(RELEASE_SOURCE,),
+    exchange = Exchange(clock, price_balance_gate=fixture_price_balance_gate(), eth_gas_gate=fixture_eth_gas_gate(), mint_verifier=verify_fixture_mint, payment_adapter=payments, release_sources=(RELEASE_SOURCE,),
                         funding_required=True, asset_control=control,
                         rollback_sources=(ROLLBACK_SOURCE,), gas_budgets=gas_budgets)
     receipt_record = receipt(registration_path=registration_path)
@@ -273,7 +279,7 @@ def exit_exchange(registration_path="REG_DIRECT", clock=None, voucher_outcomes=N
     from .settlement import SimulatedPaymentAdapter
 
     clock = clock or ManualClock()
-    exchange = Exchange(clock, eth_gas_gate=fixture_eth_gas_gate(), mint_verifier=verify_fixture_mint, payment_adapter=SimulatedPaymentAdapter(clock,
+    exchange = Exchange(clock, price_balance_gate=fixture_price_balance_gate(), eth_gas_gate=fixture_eth_gas_gate(), mint_verifier=verify_fixture_mint, payment_adapter=SimulatedPaymentAdapter(clock,
                         outcomes=kwargs.get("outcomes")),
                         release_sources=(RELEASE_SOURCE,), funding_required=True,
                         asset_control=SimulatedAssetControl(clock,
@@ -310,7 +316,7 @@ FIXTURE_BILL_TERMS = "Fixture bill terms; offline fulfillment is outside EX."
 
 def verify_fixture_mint(kind, evidence):
     """Explicit local fixture verifier, never production authority."""
-    return kind in ("existing-asset-template-schema", "controlled-encrypted-access-mapping",
+    return kind in ("existing-nft0-currency-schema", "existing-asset-template-schema", "controlled-encrypted-access-mapping",
                     "non-secret-metadata-scan")
 
 
@@ -336,3 +342,13 @@ def fixture_eth_gas_gate():
                 "blockNumber": 1, "blockHash": "0x" + "11" * 32,
                 "observedAt": now, "sourceReference": "synthetic-fixture-only"}
     return ETHTradeGasGate(read, lambda request, row: row["sourceReference"] == "synthetic-fixture-only")
+
+def fixture_price_balance_gate():
+    """Synthetic quote-asset units only, never a production wallet read."""
+    from .price_balance import NFT0PriceBalanceGate
+    def read(request, now):
+        return {"request": request, "currency": request["currency"], "unit": "base-units",
+                "availableBaseUnits": 10 ** 30, "boundFrozenBaseUnits": 0,
+                "blockNumber": 1, "blockHash": "0x" + "11" * 32,
+                "observedAt": now, "sourceReference": "synthetic-fixture-only"}
+    return NFT0PriceBalanceGate(read, lambda request, row: row["sourceReference"] == "synthetic-fixture-only")

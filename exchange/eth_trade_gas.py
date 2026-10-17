@@ -17,11 +17,11 @@ class ETHTradeGasGate:
         self.verify_native = verify_native
         self.max_age_seconds = max_age_seconds
 
-    def admit(self, match, now):
+    def admit(self, match, now, escrow_id=None):
         request = {"chainId": match.asset.chain_id, "buyer": match.buyer,
                    "contract": match.asset.contract, "tokenId": str(match.asset.token_id),
                    "sellIntentDigest": match.sell_intent_digest,
-                   "buyIntentDigest": match.buy_intent_digest}
+                   "buyIntentDigest": match.buy_intent_digest, "originalEscrowId": escrow_id}
         refused = {"allowed": False, "code": "EX_ETH_GAS_UNVERIFIED",
                    "warning": "ETH gas balance is unverified; trading is disabled.",
                    "asset": "ETH", "unit": "wei"}
@@ -31,10 +31,14 @@ class ETHTradeGasGate:
                         "requiredWei", "blockNumber", "blockHash", "observedAt",
                         "sourceReference"}
             if (type(now) is not int or now < 0 or type(row) is not dict
-                    or set(row) != expected or row["request"] != request
+                    or set(row) not in (expected, expected | {"boundGasWei"}) or row["request"] != request
                     or row["asset"] != "ETH" or row["unit"] != "wei"
-                    or any(type(row[k]) is not int or row[k] < 0 for k in
+                    or any(type(row[k]) is not int or not 0 <= row[k] < 2 ** 256 for k in
                            ("balanceWei", "reservedWei", "requiredWei", "blockNumber", "observedAt"))
+                    or type(row.get("boundGasWei", 0)) is not int
+                    or not 0 <= row.get("boundGasWei", 0) < 2 ** 256
+                    or (escrow_id is None and row.get("boundGasWei", 0) != 0)
+                    or row["reservedWei"] > row["balanceWei"]
                     or row["requiredWei"] == 0
                     or not 0 <= now - row["observedAt"] <= self.max_age_seconds
                     or type(row["blockHash"]) is not str
@@ -46,14 +50,17 @@ class ETHTradeGasGate:
                 return refused
         except Exception:
             return refused
-        if row["balanceWei"] == 0:
+        bound_gas = row.get("boundGasWei", 0)
+        if row["balanceWei"] == 0 and bound_gas == 0:
             return dict(refused, code="EX_ETH_GAS_EMPTY",
                         warning="No ETH is available for gas. Add ETH before trading.")
         available = row["balanceWei"] - row["reservedWei"]
-        if available < row["requiredWei"]:
+        if available + bound_gas < row["requiredWei"]:
             return dict(refused, code="EX_ETH_GAS_INSUFFICIENT",
                         warning="Available ETH cannot cover this operation's gas; trading is disabled.")
         return {"allowed": True, "code": None, "warning": None, "asset": "ETH", "unit": "wei",
                 "balanceWei": str(row["balanceWei"]), "reservedWei": str(row["reservedWei"]),
-                "requiredWei": str(row["requiredWei"]),
+                "requiredWei": str(row["requiredWei"]), "boundGasWei": str(bound_gas),
+                "blockNumber": row["blockNumber"], "blockHash": row["blockHash"],
+                "observedAt": row["observedAt"],
                 "nativeAtomicRecheckRequired": True}
