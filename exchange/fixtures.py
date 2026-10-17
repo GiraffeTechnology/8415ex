@@ -76,19 +76,15 @@ def minted(registration_path="REG_DIRECT", clock=None):
 
 
 def hop(exchange, seller, buyer, nonce, transfer_id, seller_session, buyer_session, now=None):
-    """One explicitly paired sell/buy, executed as one leg.
-
-    The seller and buyer each submit their own order; the pairing fixture only
-    decides that these two specific orders face each other.
-    """
+    """One eligible sell/buy enters server priority and forms a fixture leg."""
     suffix = transfer_id.replace("transfer-", "")
     sell_auth, buy_auth = f"auth-sell-{suffix}", f"auth-buy-{suffix}"
     exchange.connect_wallet(seller, seller_session)
     exchange.connect_wallet(buyer, buyer_session)
-    exchange.register_authorization(authorization(seller, sell_auth, seller_session, counterparties=(buyer,)))
-    exchange.register_authorization(authorization(buyer, buy_auth, buyer_session, counterparties=(seller,)))
-    sell = exchange.submit_intent(intent(f"sell-{suffix}", "sell", seller, sell_auth, buyer, nonce))
-    buy = exchange.submit_intent(intent(f"buy-{suffix}", "buy", buyer, buy_auth, seller, nonce))
+    exchange.register_authorization(authorization(seller, sell_auth, seller_session, counterparties=()))
+    exchange.register_authorization(authorization(buyer, buy_auth, buyer_session, counterparties=()))
+    sell = exchange.submit_intent(intent(f"sell-{suffix}", "sell", seller, sell_auth, None, nonce))
+    buy = exchange.submit_intent(intent(f"buy-{suffix}", "buy", buyer, buy_auth, None, nonce))
     match = exchange.match_intents(sell.intent_id, buy.intent_id, now)
     return exchange.execute_transfer(match, transfer_id, now)
 
@@ -153,14 +149,14 @@ def funded_hop(exchange, seller, buyer, nonce, transfer_id, seller_session, buye
     exchange.connect_wallet(seller, seller_session)
     exchange.connect_wallet(buyer, buyer_session)
     exchange.register_authorization(authorization(seller, sell_auth, seller_session,
-                                                  counterparties=(buyer,), max_amount=price,
+                                                  counterparties=(), max_amount=price,
                                                   expires_at=expires_at))
     exchange.register_authorization(authorization(buyer, buy_auth, buyer_session,
-                                                  counterparties=(seller,), max_amount=price,
+                                                  counterparties=(), max_amount=price,
                                                   expires_at=expires_at))
-    sell = exchange.submit_intent(intent(f"sell-{suffix}", "sell", seller, sell_auth, buyer, nonce,
+    sell = exchange.submit_intent(intent(f"sell-{suffix}", "sell", seller, sell_auth, None, nonce,
                                          limit_price=price, expires_at=expires_at))
-    buy = exchange.submit_intent(intent(f"buy-{suffix}", "buy", buyer, buy_auth, seller, nonce,
+    buy = exchange.submit_intent(intent(f"buy-{suffix}", "buy", buyer, buy_auth, None, nonce,
                                         limit_price=price, expires_at=expires_at))
     match = exchange.match_intents(sell.intent_id, buy.intent_id, now)
     if not lock:
