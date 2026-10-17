@@ -1,94 +1,59 @@
 # 8415ex
 
-8415ex is an application-layer model for one whole warehouse receipt traded in a
-continuous chain, where registration lags behind the trade on purpose. It is
-developed in small, verifiable increments. Wallet integration will use ERC-8415,
-supporting 8415wallet and compatible wallets.
+Continuous trading of one whole warehouse receipt, with owner tracking the trade position and holder tracking the same authoritative Oracle registration record.
 
-Python 3.10 or newer and the standard library are the only requirements. There
-is no third-party dependency anywhere in the repository.
+## Current product and recovery contract
 
-## The two positions, which are never merged
+Read [PRD.md](PRD.md), [AGENTS.md](AGENTS.md) and the exact [machine pin](config/prd-lock.json) before work. Version **1.2** replaces conflicting previous product requirements. The [execution plan](config/execution-plan.json) contains all 21 sections, 77 requirement IDs, 51 acceptance cases, 13 decisions, six stages and six revised demonstrations.
 
-The owner is the on-chain trade position. The holder is the
-registration-confirmed position. They move at different speeds, and the whole
-model exists because of that gap: a receipt can change hands several times while
-the register is still recording the first hop. Nothing here presents the two as
-one, and a deferred registration result is never shown as a refusal.
+From the repository root on the existing approved Linux executor:
 
-## What is here
+```sh
+python3 -B -m scenarios.current_prd plan
+python3 -B -m scenarios.current_prd stages
+python3 -B -m scenarios.current_prd matrix
+python3 -B -m scenarios.current_prd decisions
+python3 -B -m scenarios.current_prd handoff
+python3 -B -m scenarios.current_prd sections
+```
 
-| Directory | What it holds |
+These commands verify the exact PRD/plan bytes, reload repository files on every invocation, and report requirements and missing evidence. They do not sign, broadcast, deploy or grant acceptance. No original chat, credentials, network or installed third-party dependency is needed to recover the product contract.
+
+The existing scenarios CLI routes its matrix, stages, decisions, handoff and sections commands to the same pinned data:
+
+```sh
+python3 -B -m scenarios.cli matrix
+python3 -B -m scenarios.cli stages
+python3 -B -m scenarios.cli decisions
+python3 -B -m scenarios.cli handoff
+python3 -B -m scenarios.cli sections
+```
+
+A successful checklist read is not a passing product case. Every revised case starts NOT_VERIFIED and carries no inherited historical pass.
+
+## Removed requirements are not executable duties
+
+EX transfers the bill of lading; physical collection, transport, warehouse exit and collection-driven NFT destruction are outside delivery. Oracle alone ingests and verifies the off-chain voucher and writes its one authoritative record; holder follows that record. Release already frozen principal without a second buyer payment. Rollback preserves registered/settled prefix and returns owner to effective holder; valid unexpired assets may trade again.
+
+Price priority/FIFO, complete mint data, cutoff and gas cap/P50 policy are confirmed. Before send disclose cap and real median ETH/contemporaneous USD, obtain bound buyer confirmation, freeze the maximum gas separately from principal, debit actual consumption and unfreeze unused balance. Only actual shared-operation allocation remains D-04.
+
+Old six-scenario implementations have not been migrated by this documentation change. The scenarios CLI, direct Scenario.run calls for DEMO-01..06, and exchange.stage5 entry explicitly refuse those old execution paths with PRD_MIGRATION_REQUIRED before old callbacks. This refuses obsolete duties rather than executing and relabelling them. History remains in Git. Migrate and verify each affected scenario with its original implementation owner before removing the targeted guard.
+
+## Development and acceptance
+
+Proceed to the next independent authorized stage after a stage PR without waiting for CI. Missing RPC, issuer, one integration or one deployment target blocks only that action. Build/QA does not need RPC or an existing issuer deployment. Preserve exact base/head and the single writer for each shared path. Existing QA, review, CI/merge and deployment responsibilities remain controlling.
+
+The existing dependency-free Python model uses Python 3.10+ and standard library. Historical model/fixture code and reports remain source-bound development evidence; a rendered page is not browser acceptance. Three sources are direct, electronic and intermediary registration into one backend, with whole-artwork alignment and real frontend acceptance still required. Sepolia 11155111 and the designated verified test PYUSD stay distinct from other projects' test networks.
+
+Product suites and genuine runtime/chain/browser/material acceptance remain separate from the document loader. Current source, package, required exact-head CI, actually served version, real receipts/Oracle/funds/UI evidence and artifact readback must all correspond before full delivery. This update does not make any of them PASS.
+
+## Repository areas
+
+| Area | Purpose |
 | --- | --- |
-| [`exchange/`](exchange/README.md) | the domain: receipt state, the owner/holder dual track, serial registration with three simulated registrar adapters, segmented escrow and independent settlement, suffix rollback with buyer gas, the deadline and exit path, and a read-only status console |
-| [`scenarios/`](scenarios/README.md) | the six scenarios and three route contracts, the acceptance matrix and evidence index, and the records a reviewer needs: source identity, open decisions, the event contract, the stage map and the candidate receipt |
-| [`ci/`](ci/README.md) | a dependency-free bootstrap, its smoke command and its output manifest |
+| PRD.md / config/ | Current complete sanitized product specification and machine contract |
+| exchange/ | Existing domain, adapters, UI and stage execution code; legacy scenarios require migration |
+| scenarios/ | Pinned checklist loader and existing evidence/reporting infrastructure |
+| ci/ | Existing bootstrap and source/evidence checks |
 
-## What this is not
-
-Nothing in this repository signs, pays, broadcasts, deploys or moves value. The
-three registration routes are simulated business roles, not real registration
-institutions. A rendered status page is development and diagnostic output, not
-interface acceptance. Every obligation that needs a real chain, a real browser
-or an independent review is reported as `NOT_RUN` rather than approximated, and
-the reports below say so about themselves.
-
-## Running the checks
-
-From the repository root. The bootstrap checks need `APPROVED_TEST_ROOT` set to
-an existing, canonical directory chosen explicitly for them.
-
-```sh
-BOOTSTRAP_TEST_ROOT="$APPROVED_TEST_ROOT" python3 -B -m unittest discover -s ci/tests -v
-PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s exchange/tests -t . -v
-PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s scenarios/tests -t . -v
-```
-
-The whole local delivery in one command, which exits non-zero unless every
-expectation passed over a confirmed, clean source tree:
-
-```sh
-PYTHONDONTWRITEBYTECODE=1 python3 -B -m scenarios.cli run-all
-```
-
-## The reports, and what each one answers
-
-Each is a subcommand of `python3 -B -m scenarios.cli`.
-
-| Command | The question it answers |
-| --- | --- |
-| `run-all` | did every local expectation pass, over which exact source |
-| `scenarios`, `paths` | what did the six scenarios and the three route contracts record |
-| `matrix` | which requirement does each case serve, and what is its local outcome |
-| `evidence-index` | from a requirement, through the assertion and the run, to the artifact it lands in |
-| `receipt` | the nine-group candidate receipt, with the chain and deployment groups `NOT_RUN` |
-| `manifest` | the exact source, the file inventory and the diff under review |
-| `handoff` | which real-evidence slots are unfilled, and who owns them |
-| `stages` | per stage, what is developed here, what is accepted elsewhere, what is owed |
-| `dossier` | per scenario, the nine items a demonstration must carry |
-| `storyboard` | does the presentation outline still describe the code |
-| `operations` | do the logical operations land on real methods, and do reads move nothing |
-| `events` | which audit groups are recorded, derived, or waiting on a chain |
-| `reuse` | what this package consumes, what is simulated, what is not located yet |
-| `decisions` | which decisions are open, and what each one does **not** block |
-| `observations` | the bounded secret scan, and the recorded load, backlog and rates |
-| `validate-config` | would this configuration be accepted, and why a bad one is refused |
-| `usage` | do these instructions still match the commands that exist |
-| `completion` | per clause of the definition of done: its evidence here, or the owner who owes the rest |
-| `sections` | per requirement section: what addresses it here, or the owner it belongs to |
-
-The domain has its own diagnostic command line, which supplements the console
-and does not replace it:
-
-```sh
-python3 -B -m exchange.cli view
-python3 -B -m exchange.cli timeline
-python3 -B -m exchange.cli queue
-```
-
-## Keeping these instructions true
-
-The commands above are checked against the commands that actually exist, in both
-directions: a documented command that does not exist is a broken instruction,
-and a command no guide mentions is a report nobody will find. Both are findings,
-and the suite fails on either.
+Public files are English and sanitized. Private source links, internal topology, operational paths, credentials and full private handoffs stay outside GitHub. Existing approved Linux execution, wallet consent and no mainnet/real-value/new-resource boundaries remain. No Drive timer or automatic server synchronization is introduced.

@@ -158,6 +158,9 @@ def _execute(scenario, path):
             "realEvidence": dict.fromkeys(("deployment", "providerUI", "signatures", "chain", "realFees"), "NOT_RUN")}
 
 def run_scenario(scenario, path=None):
+    from scenarios.current_prd import blocked
+    return dict(blocked(scenario), scenario=scenario, path=path, simulated=True,
+                cases=CASES.get(scenario, ()))
     if scenario not in SCENARIOS:
         raise ValueError("unknown scenario")
     path = path or DEFAULT_PATH[scenario]
