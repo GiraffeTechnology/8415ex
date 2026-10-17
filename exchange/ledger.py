@@ -16,6 +16,7 @@ from dataclasses import dataclass, field, replace
 from copy import deepcopy
 
 from .errors import DomainError, require
+from .eth_trade_gas import ETHTradeGasGate
 from .ids import address, amount, digest, identifier, instant
 from .model import WHOLE_RECEIPT_UNITS, Asset, AuthorizationReference, TradeIntent, WarehouseReceipt
 from .mint_specification import MintSpecification, MintDeclarationBook
@@ -97,7 +98,7 @@ class Exchange:
 
     def __init__(self, clock, payment_adapter=None, release_sources=(), funding_required=False,
                  asset_control=None, rollback_sources=(), gas_budgets=None,
-                 voucher_desk=None, mint_verifier=None):
+                 voucher_desk=None, mint_verifier=None, eth_gas_gate=None):
         """``funding_required`` turns on the Stage 2 rule that a leg only forms
         once its own buyer's money is in escrow. Stage 1 leaves it off and
         records funding as not modelled rather than implying a payment.
@@ -108,6 +109,7 @@ class Exchange:
         """
         require(callable(clock), "EX_CLOCK_REFUSED", "a clock function is required")
         self._clock = clock
+        self._eth_gas_gate = eth_gas_gate
         self.payments = payment_adapter
         self.funding_required = bool(funding_required)
         self._release_sources = frozenset(identifier(s, "EX_RELEASE_SOURCE_REFUSED")
@@ -587,6 +589,11 @@ class Exchange:
                     f"{report['intentId']}: {','.join(report['reasons'])}")
         match = self._check_match_binding(match, now)
         require(transfer_id not in self._transfer_ids(), "EX_TRANSFER_DUPLICATE_REFUSED", transfer_id)
+        require(isinstance(self._eth_gas_gate, ETHTradeGasGate),
+                "EX_ETH_GAS_UNVERIFIED",
+                "Warning: authenticated ETH gas balance is unavailable; trading is disabled")
+        gas_admission = self._eth_gas_gate.admit(match, now)
+        require(gas_admission["allowed"], gas_admission["code"], gas_admission["warning"])
         funding_status, rollback_status = "not-modelled", "none"
         if self.funding_required or escrow_id is not None:
             require(escrow_id is not None, "EX_SEGMENT_NOT_FUNDED",

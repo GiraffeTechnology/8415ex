@@ -68,7 +68,7 @@ def intent(intent_id, side, signer, authorization_id, counterparty, nonce,
 def minted(registration_path="REG_DIRECT", clock=None):
     """An exchange holding one minted receipt, with A connected."""
     clock = clock or ManualClock()
-    exchange = Exchange(clock, mint_verifier=verify_fixture_mint)
+    exchange = Exchange(clock, eth_gas_gate=fixture_eth_gas_gate(), mint_verifier=verify_fixture_mint)
     receipt_record = receipt(registration_path=registration_path)
     exchange.mint(receipt_record, specification=mint_specification(receipt_record))
     exchange.connect_wallet(A, "session-a")
@@ -133,7 +133,7 @@ def funded_exchange(registration_path="REG_DIRECT", clock=None, outcomes=None):
 
     clock = clock or ManualClock()
     payments = SimulatedPaymentAdapter(clock, outcomes=outcomes)
-    exchange = Exchange(clock, mint_verifier=verify_fixture_mint, payment_adapter=payments, release_sources=(RELEASE_SOURCE,),
+    exchange = Exchange(clock, eth_gas_gate=fixture_eth_gas_gate(), mint_verifier=verify_fixture_mint, payment_adapter=payments, release_sources=(RELEASE_SOURCE,),
                         funding_required=True)
     receipt_record = receipt(registration_path=registration_path)
     exchange.mint(receipt_record, specification=mint_specification(receipt_record))
@@ -218,7 +218,7 @@ def rollback_exchange(registration_path="REG_DIRECT", clock=None, outcomes=None,
     clock = clock or ManualClock()
     payments = SimulatedPaymentAdapter(clock, outcomes=outcomes)
     control = SimulatedAssetControl(clock, outcomes=return_outcomes)
-    exchange = Exchange(clock, mint_verifier=verify_fixture_mint, payment_adapter=payments, release_sources=(RELEASE_SOURCE,),
+    exchange = Exchange(clock, eth_gas_gate=fixture_eth_gas_gate(), mint_verifier=verify_fixture_mint, payment_adapter=payments, release_sources=(RELEASE_SOURCE,),
                         funding_required=True, asset_control=control,
                         rollback_sources=(ROLLBACK_SOURCE,), gas_budgets=gas_budgets)
     receipt_record = receipt(registration_path=registration_path)
@@ -273,7 +273,7 @@ def exit_exchange(registration_path="REG_DIRECT", clock=None, voucher_outcomes=N
     from .settlement import SimulatedPaymentAdapter
 
     clock = clock or ManualClock()
-    exchange = Exchange(clock, mint_verifier=verify_fixture_mint, payment_adapter=SimulatedPaymentAdapter(clock,
+    exchange = Exchange(clock, eth_gas_gate=fixture_eth_gas_gate(), mint_verifier=verify_fixture_mint, payment_adapter=SimulatedPaymentAdapter(clock,
                         outcomes=kwargs.get("outcomes")),
                         release_sources=(RELEASE_SOURCE,), funding_required=True,
                         asset_control=SimulatedAssetControl(clock,
@@ -326,3 +326,13 @@ def mint_specification(receipt_record):
         "fixture-original-map", "fixture-controlled-map", receipt_record.trade_stop_at,
         "LTE", fmt)
 
+
+def fixture_eth_gas_gate():
+    """Explicit synthetic admission for model tests only; never a live balance."""
+    from .eth_trade_gas import ETHTradeGasGate
+    def read(request, now):
+        return {"request": request, "asset": "ETH", "unit": "wei",
+                "balanceWei": 10 ** 18, "reservedWei": 0, "requiredWei": 21000,
+                "blockNumber": 1, "blockHash": "0x" + "11" * 32,
+                "observedAt": now, "sourceReference": "synthetic-fixture-only"}
+    return ETHTradeGasGate(read, lambda request, row: row["sourceReference"] == "synthetic-fixture-only")
