@@ -13,10 +13,12 @@ reached B or later" is a statement about that index, never about the numeric
 value of an address.
 """
 from dataclasses import dataclass, field, replace
+from copy import deepcopy
 
 from .errors import DomainError, require
 from .ids import address, amount, digest, identifier, instant
 from .model import WHOLE_RECEIPT_UNITS, Asset, AuthorizationReference, TradeIntent, WarehouseReceipt
+from .mint_specification import MintSpecification, MintDeclarationBook
 from .registration import (DISPOSITIONS, RegistrationEvidence, RegistrationRequest,
                            default_registrars)
 from .rollback import (ROLLBACK_STATES, WITHDRAWN_MECHANISMS, GasBudget, RollbackAuthority,
@@ -94,7 +96,7 @@ class Exchange:
 
     def __init__(self, clock, payment_adapter=None, release_sources=(), funding_required=False,
                  asset_control=None, rollback_sources=(), gas_budgets=None,
-                 voucher_desk=None):
+                 voucher_desk=None, mint_verifier=None):
         """``funding_required`` turns on the Stage 2 rule that a leg only forms
         once its own buyer's money is in escrow. Stage 1 leaves it off and
         records funding as not modelled rather than implying a payment.
@@ -121,6 +123,8 @@ class Exchange:
         self._returned_to = {}
         self.voucher_desk = voucher_desk
         self._exits = {}
+        self._mint_book = MintDeclarationBook(mint_verifier) if callable(mint_verifier) else None
+        self._mint_declarations = {}
         self._receipts = {}
         self._asset_keys = {}
         self._authorizations = {}
@@ -142,17 +146,25 @@ class Exchange:
 
     # ---------------------------------------------------------------- receipts
 
-    def mint(self, receipt):
+    def mint(self, receipt, specification=None):
         """Record one whole receipt as exactly one NFT.
 
         Minting is a technical record. It asserts no legal right, and a second
         receipt may not map to an NFT that is already mapped.
         """
         require(isinstance(receipt, WarehouseReceipt), "EX_RECEIPT_REFUSED", "receipt type")
+        require(isinstance(specification, MintSpecification), "EX_MINT_DECLARATION_REQUIRED",
+                "a bare WarehouseReceipt is not a complete v1.2 mint declaration")
+        require(specification.receipt == receipt, "EX_MINT_DECLARATION_BINDING_REFUSED",
+                "declaration and original receipt differ")
+        require(self._mint_book is not None, "EX_MINT_VERIFIER_REQUIRED",
+                "existing schema, controlled-storage and privacy verification is required")
         require(receipt.receipt_id not in self._receipts, "EX_RECEIPT_DUPLICATE_REFUSED", receipt.receipt_id)
         existing = self._asset_keys.get(receipt.asset.key)
         require(existing is None, "EX_ASSET_DUPLICATE_REFUSED",
                 f"{receipt.asset.key} already maps to receipt {existing}")
+        declaration = self._mint_book.admit(specification)
+        self._mint_declarations[receipt.receipt_id] = deepcopy(declaration)
         self._receipts[receipt.receipt_id] = receipt
         self._asset_keys[receipt.asset.key] = receipt.receipt_id
         self._legs[receipt.receipt_id] = []
@@ -1432,6 +1444,7 @@ class Exchange:
         owner_index, holder_index = self.owner_index(receipt_id), self._holder_index[receipt_id]
         return {
             "receiptId": receipt.receipt_id,
+            "mintDeclaration": deepcopy(self._mint_declarations[receipt_id]),
             "asset": {"chainId": receipt.asset.chain_id, "contract": receipt.asset.contract,
                       "tokenId": receipt.asset.token_id},
             "commodity": {"name": receipt.commodity_name, "quantity": receipt.commodity_quantity,

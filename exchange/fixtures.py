@@ -68,8 +68,9 @@ def intent(intent_id, side, signer, authorization_id, counterparty, nonce,
 def minted(registration_path="REG_DIRECT", clock=None):
     """An exchange holding one minted receipt, with A connected."""
     clock = clock or ManualClock()
-    exchange = Exchange(clock)
-    exchange.mint(receipt(registration_path=registration_path))
+    exchange = Exchange(clock, mint_verifier=verify_fixture_mint)
+    receipt_record = receipt(registration_path=registration_path)
+    exchange.mint(receipt_record, specification=mint_specification(receipt_record))
     exchange.connect_wallet(A, "session-a")
     return exchange, clock
 
@@ -136,9 +137,10 @@ def funded_exchange(registration_path="REG_DIRECT", clock=None, outcomes=None):
 
     clock = clock or ManualClock()
     payments = SimulatedPaymentAdapter(clock, outcomes=outcomes)
-    exchange = Exchange(clock, payment_adapter=payments, release_sources=(RELEASE_SOURCE,),
+    exchange = Exchange(clock, mint_verifier=verify_fixture_mint, payment_adapter=payments, release_sources=(RELEASE_SOURCE,),
                         funding_required=True)
-    exchange.mint(receipt(registration_path=registration_path))
+    receipt_record = receipt(registration_path=registration_path)
+    exchange.mint(receipt_record, specification=mint_specification(receipt_record))
     exchange.connect_wallet(A, "session-a")
     return exchange, clock
 
@@ -220,10 +222,11 @@ def rollback_exchange(registration_path="REG_DIRECT", clock=None, outcomes=None,
     clock = clock or ManualClock()
     payments = SimulatedPaymentAdapter(clock, outcomes=outcomes)
     control = SimulatedAssetControl(clock, outcomes=return_outcomes)
-    exchange = Exchange(clock, payment_adapter=payments, release_sources=(RELEASE_SOURCE,),
+    exchange = Exchange(clock, mint_verifier=verify_fixture_mint, payment_adapter=payments, release_sources=(RELEASE_SOURCE,),
                         funding_required=True, asset_control=control,
                         rollback_sources=(ROLLBACK_SOURCE,), gas_budgets=gas_budgets)
-    exchange.mint(receipt(registration_path=registration_path))
+    receipt_record = receipt(registration_path=registration_path)
+    exchange.mint(receipt_record, specification=mint_specification(receipt_record))
     exchange.connect_wallet(A, "session-a")
     return exchange, clock
 
@@ -274,7 +277,7 @@ def exit_exchange(registration_path="REG_DIRECT", clock=None, voucher_outcomes=N
     from .settlement import SimulatedPaymentAdapter
 
     clock = clock or ManualClock()
-    exchange = Exchange(clock, payment_adapter=SimulatedPaymentAdapter(clock,
+    exchange = Exchange(clock, mint_verifier=verify_fixture_mint, payment_adapter=SimulatedPaymentAdapter(clock,
                         outcomes=kwargs.get("outcomes")),
                         release_sources=(RELEASE_SOURCE,), funding_required=True,
                         asset_control=SimulatedAssetControl(clock,
@@ -283,7 +286,8 @@ def exit_exchange(registration_path="REG_DIRECT", clock=None, voucher_outcomes=N
                         gas_budgets=kwargs.get("gas_budgets"),
                         voucher_desk=SimulatedVoucherDesk(clock, registration_path,
                                                           outcomes=voucher_outcomes))
-    exchange.mint(receipt(registration_path=registration_path))
+    receipt_record = receipt(registration_path=registration_path)
+    exchange.mint(receipt_record, specification=mint_specification(receipt_record))
     exchange.connect_wallet(A, "session-a")
     return exchange, clock
 
@@ -304,3 +308,25 @@ def redeem_authorization(exchange, account=B, authorization_id="auth-redeem",
     exchange.connect_wallet(account, session_id)
     return exchange.register_authorization(
         authorization(account, authorization_id, session_id, actions=("sell", "buy", "redeem")))
+
+# Synthetic declaration only: these facts are never actual schema/storage evidence.
+FIXTURE_BILL_TERMS = "Fixture bill terms; offline fulfillment is outside EX."
+
+def verify_fixture_mint(kind, evidence):
+    """Explicit local fixture verifier, never production authority."""
+    return kind in ("existing-asset-template-schema", "controlled-encrypted-access-mapping",
+                    "non-secret-metadata-scan")
+
+
+def mint_specification(receipt_record):
+    from .mint_specification import CommodityTemplate, RegistrationFormat, MintSpecification
+    template = CommodityTemplate("fixture-artwork", "1", "whole-artwork-fixture",
+        "fixture-equivalent-standard", ("condition",), ("condition",))
+    fmt = RegistrationFormat("fixture-voucher", "1", ("asset", "segment", "holder"),
+                             receipt_record.registration_path)
+    return MintSpecification(receipt_record, template, "fixture-bill",
+        "fixture-issuer", "fixture-registrar", "fixture-location",
+        (("condition", "fixture-only"),), FIXTURE_BILL_TERMS,
+        "fixture-original-map", "fixture-controlled-map", receipt_record.trade_stop_at,
+        "LTE", fmt)
+
