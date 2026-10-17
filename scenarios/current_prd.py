@@ -5,7 +5,16 @@ import json
 import pathlib
 import sys
 
-VERSION = "1.2"
+VERSION = "1.3"
+PINNED = {
+    "prd": (73558, "1ce035ef10eb4e09c976dc4a070299afab36fef213b775efee922da19e9479cf"),
+    "executionPlan": (77644, "1f995c74355281c0d06e59a2f0ca3569299910742f59c75e7f661687e83efcc3"),
+}
+RETIRED_IDS = frozenset({
+    "physical-collection", "late-receipt-wait", "post-registration-payment",
+    "permanent-rollback-close", "undecided-matching", "undecided-gas-cap",
+    "forced-custody", "parallel-oracle", "fragmentation",
+})
 LEGACY_DEMOS = tuple("DEMO-%02d" % n for n in range(1, 7))
 
 
@@ -32,6 +41,8 @@ def load(root=None):
         item = lock[key]
         if item.get("path") != expected_path:
             raise ValueError("unexpected product-contract path")
+        if (item.get("bytes"), item.get("sha256")) != PINNED[key]:
+            raise ValueError("current full v1.3 identity was replaced: " + expected_path)
         raw = (root / expected_path).read_bytes()
         if len(raw) != item["bytes"] or hashlib.sha256(raw).hexdigest() != item["sha256"]:
             raise ValueError("product-contract byte identity mismatch: " + expected_path)
@@ -40,7 +51,7 @@ def load(root=None):
     if plan.get("schema") != "8415ex-execution-plan/1" or plan.get("version") != VERSION:
         raise ValueError("execution plan is from a different PRD version")
     for key, expected in (
-        ("cases", {"T-%02d" % n for n in range(1, 52)}),
+        ("cases", {"T-%02d" % n for n in range(1, 69)}),
         ("decisions", {"D-%02d" % n for n in range(1, 14)}),
         ("demonstrations", set(LEGACY_DEMOS)), ("stages", set(range(6))),
     ):
@@ -50,11 +61,15 @@ def load(root=None):
     if plan["sections"] != list(range(1, 22)):
         raise ValueError("the full 21-section contract is required")
     declared = [entry["id"] for entry in plan["requirements"]]
-    if len(declared) != 77 or len(declared) != len(set(declared)):
+    if len(declared) != 91 or len(declared) != len(set(declared)):
         raise ValueError("incomplete or duplicated requirement ledger")
     if any(not set(case["requirementIds"]) <= set(declared) for case in plan["cases"]):
         raise ValueError("case refers to undeclared requirement")
-    if any(item.get("executable") is not False for item in plan["retiredRequirements"]):
+    retired = plan["retiredRequirements"]
+    retired_ids = [item["id"] for item in retired]
+    if len(retired_ids) != len(set(retired_ids)) or set(retired_ids) != RETIRED_IDS:
+        raise ValueError("retired requirement IDs are missing, duplicated or replaced")
+    if any(item.get("executable") is not False for item in retired):
         raise ValueError("retired requirement was reactivated")
     if not plan["execution"]["continueAfterStagePR"] or plan["execution"]["waitForCIToDevelopNext"]:
         raise ValueError("stage development must not wait for CI")
@@ -90,7 +105,7 @@ def require_current_scenario(scenario_id, revision=None):
     load()
     if scenario_id in LEGACY_DEMOS and revision != VERSION:
         raise ValueError("PRD_MIGRATION_REQUIRED: " + scenario_id
-                         + " still uses pre-1.2 fixtures; use the pinned execution plan. "
+                         + " has not been accepted against v1.3; use the pinned execution plan. "
                          "No legacy collection/burn/payment/grace step was executed.")
 
 
@@ -99,7 +114,7 @@ def blocked(command, root=None):
     return {"schema": "8415ex-command-migration/1", "version": VERSION,
             "command": command, "status": "PRD_MIGRATION_REQUIRED", "executed": False,
             "allPassed": False, "productStatus": "OPEN",
-            "reason": "This legacy path invokes pre-1.2 model expectations. Migrate it "
+            "reason": "This legacy path has not been accepted against v1.3. Migrate it "
                       "against config/execution-plan.json; never inherit old PASS.",
             "retiredRequirements": plan["retiredRequirements"],
             "independentWorkMayContinue": True}
