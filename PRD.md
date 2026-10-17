@@ -1,10 +1,10 @@
 # 8415ex Product Requirements
 
-Version: 1.2 (2026-10-17, Asia/Hong_Kong)
+Version: 1.3 (complete revision 2026-10-18, Asia/Hong_Kong)
 Edition: complete sanitized English product and acceptance contract
 Status: OPEN; requirements are not implementation or acceptance evidence.
 
-This is the current repository product specification. It supersedes conflicting earlier requirement editions and execution checklists. Private operational details are excluded; all product stages, requirement IDs, acceptance cases and decisions remain represented.
+This sanitized successor represents the current complete product requirements; its prepared source does not imply publication or acceptance. It supersedes conflicting earlier requirement editions and execution checklists. Private operational details are excluded; all product stages, requirement IDs, acceptance cases and decisions remain represented.
 
 ## 1. Execution conclusion
 
@@ -22,16 +22,21 @@ Provide an ordered chain of whole-receipt trades while off-chain registration ma
 | --- | --- |
 | EX-SCOPE-01 | Infrastructure, without operating a centralized exchange business. |
 | EX-SCOPE-02 | One NFT equals one whole warehouse receipt; no fractions. |
-| EX-SCOPE-03 | Allow A to B to C to D continuous trading while registration catches up. |
+| EX-SCOPE-03 | Allow continuous A to B to C to D trading while registration catches up. Ordinary transfers cannot require holder equal to owner, a closed projection gap or current finality; the holder-equals-owner remint predicate is separate. |
 | EX-SCOPE-04 | Support 8415Wallet V3 or any wallet satisfying the same authorization and control semantics; no exclusive wallet binding. |
 | EX-SCOPE-05 | Every Agent operation comes from verifiable bounded human wallet authority. |
-| EX-SCOPE-06 | The buyer bears applicable trade and rollback gas; Agent service pricing remains parked. |
+| EX-SCOPE-06 | The buyer pays its transaction gas and assigned rollback gas in ETH only. Warn and refuse a new trade when ETH is absent or insufficient. Agent service fees remain a separate later decision. |
 | EX-SCOPE-07 | No arbitrary compulsory custody or instant liquidation; normal conditional funds escrow and agreed asset-return control remain. |
 | EX-SCOPE-08 | Transfer the mapped bill of lading only; physical collection belongs to the parties named in its terms. |
 | EX-SCOPE-09 | The off-chain change voucher is itself the registration receipt; Oracle alone ingests, verifies and records it on chain. |
 | EX-SCOPE-10 | Align ArtFi whole artwork and EX backend; direct, electronic and intermediary registration are transaction sources with middleware and frontend paths. |
 
 Non-goals: operating a CEX, customer-funds general ledger or platform custody account, market-making/guaranteed returns, leverage/liquidation, receipt fragmentation, cross-chain or new real-asset commercial admission. Reuse and alignment of existing whole-artwork, wallet, Oracle, journal and settlement components remain required. Charity shares are excluded. Collection terms remain in the bill; EX does not perform collection, transport, warehouse exit or collection-driven burn. No license, institutional cooperation, legal effect, fee rate or revenue distribution is presumed.
+
+| ID | Requirement |
+| --- | --- |
+| EX-SCOPE-11 | NFT0 fixes one or more allowed price currencies at mint. Each order explicitly selects one member; insufficient selected-currency funds warn and refuse. EX does not exchange, auto-select, combine currency balances or substitute assets for principal or ETH gas. Holder remint creates a new NFT and never edits the old allowed set. |
+| EX-SCOPE-12 | A holder possessing the original NFT may atomically burn it and mint a replacement under the remint conditions. New terms may be added, removed or changed before the new mint; retain bidirectional identity and complete history. |
 
 ## 4. Baseline and factual limits
 
@@ -75,9 +80,20 @@ Use integer/fixed-point smallest units and check amount, asset and chain togethe
 | EX-MINT-03 | Receipt-access secrets remain encrypted in controlled off-chain storage; NFT holds opaque nonsecret mappings. Never hold user wallet private keys. |
 | EX-MINT-04 | Declare trade and registration deadlines at mint, including unit, timezone, precision and comparison/serialization semantics; no silent later change. |
 | EX-MINT-05 | Declare voucher format, required fields and source path at mint; Oracle verifies it as the one business receipt. |
-| EX-MINT-06 | Preserve physical collection terms for inspection without adding EX collection, transport, exit or destruction steps. |
+| EX-MINT-06 | Retain collection terms for inspection without EX physical collection, transport or warehouse-exit work. Authorized holder remint is separate from retired collection-driven burn. |
 
 Use the corresponding commodity/receipt specification; non-CME assets need an explicit equivalent template without implied CME recognition. Complete data does not permit publishing secrets; opaque mappings do not permit omitting required receipt data. Validate existing encryption, controlled-store and schema interfaces before integration, without inventing credentials.
+
+### 6.4 Holder replacement mint
+
+| ID | Requirement |
+| --- | --- |
+| EX-MINT-07 | At mint NFT0 records one or more allowed price currencies with verifiable asset, network and smallest-unit mappings. No caller or administrator can edit the existing NFT currency set after mint. A valid remint may set new terms, which become immutable on the new NFT. |
+| EX-REMINT-01 | A holder possessing the original NFT with holder equal to owner may remint under the existing wallet/contract authorization. This predicate represents no unfinished trades under the confirmed mechanism; add no clearing, refund, unfreeze, migration or extra approval prerequisite. |
+| EX-REMINT-02 | Burning the old NFT and validly minting the replacement are one atomic consistency operation. No outcome may destroy the sole valid asset or leave both tokens valid for the same bill of lading. |
+| EX-REMINT-03 | Before replacement mint the holder may add, remove or change the new terms, including allowed currencies. Preserve old terms and explicit differences; freeze the new NFT currency set after mint. |
+| EX-REMINT-04 | Make old/new NFT links readable in both directions. A burned predecessor cannot trade or remint again. Preserve original registration, trade and funds evidence without rewriting or deletion. |
+| EX-REMINT-05 | Immediately before execution atomically recheck possession and holder equal to owner against original authority. Serialize competing trade/registration/remint; duplicate, failed or UNKNOWN outcomes reconcile the same operation before further decisions, never repeating burn, mint or debit blindly. |
 
 ## 7. Continuous trading, registration and cutoff
 
@@ -94,12 +110,12 @@ Oracle verifies the mint-format voucher and writes the one chain record; holder 
 | EX-INV-05 | Only authorized Oracle chain records bound to correct asset, transfer, sequence, chain, registrar and journal advance business state. |
 | EX-INV-06 | Reject missing, expired, revoked or replayed authority. |
 | EX-INV-07 | Rollback affects only eligible unfinalized suffix and resumes after interruption. |
-| EX-INV-08 | Return owner to effective holder without revoking registration, resetting issuer or permanent closure of an unexpired valid NFT; normal resale allows owner ahead of holder. |
+| EX-INV-08 | The recorded owner may resell before holder catches up. Neither holder-owner equality, gap closure nor current finality is a prerequisite to an ordinary continuous transfer. Remint uses its separate possession and holder-equals-owner predicate. |
 | EX-INV-09 | Missing local registration observation is not rejection or immediate liquidation authority. |
 | EX-INV-10 | Record business finality separately from chain observation; reorg or duplicate events never create a second funds action. |
 | EX-INV-11 | Holder changes with the same Oracle registration record, never as a separate asynchronous business fact or second receipt. |
 | EX-INV-12 | Matching respects price priority, equal-price FIFO and best executable price; eligibility cannot grant queue priority. |
-| EX-SETTLE-01 | Each buyer independently freezes segment principal in the wallet before a valid transfer or registration task. |
+| EX-SETTLE-01 | Before a trade, fully freeze its own buyer principal in the one explicitly selected NFT0-allowed currency and the buyer-confirmed maximum ETH gas separately. No conversion, currency substitution or duplicate use of funds. Original effective freezes are reconciled, never debited again after registration. |
 | EX-SETTLE-02 | Release each eligible segment by ordered owner/holder positions and remove its rollback control without waiting for the entire chain. |
 | EX-SETTLE-03 | Keep seller, buyer, price, asset, registration sequence, principal, fees and rollback per segment; no later-funds subsidy. |
 | EX-SETTLE-04 | Bind release to genuine authorized Oracle chain source, asset, transfer and journal; historical registration and current holder observations remain distinguishable. |
@@ -109,9 +125,18 @@ Oracle verifies the mint-format voucher and writes the one chain record; holder 
 | EX-TIME-03 | Use mint rules and authoritative Oracle ordering for deadline decisions; protect registered/settled prefix; no late-voucher grace or second-receipt wait. |
 | EX-EXIT-01 | EX completion is bill-of-lading transfer with full terms and Oracle-confirmed holder, without physical collection. |
 | EX-EXIT-02 | Off-chain parties handle collection, transport and warehouse exit; these are not EX completion/acceptance conditions. |
-| EX-EXIT-03 | No collection-driven NFT destruction; retain receipt/registration/trade/funds history and prevent duplicate valid mappings. |
+| EX-EXIT-03 | Do not introduce physical-collection-driven burn. Authorized holder remint atomically burns the old NFT; retain old/new receipt, registration, trade and funds history and prevent duplicate valid asset mappings. |
 
 Before mint cutoffs, show genuine pending status; absent local notification is neither success nor refusal. Deadline, registration and rollback races need atomic preconditions against one ordered authority. Technical log replay does not create a holder-first/receipt-later business state. Same identity/same content is idempotent; same identity/different content conflicts. Old messages cannot revive failed segments. Registered holder stays effective during technical recovery. After recovery an otherwise valid, unexpired and authorized NFT may begin a new chain; expiry cannot be bypassed by recovery. Actual off-chain collection rights are unaffected by test cutoff, and no forced disposal follows expiry.
+
+One or more allowed price currencies are declared immutably by NFT0 at mint; each order explicitly selects one member and carries that selection through the signed order, each principal freeze, release and refund. EX never selects a fallback currency, performs exchange, automatically buys ETH or converts principal to cover gas. Principal balance is checked in its own asset and smallest unit; gas is checked independently in ETH wei. If the designated price currency is ETH, the two liabilities remain separately reserved so one balance is not counted twice. Native execution rechecks original funds/reservations/nonce/UNKNOWN atomically. Missing or insufficient funds on either side warns and refuses; no balance or denomination is inferred from a label.
+
+| ID | Requirement |
+| --- | --- |
+| EX-SETTLE-06 | Quote, freeze, release and refund each leg in the one currency explicitly selected from its immutable NFT0 allowed set. Keep principal and ETH gas accounts separate; no conversion, substitution or summed multi-currency payment. ETH-priced principal and gas cannot consume the same funds twice. |
+| EX-SETTLE-07 | If available selected-currency funds cannot fully freeze the price, warn and stop before signing, execution and broadcast. Adequate ETH gas or other allowed currencies cannot replace this order principal. |
+| EX-INV-13 | One or more allowed currencies are immutable per minted NFT and each order binds one through its whole principal lifecycle. Principal or ETH gas shortage forms no new trade. No currency conversion, aggregate currency payment or third-party subsidy bypass; old and replacement identities remain distinct. |
+| EX-INV-14 | Remint never leaves both old and new valid or loses the valid asset through a one-sided burn. Existing history, funds and registration obligations survive the replacement. |
 
 ## 8. Conditional funds, suffix rollback and gas
 
@@ -121,17 +146,17 @@ AB, BC and CD have separate prices and original-buyer funds; do not assume equal
 | --- | --- |
 | EX-ROLLBACK-01 | B refusal while holder remains A withdraws all unregistered segments and returns owner to A without changing holder. |
 | EX-ROLLBACK-02 | After AB registration, C refusal withdraws only unregistered suffix and returns owner to B; preserve holder and settled prefix. |
-| EX-ROLLBACK-03 | Refund unreleased principal to each segment's original buyer; show principal, actual fees and net proceeds. |
-| EX-ROLLBACK-04 | Recovery does not require serial NFT passage through ordinary intermediate wallets or their current ETH balance. |
+| EX-ROLLBACK-03 | Refund each segment to its original buyer in its original selected NFT0-allowed price currency. Display original principal, actual ETH gas and net receipts separately by currency; never subtract ETH wei from non-ETH principal through a display exchange rate. |
+| EX-ROLLBACK-04 | Rollback does not require the NFT to visit intermediate ordinary wallets or their current unfrozen ETH. Sufficient original ETH prepayment for the approved obligation remains usable, without a second prepayment, premature unfreeze or cancellation of rollback. |
 | EX-ROLLBACK-05 | Rollback does not burn the NFT; valid unexpired authorized assets may start a new chain from recovered owner equal to effective holder. |
-| EX-GAS-01 | Each segment's buyer bears its actual trade, refund and NFT-return gas regardless of who refused registration. |
+| EX-GAS-01 | Each leg buyer pays the actual gas assigned to its trade, refund and NFT return in ETH, without shifting liability merely because another party refused registration. |
 | EX-GAS-02 | Do not charge one shared actual operation in full to multiple segments; allocation method remains D-04. |
-| EX-GAS-03 | No gas-shortage temporary custody, redemption deadline, forced sale or instant liquidation. |
-| EX-GAS-04 | Before trade disclose both cap and median total fee in ETH and contemporaneous USD for buyer confirmation; an estimate disclaimer is not an amount. |
+| EX-GAS-03 | ETH is the sole gas settlement asset. Warn and refuse a new trade if ETH is absent or insufficient after reservations. Validate and account for NFT0 price-currency funds separately; neither balance substitutes for the other. No gas-shortage temporary custody, redemption deadline, forced sale or instant liquidation. |
+| EX-GAS-04 | Before trading disclose both the maximum gas amount and median estimate in ETH and contemporaneous ETH/USD display values for buyer confirmation. USD is display only. An estimate disclaimer does not replace numeric amounts. |
 | EX-GAS-05 | Confirmed cap constrains the approved action scope together with the wallet grant; stop and obtain a new confirmation before exceeding it; no invented percentage or unlimited authority. |
 | EX-GAS-06 | Use real applicable verifiable median samples with algorithm, population, count, window, observation time, network, action and source; no fabricated sample, fake zero or single prediction as P50. |
-| EX-GAS-07 | After buyer confirmation freeze the maximum confirmed gas amount in the wallet separately from principal; insufficient, absent or unknown freeze prevents send. |
-| EX-GAS-08 | Debit evidenced actual gas and unfreeze unused amount; failed transactions still consume gas; duplicate event or retry cannot duplicate settlement. |
+| EX-GAS-07 | Freeze the buyer-confirmed maximum in ETH separately from selected-currency principal before sending. Count available ETH and disjoint effective original approved prepayment only; never reuse other reservations or principal. Insufficient or incomplete freezing prevents send. |
+| EX-GAS-08 | Debit verifiable actual ETH gas and unfreeze only unused ETH prepayment. Failed transactions still pay consumed gas. Duplicate events and retries cannot charge or unfreeze twice. |
 
 Every freeze, registration task, release, refund/unfreeze and asset-return action has stable native identity. Unknown result requires actual lookup before retry; restart cannot turn unknown into failed or a new buyer debit. A rollback report includes trigger, suffix, effective holder, protected prefix, each funds/owner result, remaining technical steps and safe retry conditions. Never claim complete before all required evidence.
 
@@ -140,6 +165,11 @@ Before confirmation disclose two total-fee amounts: approved cap and real sample
 Record algorithm, population, sample count, window start/end, collection time, chain/action and reproducible raw sample references/digests. Confirmation binds quote ID/version, action, scope, cap, displayed USD, validity and original grant. Recheck current fee parameters and guarantee the approved scope remains within cap before sending. A broad wallet grant never raises a lower buyer cap. In-scope automation does not need an extra platform approval step.
 
 After confirmation freeze maximum gas ETH separately from principal; insufficient/failed/unknown freeze means no send. If cap is exceeded or cannot be guaranteed, stop the affected step, disclose a fresh quote and obtain new confirmation and sufficient approved top-up. Splits, retries and replacement quotes cannot erase incurred costs, pending exposure or reset aggregate cap. Actual evidenced gas debits remain charged on failed transactions. Unfreeze only unused balance no longer needed; unknown outcome retains possible exposure. Distinct retries can incur new evidenced gas within the same cap; one actual cost is never charged twice. USD is disclosure, not authority to exchange principal for gas. Only genuine shared-operation allocation remains D-04; normal freeze/debit/unfreeze is fixed.
+
+| ID | Requirement |
+| --- | --- |
+| EX-GAS-09 | ETH is the sole gas settlement asset. USD is disclosure only; PYUSD, WETH or other assets cannot pay gas. No automatic exchange, non-ETH-principal gas deduction or platform/third-party subsidy bypass. |
+| EX-GAS-10 | Zero ETH warns and refuses new trading before signing, execution and broadcast. Available ETH below the confirmed maximum freeze also refuses. UI, API, Agent and retry paths cannot bypass this check. |
 
 ## 9. Wallet, Agent and matching
 
@@ -150,7 +180,7 @@ After confirmation freeze maximum gas ETH separately from principal; insufficien
 | EX-AUTH-03 | Support the actual semantic wallet contract; at least one genuine integrated path plus the same conformance checks for alternatives. |
 | EX-AUTH-04 | Revocation or expiry rejects new restricted actions with deterministic concurrent behavior. |
 | EX-AUTH-05 | Wallet manages Agent authorization; no extra platform approval layer or repeated manual step for an already permitted action. |
-| EX-MATCH-01 | Use independent executable bids/asks with price priority, equal-price FIFO and best executable price. |
+| EX-MATCH-01 | Both orders must select the same member of the NFT0 mint-time allowed set. Price priority, FIFO and best executable price operate within one currency book only. No named-counterparty priority jump, FX conversion or numeric price ranking across currencies. |
 | EX-MATCH-02 | Reference only CME spot matching and relevant receipt specifications; no futures margin, CCP, leverage liquidation, platform dealing or unapproved commercial fees. |
 | EX-MATCH-03 | Matching is not registration or settlement completion. |
 
@@ -201,7 +231,7 @@ Do not hide partial states, infer unlimited approval from connection, fabricate 
 
 | ID | Requirement |
 | --- | --- |
-| EX-NFR-01 | Reproduce Linux runs with fixed inputs/time, exact commands, runtime and digests. |
+| EX-NFR-01 | Run all product, unit, integration, API, browser, EVM, syntax, type, build and package tests only on existing approved remote non-Windows Linux with verified ctyun or aliyun provider binding. No local/Windows/WSL/container or unknown hosted-runner fallback. Read the rule on reconnect and bind source, command, environment and evidence; retaining a script alone is not enforcement. |
 | EX-NFR-02 | Prevent funds/asset reentry and replay with authority and state preconditions. |
 | EX-NFR-03 | Safely recover reorg, duplicate logs, RPC timeout and unknown results. |
 | EX-NFR-04 | Restart and duplicate queue consumption preserve correlations and never duplicate settlement. |
@@ -224,7 +254,7 @@ Only authoritative permitted Oracle chain evidence bound to asset/segment/journa
 | --- | --- |
 | EX-ARCH-01 | Align whole-artwork backend receipt, wallet, Oracle, journal, freeze/release, rollback and audit semantics with actual contracts/schema/events/errors and evidence. Reuse first; no implied new deployment instance or migration permission. |
 | EX-ARCH-02 | Route REG-DIRECT, REG-ELECTRONIC and REG-INTERMEDIARY sources to the same trade/settlement backend; Oracle remains sole raw-voucher authority. |
-| EX-ARCH-03 | Provide operable frontend for each source with description, mint format, task status and Oracle record; share order, wallet, gas, owner/holder, funds and history components. |
+| EX-ARCH-03 | Implement usable frontend flows for all three source paths with source explanation, declared mint voucher format, task state and original Oracle records. Share immutable allowed-currency selection, matching, wallet authorization, ETH maximum/median disclosure and confirmation, shortage warnings/refusal, owner/holder, funds and history. No conversion or multi-currency sum. Placeholder buttons do not satisfy this requirement. |
 | EX-ARCH-04 | Alignment covers whole artwork/receipt only, excluding charity fractions, shares and invented market modes. |
 
 Missing CI route affects that candidate's CI/merge, not independent models. Missing wallet support, Oracle authority, asset-return control, gas interface, verified test-token address or target affects the respective real path only. Continue contracts, fixtures, implementation and packages independent of it. First search existing source/config/evidence; escalate only a precise genuine product/permission decision. No visual redesign prerequisite; optional staking hooks do not authorize undecided staking rules.
@@ -241,7 +271,7 @@ Oracle alone ingests/verifies each voucher and records it. Each source routes in
 
 Main source fixture: REG-DIRECT (source coverage must be independently verified).
 
-A to B; Oracle writes the verified registration voucher and holder reaches B. Release original frozen AB funds; owner=holder=B; readable bill and registration history; no collection or burn.
+A to B; Oracle writes the verified registration voucher and holder reaches B. Release original frozen AB funds; owner=holder=B; readable bill and registration history; no physical collection or collection-driven burn.
 
 Cases: T-02, T-11, T-25, T-32, T-33.
 
@@ -281,13 +311,13 @@ Cases: T-20, T-21, T-22, T-23.
 
 Main source fixture: REG-INTERMEDIARY (source coverage must be independently verified).
 
-At trade cutoff attempt a new transfer with unregistered segments outstanding. Reject new trade; overdue unregistered suffix fails and owner returns to effective holder; keep registered/settled prefix; no expired reopening or burn.
+At trade cutoff attempt a new transfer with unregistered segments outstanding. Reject new trade; overdue unregistered suffix fails and owner returns to effective holder; keep registered/settled prefix; no expired reopening or collection-driven burn.
 
 Cases: T-24, T-25, T-32, T-33, T-44.
 
 | ID | Requirement |
 | --- | --- |
-| EX-DEMO-01 | Use Ethereum Sepolia chain 11155111 and the designated verified Sepolia test PYUSD through existing approved paths; never substitute Hoodi. |
+| EX-DEMO-01 | Use the original approved Ethereum Sepolia chain11155111 test path. The designated Sepolia PYUSD fixture must be a member of fixture NFT0 mint-time currencies and explicitly selected by scenario orders; gas is test ETH. Do not borrow the separate Wallet Hoodi configuration or make PYUSD a universal product currency. |
 | EX-DEMO-02 | Deliver all six revised scenarios with actual steps, state assertions and execution evidence. |
 | EX-DEMO-03 | Deliver an operable trading demo, editable PPT proposal and playable film, clearly labelling real test-chain activity, simulated registrars and animation. |
 
@@ -371,7 +401,7 @@ Entry: Reproducible trading, Oracle and rollback; verifiable mint cutoffs/format
 - Resolve registration/deadline races against one authoritative ordered state; no holder-first/receipt-later, second receipt or grace stage.
 - Valid unexpired unburned NFT may begin a new chain when authorized; expiry cannot be bypassed by recovery.
 - Allow ordinary owner-ahead-of-holder continuous resale.
-- Show full bill terms, off-chain collection obligations and Oracle/transfer history without implementing physical fulfillment or destruction.
+- Show full bill terms, off-chain collection obligations and Oracle/transfer history without implementing physical fulfillment or collection-driven destruction.
 - Reject duplicate mapping and transfer replay; preserve history and idempotent technical recovery.
 
 Deliverables: Deadline and suffix recovery model, bill-transfer/scope UI, boundary fixtures and resumed-trading evidence.
@@ -397,9 +427,11 @@ Acceptance: All six scenarios and complete evidence chain; deployment/runtime/ch
 
 Develop next independent stage after this stage PR without waiting for CI. An exit condition defines acceptance, not a global development stop.
 
+Stage 4 also includes authorized holder replacement mint: possession plus holder=owner, atomic old burn/new mint, editable new terms, retained old/new history and UNKNOWN/concurrency recovery. No extra cleanup/refund/unfreeze/migration approval gate is introduced. Ordinary transfer remains independent of holder equality, gap closure and current finality. Stage 5 integrates T-52 through T-68 with all source paths and real evidence.
+
 ## 17. Acceptance matrix
 
-The minimum matrix retains all original IDs with revised semantics and adds T-41 through T-51. A row is an obligation, not a passing result. Parameterized/property cases may cover multiple rows. First stage is the latest initial inclusion point, not a prohibition on earlier work. Preserve exact source/run/evidence; never inherit historical green into revised assertions.
+The complete matrix retains T-01 through T-51 with applicable revised semantics and extends through T-68. A row is an obligation, not a passing result. Parameterized/property cases may cover multiple rows. First stage is the latest initial inclusion point, not a prohibition on earlier work. Preserve exact source/run/evidence; never inherit historical green into revised assertions.
 
 | Case | Assertion | Requirements | First stage / later integration |
 | --- | --- | --- | --- |
@@ -413,7 +445,7 @@ The minimum matrix retains all original IDs with revised semantics and adds T-41
 | T-08 | Account switching, disconnect or lost session must not reuse the previous account's authorization. | EX-AUTH-01 / EX-AUTH-03 | 1 |
 | T-09 | Independently submitted bids and asks follow price priority, equal-price FIFO and best executable price; no queue jumping, altered limits or specified-counterparty substitution. | EX-MATCH-01 / EX-INV-12 | 1 |
 | T-10 | All three Oracle adapters satisfy one registration contract using mint-declared formats; holder follows the same receipt; simulated roles are labelled. | EX-INV-05 / EX-SCOPE-09 / EX-MINT-05 | 1 |
-| T-11 | Each buyer's wallet freezes that segment's principal before valid execution or registration admission; no second buyer payment after registration. | EX-SETTLE-01 / EX-SETTLE-05 | 2 |
+| T-11 | Principal uses the explicit selected member of the immutable NFT0 set through freeze/release/refund. Refuse missing/changed currency, conversion/substitution and insufficient/unknown selected-currency balance even with sufficient ETH gas. Freeze each liability separately before trade; no second principal debit after registration. | EX-SETTLE-01 / EX-SETTLE-05 | 2 |
 | T-12 | Release eligible AB without waiting for C or D. | EX-SETTLE-02 / EX-INV-03 | 2 |
 | T-13 | Keep every segment's price and funds separate; pending later funds cannot subsidize an earlier release. | EX-SETTLE-01 / EX-SETTLE-03 | 2 |
 | T-14 | Reject wrong asset, segment, journal, network or unauthorized evidence source. | EX-INV-05 / EX-SETTLE-04 | 2 |
@@ -421,28 +453,28 @@ The minimum matrix retains all original IDs with revised semantics and adds T-41
 | T-16 | Recover unknown RPC or execution results for release of already frozen funds idempotently; no new buyer-payment business failure, duplicate debit or gas charge. | EX-SETTLE-05 / EX-INV-04 / EX-NFR-04 | 2 |
 | T-17 | When B refuses and holder is A, refund the unregistered suffix and return owner to A; holder stays A and the NFT is not burned. | EX-ROLLBACK-01 / EX-ROLLBACK-05 | 3 |
 | T-18 | When AB is registered and C refuses, withdraw BC/CD only and return owner to effective holder B; keep registration and settled AB; never reset to issuer. | EX-ROLLBACK-02 / EX-INV-03 / EX-INV-08 | 3 |
-| T-19 | Return each segment's unreleased principal to its original buyer; show actual gas and net proceeds with explicit units. | EX-GAS-01 / EX-ROLLBACK-03 | 3 |
-| T-20 | Intermediate wallets with zero ordinary ETH do not change recovery duties or require serial wallet-by-wallet NFT return. | EX-ROLLBACK-04 | 3 |
+| T-19 | Return each segment's unreleased principal to its original buyer; show actual gas and net proceeds with explicit units. | EX-GAS-01 / EX-ROLLBACK-03 / EX-SETTLE-06 | 3 |
+| T-20 | Intermediate wallets with zero ordinary ETH do not change recovery duties or require serial wallet-by-wallet NFT return. | EX-ROLLBACK-04 / EX-GAS-07 / EX-GAS-10 | 3 |
 | T-21 | One shared operation must not be charged in full to multiple segments. | EX-GAS-02 | 3 |
-| T-22 | Insufficient gas remains an explicit recoverable condition; no temporary custody, timed redemption or forced sale. | EX-GAS-03 | 3 |
+| T-22 | ETH is the sole gas asset. Zero/insufficient/unverified applicable ETH warns and refuses new trading even if price funds suffice; selected-currency shortage also refuses. Original sufficient frozen gas remains usable for its approved recovery without second prepayment or double counting. | EX-GAS-03 | 3 |
 | T-23 | Resume crashed rollback idempotently without repeat refunds or charges; duplicate or obsolete messages cannot revive withdrawn segments; no late-receipt grace path. | EX-INV-04 / EX-INV-07 / EX-TIME-03 | 3 |
 | T-24 | Honor mint time units and boundaries; refuse new trades after cutoff; overdue unregistered suffix fails and owner returns to effective holder; preserve registered and settled prefix. | EX-TIME-01 / EX-TIME-02 / EX-TIME-03 | 4 |
-| T-25 | EX transfers the bill of lading only; terms remain visible; no physical collection, transport, warehouse exit or burn step; owner ahead of holder does not prohibit ordinary resale. | EX-SCOPE-08 / EX-EXIT-01 / EX-INV-08 | 4 |
+| T-25 | EX transfers the bill of lading without physical collection, transport, warehouse exit or collection-driven burn. Terms remain readable; owner ahead of holder may resell. Authorized atomic holder remint is separately covered by T63-68. | EX-SCOPE-08 / EX-EXIT-01 / EX-INV-08 / EX-SCOPE-12 | 4 |
 | T-26 | Distinguish simulated and real, pending and complete, owner and holder. | EX-NFR-05 | 1 |
 | T-27 | Reproduce Linux commands and fixtures with exact source, configuration and run identity. | EX-NFR-01 / EX-NFR-07 | 1 |
 | T-28 | On duplicate consumption, restart or unknown freeze/release/refund, query before retry; never duplicate funds or gas actions. | EX-NFR-03 / EX-NFR-04 / EX-SETTLE-05 | 2 |
 | T-29 | Reject rollback without sufficient authority; no arbitrary confiscation or rewriting a finalized prefix. | EX-SCOPE-07 / EX-NFR-10 | 3 |
 | T-30 | Recover reorg, duplicate logs, RPC timeout and reordered events without early or repeated release. | EX-INV-10 / EX-NFR-03 | 3 |
 | T-31 | Release and refund are mutually exclusive; reconcile segment principal, fees and final balances. | EX-INV-04 / EX-SETTLE-03 | 2 |
-| T-32 | Trace bill-of-lading terms, Oracle registration, holder and funds; physical collection or NFT destruction is not completion. | EX-EXIT-02 / EX-EXIT-03 / EX-SCOPE-09 | 4 |
+| T-32 | Trace bill-of-lading terms, original Oracle registration, holder and funds. Physical collection or collection-driven destruction is not completion; authorized remint separately preserves old/new NFT links and existing evidence. | EX-EXIT-02 / EX-EXIT-03 / EX-SCOPE-09 / EX-REMINT-04 | 4 / 5 |
 | T-33 | Reject duplicate valid mappings, transfer replay and repeated funds actions; failed old segments stay dead, valid NFTs can start a new chain, history remains. | EX-EXIT-03 / EX-ROLLBACK-05 | 4 |
 | T-34 | Agent actions already authorized in the wallet need no extra platform step approval; refuse out-of-scope actions. | EX-AUTH-01 / EX-AUTH-05 | 1 |
-| T-35 | Use only approved Sepolia 11155111 and designated test PYUSD; reject wrong chain or asset before sending; no Hoodi substitution. | EX-DEMO-01 | 5 |
+| T-35 | Use only approved Sepolia 11155111 and designated test PYUSD; reject wrong chain or asset before sending; no Hoodi substitution. | EX-DEMO-01 / EX-SCOPE-11 / EX-GAS-09 | 5 |
 | T-36 | All six scenarios have matching actual transactions, simulated registration evidence, UI states and final assertions. | EX-DEMO-02 | 5 |
 | T-37 | Demo, PPT and playable film consistently label real test-chain actions, simulated roles and animation; no implied institutional cooperation. | EX-DEMO-03 | 5 |
 | T-38 | Required CI belongs to exact head; actual deployed commit matches; read back artifact bytes and hashes. | EX-NFR-07 | 5 |
-| T-39 | No secrets, private source documents or internal operational material in code, logs, artifacts or public diffs. | EX-NFR-06 / EX-NFR-09 | all |
-| T-40 | Record real resource and performance baselines and diagnosable errors; no invented production SLA. | EX-NFR-05 / EX-NFR-08 | all |
+| T-39 | No secrets, private source documents or internal operational material in code, logs, artifacts or public diffs. | EX-NFR-06 / EX-NFR-09 | 0 |
+| T-40 | Record real resource and performance baselines and diagnosable errors; no invented production SLA. | EX-NFR-05 / EX-NFR-08 | 0 |
 | T-41 | Mint complete asset-specific receipt data, terms, both cutoffs and time semantics; reject missing required fields; do not copy unrelated commodity rules. | EX-MINT-01 / EX-MINT-02 / EX-MINT-04 / EX-MINT-06 | 1 |
 | T-42 | Encrypt receipt-access secrets only in controlled off-chain storage; NFT has only opaque nonsecret mapping; no wallet private keys held by EX. | EX-MINT-03 / EX-NFR-06 | 1 |
 | T-43 | Before trade show both cap and median in ETH and contemporaneous USD with source, time, scope and buyer confirmation; unavailable quote, FX or confirmation blocks submission; no fake zero. | EX-GAS-04 / EX-GAS-05 / EX-GAS-06 | 1 / 3 |
@@ -453,7 +485,41 @@ The minimum matrix retains all original IDs with revised semantics and adds T-41
 | T-48 | Backend and all sources retain whole artwork/receipt semantics; no charity fractions, shares or newly invented spot/futures/leverage modes. | EX-ARCH-04 / EX-SCOPE-02 / EX-MATCH-02 | 1 / 5 |
 | T-49 | Recompute P50 from real applicable algorithm, sample population/count/window/time and source; refuse fabricated or unrelated samples and single-point or cap-average substitutes; estimate is not a guarantee. | EX-GAS-06 / EX-GAS-04 | 1 / 3 |
 | T-50 | Buyer confirmation binds quote version, scope and cap; send/retry stays within it and wallet grant; exceeding or unprovable cap stops for fresh confirmation; splitting, retry or quote replacement cannot reset aggregate cap. | EX-GAS-05 / EX-INV-04 | 1 / 3 |
-| T-51 | Freeze the confirmed maximum gas amount separately from principal before sending; insufficient or unknown freeze stops; debit actual consumption, unfreeze unused balance, keep failed-tx gas charged and process duplicates once. | EX-GAS-07 / EX-GAS-08 / EX-INV-04 | 1 / 2, 3 |
+| T-51 | Freeze the confirmed maximum gas amount separately from principal before sending; insufficient or unknown freeze stops; debit actual consumption, unfreeze unused balance, keep failed-tx gas charged and process duplicates once. | EX-GAS-07 / EX-GAS-08 / EX-GAS-10 / EX-INV-04 | 1 / 2 / 3 |
+
+| T-52 | Zero ETH warns and refuses a new trade despite sufficient NFT0 principal or other tokens; no transaction signing/broadcast, valid trade/registration task or owner advance. UI/API/Agent agree. | EX-GAS-09 / EX-GAS-10 / EX-INV-13 | 1 / 3 / 5 |
+
+| T-53 | Check available ETH at zero, one wei below the maximum, exactly the maximum and above it, after other reservations. Sufficient P50 but insufficient cap refuses; sufficient funds proceed only when all other conditions hold. | EX-GAS-05 / EX-GAS-07 / EX-GAS-10 | 1 / 3 / 5 |
+
+| T-54 | Gas quote confirmation, freeze, debit and unused unfreeze settle in ETH; USD is display only. Refuse PYUSD/WETH/other gas assets, conversion, non-ETH-principal gas deductions and subsidy bypass. Preserve cap/median and consumption idempotence. | EX-GAS-04 / EX-GAS-07 / EX-GAS-08 / EX-GAS-09 / EX-SCOPE-11 | 1 / 2 / 3 / 5 |
+
+| T-55 | Recheck changed account/chain, concurrent ETH use, invalid freeze, old-signature replay and retries before signing/broadcast. Direct backend calls cannot bypass; prebroadcast refusal cannot invent consumed gas. | EX-GAS-10 / EX-AUTH-02 / EX-AUTH-04 / EX-INV-04 | 1 / 3 / 5 |
+
+| T-56 | Sufficient original frozen ETH for the same approved rollback obligation remains usable with zero unfrozen cash. No second prepayment, early unfreeze or cancelled rollback. A remaining shortage uses the original confirmed replenishment flow; no automatic exchange/subsidy. | EX-ROLLBACK-04 / EX-GAS-05 / EX-GAS-07 / EX-GAS-08 | 3 / 5 |
+
+| T-57 | Each order selects one immutable NFT0-allowed currency; both intents and leg freeze/release/refund match it. Wrong currency refuses consistently across three sources and UI/API/Agent, without conversion or substitution. | EX-SCOPE-11 / EX-MINT-07 / EX-MATCH-01 / EX-SETTLE-06 / EX-INV-13 | 1 / 2 / 3 / 5 |
+
+| T-58 | Absent, conflicting, changed or unverifiable NFT0 currencies or an order without explicit selection refuse. No ETH/PYUSD default or balance-based automatic choice. PYUSD fixtures require mint-time membership and explicit selection. | EX-MINT-07 / EX-SCOPE-11 / EX-DEMO-01 | 1 / 5 |
+
+| T-59 | When selected principal is ETH, independently cover and account for principal and maximum gas. Refuse coverage of only one or counting the same balance/freeze twice. Reconcile principal refund and unused gas separately without restoring consumed gas. | EX-SETTLE-06 / EX-SETTLE-07 / EX-GAS-07 / EX-GAS-08 / EX-INV-13 | 1 / 2 / 3 |
+
+| T-60 | Mint-time one-currency and multiple-currency sets are recorded/read correctly. No later UI/API/Agent/contract/admin path can add, remove or replace the same NFT set. Valid remint creates a new NFT while atomically burning the old one. | EX-MINT-07 / EX-SCOPE-11 / EX-INV-13 / EX-REMINT-03 | 1 / 4 / 5 |
+
+| T-61 | Warn and refuse selected-currency principal at zero or one smallest unit short before signing/broadcast, despite sufficient other currencies/gas. Exact sufficiency may proceed under other conditions. Exclude concurrent reservations; reuse only this operation own effective freeze. | EX-SETTLE-07 / EX-SETTLE-06 / EX-GAS-07 / EX-INV-13 | 1 / 2 / 3 / 5 |
+
+| T-62 | For multiple allowed currencies, both orders select the same currency; verify price priority/FIFO/best executable price independently inside each currency. No raw cross-currency numeric comparison, FX ranking, mixed principal sum or automatic conversion. | EX-MATCH-01 / EX-SCOPE-11 / EX-SETTLE-06 / EX-INV-12 | 1 / 5 |
+
+| T-63 | A holder possessing the original NFT with holder equal to owner may remint under valid existing wallet authority. Refuse non-holder, no possession, unequal owner, admin-only identity and invalid/revoked/replayed authority. | EX-REMINT-01 / EX-AUTH-01 / EX-AUTH-04 | 4 / 5 |
+
+| T-64 | Successful remint atomically burns the old NFT and validly mints the new one. Failure of either leaves no one-sided asset loss or two simultaneously valid bills; retain same-operation evidence. | EX-REMINT-02 / EX-INV-14 | 4 / 5 |
+
+| T-65 | Before new mint holder may add/remove/change new terms including allowed currencies; preserve old terms/history. New minted currencies become immutable. New terms cannot bypass ETH gas, no-conversion, Oracle or authority boundaries. | EX-REMINT-03 / EX-MINT-07 / EX-GAS-09 | 4 / 5 |
+
+| T-66 | Remint concurrent with trade/registration atomically rechecks possession and holder equal to owner, yielding one valid result. Duplicate/RPC-timeout/failed/UNKNOWN requests reconcile and recover idempotently, never repeating burn/mint/debit. | EX-REMINT-05 / EX-INV-04 / EX-INV-14 | 4 / 5 |
+
+| T-67 | Read old/new NFT links both ways, term differences and original registration/trade/funds evidence. A burned predecessor cannot trade/remint again. New terms cannot delete or rewrite completed history. | EX-REMINT-04 / EX-SCOPE-12 / EX-INV-14 | 4 / 5 |
+
+| T-68 | Possession and holder equal to owner are the confirmed no-unfinished-trade mechanism for remint, subject to existing authority. No extra clearing/refund/unfreeze/migration approval. This predicate cannot block ordinary resale with owner ahead of holder. | EX-REMINT-01 / EX-INV-08 / EX-SCOPE-03 | 4 / 5 |
 
 ## 18. Engineering delivery and exact-source acceptance
 
@@ -498,23 +564,24 @@ Source identifiers are retained without private locators or quoted private opera
 | SRC-04 | Existing whole-artwork authority/journal/segment/settlement alignment |
 | SRC-05 / SRC-06 | Historical repository/bootstrap evidence, source-bound and never current acceptance |
 | SRC-07 / SRC-09 | Full staged PRD and infrastructure/execution scope |
-| SRC-08 | Historical private distribution policy, retained for private records; later explicit publication permits this sanitized product edition |
+| SRC-08 | Historical sanitized-publication provenance; every new public upload remains subject to current authorization and actual review |
 | SRC-10 | Current confirmed matching, mint, cutoff, bill transfer, prefix protection, single Oracle receipt and stage-PR continuation |
 | SRC-10B | Whole-artwork backend alignment and three transaction sources, explicitly not market modes |
 | SRC-10C | Cap/P50 ETH/USD, buyer confirmation, cap-sized prefreeze, actual debit and unused unfreeze |
 | SRC-11 | CME spot-market chapter 12 reference, limited to corresponding confirmed principles/specifications |
 | SRC-12 | CME Direct Auction FIFO reference, without importing unrelated market terms |
 | SRC-13 | Original full edition as revision baseline, not a replacement for current requirements |
+| SRC-14 | Full v1.3: immutable one/multiple NFT0 currencies, ETH-only gas and separate funds, atomic authorized holder remint, ordinary continuous-transfer boundary and T52-68 |
 
 Matching references: [CME spot rules](https://www.cmegroup.com/rulebook/CME/I/12.pdf), [CME Direct Auction manual](https://www.cmegroup.com/content/dam/cmegroup/education/files/cme-direct-auction-dairy-user-manual.pdf). These are references within confirmed scope, not a claim of certification or implementation.
 
-Migration rules: no 72-hour/previous-working-day forced custody scheme; no physical collection/burn acceptance; owner returns to effective holder without prefix/issuer reset; Oracle's one voucher/record controls holder; no EX raw-original or second receipt; no late grace; no second buyer payment; no open matching/mint/cutoff/cap decision where already confirmed. Preserve all nonconflicting original requirements and IDs. Git history retains superseded text, which is not a live checklist.
+Migration rules: no 72-hour/previous-working-day forced custody scheme; no physical-collection-driven burn acceptance; owner returns to effective holder without prefix/issuer reset; Oracle's one voucher/record controls holder; no EX raw-original or second receipt; no late grace; no second buyer payment; no open matching/mint/cutoff/cap decision where already confirmed. Preserve all nonconflicting original requirements and IDs. Git history retains superseded text, which is not a live checklist.
 
 ## 21. Definition of done
 
 Complete only when all six revised scenarios, all three explicitly simulated Oracle sources, complete whole-receipt mint, price/FIFO matching, per-segment original-funds release, bounded suffix rollback, cutoff/bill-transfer boundary and eligible resumed trading have reproducible evidence. Verify real cap/P50 ETH/USD, samples, buyer confirmation/reconfirmation, maximum gas freeze, actual debit and unused unfreeze within confirmed cap and separate from principal. Match demo/PPT/playable film, exact code/config, actual Linux deployment, Sepolia observations and private execution records. Whole-artwork alignment, operable middleware/frontend for all sources and T-46..48 must pass. Missing applicable evidence keeps delivery OPEN.
 
-Physical collection, transport, warehouse exit and NFT destruction are not completion conditions. Completion does not imply real warehouses/institutions admitted, cooperation, licenses, commercial fees, mainnet deployment or acceptance of new human financial/legal obligations. Parked items affect only genuinely dependent later work.
+Physical collection, transport, warehouse exit and collection-driven NFT destruction are not completion conditions. Authorized atomic holder remint, immutable allowed-currency selection and separate ETH gas/price coverage remain required by T-52 through T-68. Completion does not imply real warehouses/institutions admitted, cooperation, licenses, commercial fees, mainnet deployment or acceptance of new human financial/legal obligations. Parked items affect only genuinely dependent later work.
 
 ## Appendix A: migration coverage
 
