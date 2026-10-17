@@ -182,8 +182,11 @@ class Scenario:
     cases: tuple
     main_path: str
     body: object
+    prd_version: str = None
 
     def run(self):
+        from .current_prd import require_current_scenario
+        require_current_scenario(self.scenario_id, self.prd_version)
         recorder = Recorder(self.scenario_id, self.title, self.cases, self.main_path)
         started = time.time()
         started_at = _utc(started)

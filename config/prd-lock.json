@@ -1,0 +1,14 @@
+{
+  "executionPlan": {
+    "bytes": 58865,
+    "path": "config/execution-plan.json",
+    "sha256": "5a56774be0d8451d99c58a3ca712f5b45e373ff70f78903d6af70ca07e69c10b"
+  },
+  "prd": {
+    "bytes": 59923,
+    "path": "PRD.md",
+    "sha256": "62850f615e8afad087aeb6fc0fd1aa79682c65c8fa18c5693b74348052c44b58"
+  },
+  "schema": "8415ex-prd-lock/1",
+  "version": "1.2"
+}
