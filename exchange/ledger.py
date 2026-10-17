@@ -122,6 +122,8 @@ class Exchange:
         self._gas = {}
         self._rollbacks = {}
         self._returned_to = {}
+        self._active_legs = {}
+        self._rollback_history = {}
         self.voucher_desk = voucher_desk
         self._exits = {}
         self._mint_book = MintDeclarationBook(mint_verifier) if callable(mint_verifier) else None
@@ -170,6 +172,8 @@ class Exchange:
         self._receipts[receipt.receipt_id] = receipt
         self._asset_keys[receipt.asset.key] = receipt.receipt_id
         self._legs[receipt.receipt_id] = []
+        self._active_legs[receipt.receipt_id] = []
+        self._rollback_history[receipt.receipt_id] = []
         self._holder_index[receipt.receipt_id] = 0
         self._requests_by_leg[receipt.receipt_id] = {}
         self._deferred[receipt.receipt_id] = {}
@@ -422,6 +426,96 @@ class Exchange:
 
     # ------------------------------------------------------------- transfers
 
+    def active_leg_indices(self, receipt_id):
+        """Stable global leg IDs in the current chain, including protected prefix."""
+        self.receipt(receipt_id)
+        return tuple(self._active_legs[receipt_id])
+
+    def _next_registration_index(self, receipt_id):
+        for index in self._active_legs[receipt_id]:
+            if self.leg(receipt_id, index).registration_status != "confirmed":
+                return index
+        return len(self._legs[receipt_id])
+
+    def resume_trading(self, receipt_id, now=None):
+        """Open a fresh chain only after complete recovery and current validity.
+
+        The configured original verifier must attest current asset validity for
+        this binding. No validity is inferred from a return, CI or an old mint.
+        Global leg IDs, consumed nonces, escrow/gas references and old evidence
+        stay unique; only the executable path drops the withdrawn suffix.
+        """
+        now = self._now(now)
+        receipt = self.receipt(receipt_id)
+        require(now == self._now(None), "EX_RECOVERY_OBSERVATION_REFUSED",
+                "recovery uses the current trusted observation")
+        state = self._rollbacks[receipt_id]
+        require(state is not None and state["state"] == "complete"
+                and all(step.status == "done" for step in state["steps"]),
+                "EX_RECOVERY_INCOMPLETE", "all refund and asset-return steps need their own result")
+        require(self._returned_to[receipt_id] == (state["boundaryIndex"], state["boundaryAccount"]),
+                "EX_RECOVERY_POSITION_REFUSED", "recorded return does not match the recovery boundary")
+        require(self.owner_index(receipt_id) == self.holder_index(receipt_id)
+                and self.owner_of(receipt_id) == self.holder_of(receipt_id),
+                "EX_RECOVERY_POSITION_REFUSED", "recovery must start at effective holder")
+        require(self._exits[receipt_id] is None, "EX_RECOVERY_LEGACY_OUTCOME_UNRESOLVED",
+                "a historical physical-operation outcome must be reconciled without resuming it")
+        require(now < receipt.trade_stop_at, "EX_TRADE_WINDOW_CLOSED",
+                "completed rollback cannot reopen an expired asset")
+        binding = {"receiptId": receipt_id, "asset": list(receipt.asset.key),
+                   "mintDeclarationDigest": self._mint_declarations[receipt_id]["declarationDigest"],
+                   "owner": self.owner_of(receipt_id), "holder": self.holder_of(receipt_id),
+                   "boundaryIndex": state["boundaryIndex"], "observedAt": now}
+        binding_digest = digest(binding)
+        try:
+            valid = self._mint_book.verify("current-asset-validity", binding)
+        except Exception:
+            raise DomainError("EX_ASSET_VALIDITY_NOT_VERIFIED",
+                              "current asset validity verifier failed") from None
+        require(valid is True and digest(binding) == binding_digest,
+                "EX_ASSET_VALIDITY_NOT_VERIFIED", "current validity and unchanged binding required")
+        require(self._rollbacks[receipt_id] is state
+                and self.owner_of(receipt_id) == self.holder_of(receipt_id) == state["boundaryAccount"]
+                and self.owner_index(receipt_id) == self.holder_index(receipt_id) == state["boundaryIndex"],
+                "EX_RECOVERY_POSITION_REFUSED", "recovery position changed during verification")
+        require(self._now(None) < receipt.trade_stop_at, "EX_TRADE_WINDOW_CLOSED",
+                "deadline passed during current validity verification")
+        withdrawn = frozenset(state["affectedLegs"])
+        survivors = [i for i in self._active_legs[receipt_id] if i not in withdrawn]
+        require(all(self.leg(receipt_id, i).registration_status == "confirmed" for i in survivors),
+                "EX_RECOVERY_POSITION_REFUSED", "the surviving path must be the registered prefix")
+        report = deepcopy(self.rollback_report(receipt_id, now))
+        report["historical"] = True
+        withdrawn_deferred = {i: deepcopy(e) for i, e in self._deferred[receipt_id].items()
+                              if i not in survivors}
+        old_orders = tuple({"quoteAsset": key[1], "intentId": order.intent_id,
+                            "digest": order.digest, "sequence": sequence}
+                           for key, book in self._order_books.items() if key[0] == receipt_id
+                           for order, sequence in book._entries.values())
+        self._rollback_history[receipt_id].append({
+            "state": deepcopy(state), "report": report,
+            "withdrawnDeferredEvidence": withdrawn_deferred, "retiredOrders": old_orders})
+        self._active_legs[receipt_id] = survivors
+        self._deferred[receipt_id] = {i: e for i, e in self._deferred[receipt_id].items()
+                                      if i in survivors}
+        self._rollbacks[receipt_id] = None
+        self._returned_to[receipt_id] = None
+        self._order_books = {key: book for key, book in self._order_books.items()
+                             if key[0] != receipt_id}
+        self._record(receipt_id, "trading-resumed", {
+            "generation": len(self._rollback_history[receipt_id]),
+            "boundaryIndex": state["boundaryIndex"], "account": state["boundaryAccount"],
+            "withdrawnLegs": list(state["affectedLegs"]), "activeLegs": list(survivors),
+            "nextGlobalLegIndex": len(self._legs[receipt_id]), "oldOrdersReadmitted": False,
+            "historyPreserved": True})
+        return {"receiptId": receipt_id, "resumed": True, "account": self.owner_of(receipt_id),
+                "activeLegs": tuple(survivors), "nextGlobalLegIndex": len(self._legs[receipt_id]),
+                "generation": len(self._rollback_history[receipt_id]), "observedAt": now}
+
+    def historical_rollbacks(self, receipt_id):
+        self.receipt(receipt_id)
+        return tuple(deepcopy(item["report"]) for item in self._rollback_history[receipt_id])
+
     def owner_index(self, receipt_id):
         """The position the asset is actually at now.
 
@@ -431,10 +525,14 @@ class Exchange:
         """
         self.receipt(receipt_id)
         returned = self._returned_to[receipt_id]
-        return returned[0] if returned is not None else len(self._legs[receipt_id])
+        active = self._active_legs[receipt_id]
+        return returned[0] if returned is not None else (active[-1] + 1 if active else 0)
 
     def holder_index(self, receipt_id):
-        """How many legs the registrar has confirmed, always a prefix."""
+        """Stable global position of the last registered active leg, or zero.
+
+        Withdrawn IDs are never reused; use registeredPrefixLegs for the count.
+        """
         self.receipt(receipt_id)
         return self._holder_index[receipt_id]
 
@@ -444,7 +542,8 @@ class Exchange:
         if returned is not None:
             return returned[1]
         legs = self._legs[receipt_id]
-        return legs[-1].buyer if legs else receipt.origin_account
+        active = self._active_legs[receipt_id]
+        return legs[active[-1]].buyer if active else receipt.origin_account
 
     def recorded_legs(self, receipt_id):
         """How many legs the history holds, whatever the asset's position is."""
@@ -504,12 +603,14 @@ class Exchange:
             funding_status, rollback_status = "locked", "available"
         leg = Transfer(transfer_id=identifier(transfer_id, "EX_TRANSFER_REFUSED"), receipt_id=receipt_id,
                        leg_index=len(legs), seller=match.seller, buyer=match.buyer,
-                       predecessor_transfer_id=legs[-1].transfer_id if legs else None,
+                       predecessor_transfer_id=legs[self._active_legs[receipt_id][-1]].transfer_id
+                       if self._active_legs[receipt_id] else None,
                        price=amount(match.price, "EX_TRANSFER_REFUSED"), quote_asset=match.quote_asset,
                        sell_intent_digest=match.sell_intent_digest, buy_intent_digest=match.buy_intent_digest,
                        sell_authorization_id=sell.authorization_id, buy_authorization_id=buy.authorization_id,
                        executed_at=now, funding_status=funding_status, rollback_status=rollback_status)
         legs.append(leg)
+        self._active_legs[receipt_id].append(leg.leg_index)
         self._used_nonces.add((sell.signer, sell.nonce))
         self._used_nonces.add((buy.signer, buy.nonce))
         self._record(receipt_id, "transfer-executed", {
@@ -550,6 +651,8 @@ class Exchange:
         now = self._now(now)
         receipt = self.receipt(receipt_id)
         leg = self.leg(receipt_id, leg_index)
+        require(leg_index in self._active_legs[receipt_id], "EX_WITHDRAWN_LEG_REFUSED",
+                "withdrawn history cannot start another registration request")
         require(isinstance(commitment_window, int) and not isinstance(commitment_window, bool)
                 and commitment_window > 0, "EX_REGISTRATION_REQUEST_REFUSED",
                 "the commitment window must be a positive number of seconds")
@@ -614,9 +717,10 @@ class Exchange:
                     "legIndex": evidence.leg_index, "holderIndex": self._holder_index[evidence.receipt_id],
                     "appliedAt": previous["appliedAt"]}
         receipt_id = evidence.receipt_id
-        expected = self._holder_index[receipt_id]
+        expected = self._next_registration_index(receipt_id)
         rollback = self._rollbacks[receipt_id]
-        if rollback is not None and evidence.leg_index in rollback["affectedLegs"]:
+        if ((rollback is not None and evidence.leg_index in rollback["affectedLegs"])
+                or self.leg(receipt_id, evidence.leg_index).rollback_status == "returned"):
             # The suffix is frozen or unwound. A late success cannot revive the leg
             # or release money again; it is kept as conflict evidence.
             outcome = self.record_late_registration_conflict(receipt_id, evidence)
@@ -664,7 +768,7 @@ class Exchange:
         """Apply buffered results that the filled gap has now made contiguous."""
         buffered = self._deferred[receipt_id]
         while True:
-            nxt = self._holder_index[receipt_id]
+            nxt = self._next_registration_index(receipt_id)
             rollback = self._rollbacks[receipt_id]
             if rollback is not None and nxt in rollback["affectedLegs"]:
                 return
@@ -757,6 +861,8 @@ class Exchange:
         leg = self.leg(receipt_id, leg_index)
         owner_index, holder_index = self.owner_index(receipt_id), self._holder_index[receipt_id]
         reasons = []
+        if leg_index not in self._active_legs[receipt_id]:
+            reasons.append("EX_WITHDRAWN_LEG_REFUSED")
         if owner_index < leg_index + 1:
             reasons.append("EX_OWNER_POSITION_NOT_REACHED")
         if holder_index < leg_index + 1:
@@ -895,7 +1001,7 @@ class Exchange:
         now = self._now(now)
         self.receipt(receipt_id)
         outcomes = []
-        for leg_index in range(self.owner_index(receipt_id)):
+        for leg_index in self._active_legs[receipt_id]:
             state = self.segment_release_state(receipt_id, leg_index, now)
             if not state["eligible"]:
                 outcomes.append({"legIndex": leg_index, "released": False,
@@ -1041,13 +1147,16 @@ class Exchange:
         receipt = self.receipt(receipt_id)
         legs = self._legs[receipt_id]
         boundary_index, boundary_account = 0, receipt.origin_account
-        for leg in legs:
+        for active_index in self._active_legs[receipt_id]:
+            leg = legs[active_index]
             if leg.registration_status == "confirmed" and leg.leg_index < self._holder_index[receipt_id]:
                 boundary_index, boundary_account = leg.leg_index + 1, leg.buyer
             else:
                 break
         return {"boundaryIndex": boundary_index, "boundaryAccount": boundary_account,
-                "finalizedPrefixLegs": boundary_index}
+                "finalizedPrefixLegs": sum(
+                    self.leg(receipt_id, i).registration_status == "confirmed"
+                    for i in self._active_legs[receipt_id])}
 
     def deadline_boundary(self, receipt_id):
         """Where a post-deadline return stops: the last confirmed holder.
@@ -1061,7 +1170,9 @@ class Exchange:
         require(index >= settled, "EX_ROLLBACK_PREFIX_IMMUTABLE",
                 "the confirmed holder is behind the settled prefix")
         return {"boundaryIndex": index, "boundaryAccount": self.holder_of(receipt_id),
-                "finalizedPrefixLegs": index}
+                "finalizedPrefixLegs": sum(
+                    self.leg(receipt_id, i).registration_status == "confirmed"
+                    for i in self._active_legs[receipt_id])}
 
     def rollback_interval(self, receipt_id, refused_leg_index):
         """The legs a refusal at ``refused_leg_index`` may unwind.
@@ -1072,10 +1183,13 @@ class Exchange:
         """
         self.receipt(receipt_id)
         self.leg(receipt_id, refused_leg_index)
+        require(refused_leg_index in self._active_legs[receipt_id], "EX_WITHDRAWN_LEG_REFUSED",
+                "a prior withdrawn leg cannot trigger a new rollback")
         boundary = self.rollback_boundary(receipt_id)
         require(refused_leg_index >= boundary["boundaryIndex"], "EX_ROLLBACK_PREFIX_IMMUTABLE",
                 f"leg {refused_leg_index} is inside the finalized prefix")
-        affected = tuple(range(boundary["boundaryIndex"], self.owner_index(receipt_id)))
+        affected = tuple(i for i in self._active_legs[receipt_id]
+                         if i >= boundary["boundaryIndex"])
         return {"affectedLegs": affected, **boundary}
 
     def _check_rollback_authority(self, receipt_id, refused_leg_index, authority, interval):
@@ -1121,12 +1235,12 @@ class Exchange:
             require(now >= receipt_record.trade_stop_at, "EX_ROLLBACK_TRIGGER_REFUSED",
                     "the trading deadline has not passed")
             boundary = self.deadline_boundary(receipt_id)
-            interval = {"affectedLegs": tuple(range(boundary["boundaryIndex"],
-                                                    self.owner_index(receipt_id))),
+            interval = {"affectedLegs": tuple(i for i in self._active_legs[receipt_id]
+                                               if i >= boundary["boundaryIndex"]),
                         **boundary}
             require(interval["affectedLegs"] != (), "EX_ROLLBACK_TRIGGER_REFUSED",
                     "owner and the last confirmed holder agree; there is nothing unfinished")
-            refused_leg_index = interval["boundaryIndex"]
+            refused_leg_index = interval["affectedLegs"][0]
         self._check_rollback_authority(receipt_id, refused_leg_index, authority, interval)
         steps = []
         for index in interval["affectedLegs"]:
@@ -1156,6 +1270,7 @@ class Exchange:
             "triggerKind": trigger,
             "boundaryIndex": interval["boundaryIndex"],
             "boundaryAccount": interval["boundaryAccount"],
+            "finalizedPrefixLegs": interval["finalizedPrefixLegs"],
             "affectedLegs": interval["affectedLegs"], "steps": steps,
             "state": "in-progress", "openedAt": now, "conflicts": []}
         self._record(receipt_id, "rollback-opened", {
@@ -1321,6 +1436,11 @@ class Exchange:
         conflicting evidence is kept and the matter goes to investigation.
         """
         state = self._rollbacks[self.receipt(receipt_id).receipt_id]
+        archived = None
+        if state is None or evidence.leg_index not in state["affectedLegs"]:
+            archived = next((item for item in reversed(self._rollback_history[receipt_id])
+                             if evidence.leg_index in item["state"]["affectedLegs"]), None)
+            state = archived["state"] if archived is not None else None
         require(state is not None, "EX_ROLLBACK_NOT_OPEN", receipt_id)
         state["conflicts"].append({"resultId": evidence.result_id, "legIndex": evidence.leg_index,
                                    "outcome": evidence.outcome, "observedAt": evidence.observed_at})
@@ -1328,6 +1448,8 @@ class Exchange:
             "resultId": evidence.result_id, "legIndex": evidence.leg_index,
             "outcome": evidence.outcome, "legRevived": False, "fundsReleasedAgain": False,
             "disposition": "retained as conflict evidence for investigation"})
+        if archived is not None:
+            archived["report"]["conflicts"] = tuple(deepcopy(state["conflicts"]))
         return {"legRevived": False, "fundsReleasedAgain": False,
                 "conflicts": tuple(state["conflicts"])}
 
@@ -1367,7 +1489,7 @@ class Exchange:
             "trigger": state["trigger"], "refusedLegIndex": state["refusedLegIndex"],
             "authorityId": state["authorityId"], "source": state["source"],
             "affectedLegs": state["affectedLegs"],
-            "finalizedPrefixLegs": state["boundaryIndex"],
+            "finalizedPrefixLegs": state["finalizedPrefixLegs"],
             "lastFinalizedPosition": state["boundaryIndex"],
             "returnBoundaryAccount": state["boundaryAccount"],
             "funds": tuple(funds), "assetControl": asset,
@@ -1381,40 +1503,47 @@ class Exchange:
     # ------------------------------------ deadline and historical exit enquiry
 
     def evaluate_deadline(self, receipt_id, now=None):
-        """Whether new trades stop, what is still in flight, and what is undefined.
+        """Report fixed v1.2 rules and the original authority still needed.
 
-        The mint-time stop instant is preserved exactly as recorded. After it
-        passes, new trades are refused while in-flight registration, settlement
-        and rollback continue under their own rules.
-
-        The precedence between a registration timeout, this deadline and an
-        in-flight result is still open in the requirements, so where two of them
-        are live at once this reports the conflict instead of ranking them.
+        A local clock is enough to stop new trades. It cannot prove whether
+        registration became effective within mint conditions; that decision
+        needs the single authoritative Oracle state, never a grace receipt.
+        This read method does not issue refunds, returns or holder writes.
         """
         now = self._now(now)
         receipt = self.receipt(receipt_id)
         overdue = self.overdue_requests(receipt_id, now)
         past = now >= receipt.trade_stop_at
-        in_flight = tuple(leg.leg_index for leg in self._legs[receipt_id]
-                          if leg.registration_status == "pending")
-        undefined = []
-        if past and overdue:
-            undefined.append("D-03: a registration timeout and the trading deadline are both "
-                             "live; their precedence is not defined in the requirements")
-        if past and self.deferred_legs(receipt_id):
-            undefined.append("D-03: a deferred in-flight result and the trading deadline are "
-                             "both live; their precedence is not defined in the requirements")
+        active = self._active_legs[receipt_id]
+        in_flight = tuple(i for i in active
+                          if self.leg(receipt_id, i).registration_status == "pending")
+        deferred = self.deferred_legs(receipt_id)
+        blockers = []
+        if not receipt.minted_at <= now < receipt.trade_stop_at:
+            blockers.append("EX_TRADE_WINDOW_CLOSED")
+        if self._rollbacks[receipt_id] is not None:
+            blockers.append("EX_TRADE_ROLLBACK_OPEN")
+        if self._returned_to[receipt_id] is not None:
+            blockers.append("EX_RECOVERY_REQUIRED")
+        if self._exits[receipt_id] is not None:
+            blockers.append("EX_RECOVERY_LEGACY_OUTCOME_UNRESOLVED")
         return {"receiptId": receipt_id, "tradeStopAt": receipt.trade_stop_at,
                 "observedAt": now, "pastDeadline": past,
-                "newTradesAccepted": not past,
+                "newTradesAccepted": not blockers, "tradeBlockingReasons": tuple(blockers),
                 "inFlightRegistrationLegs": in_flight,
-                "overdueRequests": tuple(entry["legIndex"] for entry in overdue),
-                "deferredLegs": self.deferred_legs(receipt_id),
+                "overdueRequests": tuple(entry["legIndex"] for entry in overdue
+                                         if entry["legIndex"] in active),
+                "deferredLegs": deferred,
                 "ownerIndex": self.owner_index(receipt_id),
                 "holderIndex": self._holder_index[receipt_id],
                 "unfinishedSuffixReturnsTo": self.holder_of(receipt_id)
                 if self.owner_index(receipt_id) != self._holder_index[receipt_id] else None,
-                "undefinedOrdering": tuple(undefined)}
+                "undefinedOrdering": (),
+                "requiresAuthoritativeReconciliation": bool(past and
+                    self.owner_index(receipt_id) != self.holder_index(receipt_id)),
+                "deadlineRule": "preserve effective registered prefix; fail and return only unregistered suffix",
+                "registrationTimeSource": "single authoritative Oracle record under mint conditions",
+                "graceReceiptRequired": False, "recoveryExecutedByReport": False}
 
     def bill_of_lading_view(self, receipt_id, now=None):
         """Read existing bill terms and positions without physical fulfillment.
@@ -1505,8 +1634,16 @@ class Exchange:
             "holder": {"account": self.holder_of(receipt_id), "position": holder_index,
                        "meaning": "registration-confirmed position"},
             "ownerEqualsHolder": owner_index == holder_index,
-            "registeredPrefixLegs": holder_index,
-            "outstandingLegs": owner_index - holder_index,
+            "registeredPrefixLegs": sum(
+                self.leg(receipt_id, i).registration_status == "confirmed"
+                for i in self._active_legs[receipt_id]),
+            "activeLegIndices": tuple(self._active_legs[receipt_id]),
+            "historicalWithdrawnLegIndices": tuple(i for i in range(len(legs))
+                                                     if i not in self._active_legs[receipt_id]),
+            "chainGeneration": len(self._rollback_history[receipt_id]),
+            "outstandingLegs": sum(
+                self.leg(receipt_id, i).registration_status != "confirmed"
+                for i in self._active_legs[receipt_id]),
             "deferredLegs": self.deferred_legs(receipt_id),
             "rejectedLegs": tuple(e.leg_index for e in self._rejections[receipt_id]),
             "registrationPath": receipt.registration_path,
