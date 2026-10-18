@@ -236,3 +236,44 @@ TRANSPORT = {
     }
 }
 
+
+# Safe public reasons; never render original provider exception text.
+AVAILABILITY = {
+    "en": {
+        "QUOTE_UNAVAILABLE": "The original quote source is unavailable. Refresh before confirming; no gas payment is enabled.",
+        "QUOTE_MISSING": "A complete verified gas quote is missing. Maximum, P50 and FX evidence are required before confirmation.",
+        "QUOTE_EXPIRED": "This gas quote has expired. Obtain a fresh quote and confirm it before continuing.",
+        "QUOTE_NOT_YET_VALID": "This gas quote is not yet valid. Refresh the quote using the original trusted clock before confirming."
+    },
+    "zh-Hans": {
+        "QUOTE_UNAVAILABLE": "原报价来源不可用。请刷新后再确认；当前不能进行 gas 付款。",
+        "QUOTE_MISSING": "缺少完整且已核验的 gas 报价。确认前须具备上限、P50 和汇率证据。",
+        "QUOTE_EXPIRED": "此 gas 报价已过期。请获取新报价并确认后再继续。",
+        "QUOTE_NOT_YET_VALID": "此 gas 报价尚未生效。请依据原可信时钟刷新报价后再确认。"
+    },
+    "zh-Hant": {
+        "QUOTE_UNAVAILABLE": "原報價來源無法使用。請重新整理後再確認；目前不能進行 gas 付款。",
+        "QUOTE_MISSING": "缺少完整且已核驗的 gas 報價。確認前須具備上限、P50 和匯率證據。",
+        "QUOTE_EXPIRED": "此 gas 報價已過期。請取得新報價並確認後再繼續。",
+        "QUOTE_NOT_YET_VALID": "此 gas 報價尚未生效。請依據原可信時鐘重新整理報價後再確認。"
+    },
+    "fr": {
+        "QUOTE_UNAVAILABLE": "La source du devis d’origine est indisponible. Actualisez avant de confirmer ; aucun paiement de gas n’est activé.",
+        "QUOTE_MISSING": "Un devis de gas complet et vérifié manque. Le plafond, le P50 et les preuves du taux de change sont requis avant confirmation.",
+        "QUOTE_EXPIRED": "Ce devis de gas a expiré. Obtenez un nouveau devis et confirmez-le avant de continuer.",
+        "QUOTE_NOT_YET_VALID": "Ce devis de gas n’est pas encore valable. Actualisez-le avec l’horloge de confiance d’origine avant confirmation."
+    },
+    "es": {
+        "QUOTE_UNAVAILABLE": "La fuente de cotización original no está disponible. Actualice antes de confirmar; no se habilita ningún pago de gas.",
+        "QUOTE_MISSING": "Falta una cotización de gas completa y verificada. Se requieren el máximo, el P50 y la evidencia del cambio antes de confirmar.",
+        "QUOTE_EXPIRED": "Esta cotización de gas ha caducado. Obtenga una nueva cotización y confírmela antes de continuar.",
+        "QUOTE_NOT_YET_VALID": "Esta cotización de gas aún no es válida. Actualícela con el reloj de confianza original antes de confirmar."
+    },
+    "ja": {
+        "QUOTE_UNAVAILABLE": "元の見積もり取得元を利用できません。確認前に更新してください。Gas の支払いは有効になりません。",
+        "QUOTE_MISSING": "検証済みの完全な gas 見積もりがありません。確認には上限、P50、為替レートの証拠が必要です。",
+        "QUOTE_EXPIRED": "この gas 見積もりは期限切れです。新しい見積もりを取得し、確認してから続行してください。",
+        "QUOTE_NOT_YET_VALID": "この gas 見積もりはまだ有効ではありません。元の信頼できる時計に基づいて更新し、確認してください。"
+    }
+}
+

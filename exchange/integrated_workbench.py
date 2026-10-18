@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from .workbench import WorkbenchServer, WorkbenchHandler
 from .demo_ui import MAX_BODY
-from .gas_confirmation_ui import GasConfirmationPage
+from .gas_confirmation_ui import GasConfirmationPage, GasDisclosureUnavailable
 from .gas_budget import GasBudgetRefused
 from .gas_disclosure_locales import WORDS as GAS_WORDS, TRANSPORT
 from .registration_source_workbench import (
@@ -74,6 +74,15 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
                 '<title>' + escape(title) + '</title><body><main>'
                 + links + languages + content + '</main></body></html>')
 
+    def _quote_unavailable(self, error, locale):
+        # Known reason and allowlisted locale only; no provider diagnostics,
+        # token, proof, amount placeholder or confirmation form is emitted.
+        content = ('<section lang="' + locale + '"><h2>'
+                   + escape(GAS_WORDS[locale]["heading"]) + '</h2><p role="alert" data-code="'
+                   + error.code + '">' + escape(error.message(locale)) + '</p></section>')
+        status = 503 if error.code in ("QUOTE_UNAVAILABLE", "QUOTE_MISSING") else 400
+        self.send_body(status, self._page(GAS_WORDS[locale]["heading"], content, locale))
+
     def native_page(self, name):
         body = super().native_page(name)
         links = ('<nav aria-label="Integrated components">'
@@ -133,6 +142,8 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
                         source_query["source"][0], rid, locale=locale)
                 title = TRANSPORT[locale]["registration"]
             self.send_body(200, self._page(title, content, locale, request.path))
+        except GasDisclosureUnavailable as error:
+            self._quote_unavailable(error, locale)
         except (ValueError, KeyError, GasBudgetRefused,
                 RegistrationSourceRefused):
             self.send_body(400, TRANSPORT[locale]["inputRefused"])
@@ -180,6 +191,8 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
             self.server.gas_page.submit(fields, self.server.current_time())
             self.send_body(303, "", Location="/gas" + (
                 "" if locale == "en" else "?lang=" + locale))
+        except GasDisclosureUnavailable as error:
+            self._quote_unavailable(error, locale)
         except (ValueError, UnicodeError, GasBudgetRefused):
             self.send_body(400, TRANSPORT[locale]["confirmationRefused"])
         except TimeoutError:
@@ -187,6 +200,7 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
             self.send_body(408, TRANSPORT[locale]["unknown"])
         except OSError:
             self.send_body(503, TRANSPORT[locale]["unknown"])
+
 
 
 

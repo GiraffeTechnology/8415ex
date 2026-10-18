@@ -2,11 +2,25 @@
 from html import escape
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 from .gas_budget import GasQuote, BuyerConfirmation, GasBudgetRefused
-from .gas_disclosure_locales import WORDS
+from .gas_disclosure_locales import WORDS, AVAILABILITY
 
 
 def _escape(value):
     return escape(str(value), quote=True)
+
+
+class GasDisclosureUnavailable(GasBudgetRefused):
+    """Fixed public availability reason, separate from private source errors."""
+    def __init__(self, code):
+        if code not in AVAILABILITY["en"]:
+            raise GasBudgetRefused("known public quote availability reason required")
+        self.code = code
+        super().__init__(code)
+
+    def message(self, locale):
+        if type(locale) is not str or locale not in AVAILABILITY:
+            raise GasBudgetRefused("supported disclosure locale required")
+        return AVAILABILITY[locale][self.code]
 
 
 class GasConfirmationPage:
@@ -39,11 +53,16 @@ class GasConfirmationPage:
     def _quote(self, now):
         if type(now) is not int or now < 0:
             raise GasBudgetRefused('trusted current time required')
-        quote = self.current_quote()
+        try:
+            quote = self.current_quote()
+        except Exception:
+            raise GasDisclosureUnavailable("QUOTE_UNAVAILABLE") from None
         if not isinstance(quote, GasQuote):
-            raise GasBudgetRefused('current typed quote unavailable')
-        if not quote.quoted_at <= now < quote.valid_until:
-            raise GasBudgetRefused('quote expired or not yet valid; refresh before confirming')
+            raise GasDisclosureUnavailable("QUOTE_MISSING")
+        if now < quote.quoted_at:
+            raise GasDisclosureUnavailable("QUOTE_NOT_YET_VALID")
+        if now >= quote.valid_until:
+            raise GasDisclosureUnavailable("QUOTE_EXPIRED")
         return quote
 
     def render(self, now, csrf_token, locale="en"):
@@ -125,5 +144,6 @@ class GasConfirmationPage:
         if self._quote(now).digest != quote.digest:
             raise GasBudgetRefused('quote changed during confirmation; do not send')
         return confirmation
+
 
 
