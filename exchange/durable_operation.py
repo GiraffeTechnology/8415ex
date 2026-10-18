@@ -125,11 +125,7 @@ class DurableEXOperationJournal:
             raise DurableOperationRefused("Stored operation binding is inconsistent")
         # The redundant receipt index and head are recovery/CAS inputs, not
         # independent authorities. They must agree with the original scope.
-        head = self.connection.execute(
-            "SELECT revision FROM ex_operation_receipt_heads WHERE receipt_id=?",
-            (scope["receiptId"],)).fetchone()
-        if (head is None or type(head[0]) is not int
-                or not row[2] <= head[0] < 2 ** 63):
+        if self._receipt_revision(scope["receiptId"]) < row[2]:
             raise DurableOperationRefused("Stored receipt revision conflicts with original claim")
         return {"scope": scope, "scopeDigest": row[1], "claimedRevision": row[2],
                 "status": row[3], "proofReference": row[4], "outcome": row[5],
@@ -139,15 +135,30 @@ class DurableEXOperationJournal:
         self._clean()
         return self._lookup(operation_id)
 
+    def _receipt_revision(self, receipt_id):
+        """Read consistent local CAS metadata, including inside our write lock."""
+        row = self.connection.execute(
+            "SELECT revision FROM ex_operation_receipt_heads WHERE receipt_id=?",
+            (receipt_id,)).fetchone()
+        maximum, invalid = self.connection.execute(
+            "SELECT MAX(claimed_revision), SUM(CASE WHEN typeof(claimed_revision)='integer' "
+            "AND claimed_revision>=1 THEN 0 ELSE 1 END) "
+            "FROM ex_operation_claims WHERE receipt_id=?", (receipt_id,)).fetchone()
+        if invalid not in (None, 0):
+            raise DurableOperationRefused("Stored receipt claims have invalid revisions")
+        if row is None:
+            if maximum is not None:
+                raise DurableOperationRefused("Stored claims have no receipt revision head")
+            return 0
+        if (type(row[0]) is not int or not 0 <= row[0] < 2 ** 63
+                or (maximum is not None and
+                    (type(maximum) is not int or row[0] < maximum))):
+            raise DurableOperationRefused("Stored receipt revision conflicts with claims")
+        return row[0]
+
     def revision(self, receipt_id):
         self._clean()
-        row = self.connection.execute("SELECT revision FROM ex_operation_receipt_heads "
-                                      "WHERE receipt_id=?", (receipt_id,)).fetchone()
-        if row is None:
-            return 0
-        if type(row[0]) is not int or not 0 <= row[0] < 2 ** 63:
-            raise DurableOperationRefused("Stored receipt revision is invalid")
-        return row[0]
+        return self._receipt_revision(receipt_id)
 
     def claim(self, binding, expected_revision):
         scope = _scope(binding)
@@ -164,6 +175,11 @@ class DurableEXOperationJournal:
                     raise DurableOperationRefused("Original operation identity conflict")
                 c.rollback()
                 return dict(previous, disposition="EXISTING_RECONCILE_ONLY")
+            # Check the existing head against retained claims under the same
+            # BEGIN IMMEDIATE lock. A lost/stale head is not an empty receipt
+            # and must not be silently recreated before a new operation.
+            if self._receipt_revision(scope["receiptId"]) != expected_revision:
+                raise DurableOperationRefused("EX receipt revision changed; reread authority")
             c.execute("INSERT OR IGNORE INTO ex_operation_receipt_heads VALUES (?,0)",
                       (scope["receiptId"],))
             updated = c.execute("UPDATE ex_operation_receipt_heads SET revision=revision+1 "
@@ -274,5 +290,6 @@ class DurableEXOperationJournal:
         finally:
             if c.in_transaction:
                 c.rollback()
+
 
 
