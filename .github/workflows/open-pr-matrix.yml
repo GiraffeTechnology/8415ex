@@ -2,7 +2,6 @@ name: Open PR full CI
 on:
   push:
     branches: [main, ci/all-open-pr-matrix-v14-20261019]
-    paths: [.github/workflows/open-pr-matrix.yml]
   workflow_dispatch: {}
 permissions:
   contents: read
