@@ -51,10 +51,13 @@ class EveryPageRenders(unittest.TestCase):
         self.assertNotIn("<th>Holder</th>", html)
         self.assertNotIn("<th>Owner</th>", html)
 
-    def test_the_receipt_page_states_that_owner_equals_holder_is_not_enough(self):
+    def test_the_receipt_page_separates_ordinary_transfer_from_holder_remint(self):
         exchange, _ = F.minted()
         html = views.page(exchange, "rcpt-8415-0001", "receipt")
-        self.assertIn("not sufficient", html)
+        self.assertIn("owner and holder need not agree", html)
+        self.assertIn("requires holder possession and holder = owner", html)
+        self.assertIn("retired from EX", html)
+        self.assertNotIn("necessary condition", html)
 
     def test_the_authorization_page_denies_that_connecting_authorizes(self):
         html = self._page("authorization")
@@ -179,3 +182,4 @@ class ConsoleIsReadOnly(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
