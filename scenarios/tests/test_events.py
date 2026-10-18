@@ -15,6 +15,7 @@ from scenarios import events
 ROOT = str(Path(__file__).resolve().parents[2])
 
 CURRENT_DOMAIN_KINDS = {
+    "intent-accepted", "intent-refused",
     "receipt-minted", "trading-resumed", "transfer-executed", "registration-submitted",
     "registration-result-idempotent", "registration-result", "registration-result-drained",
     "escrow-locked", "payment-attempt-started", "segment-release-attempt", "payment-enquiry",
@@ -60,8 +61,9 @@ class Vocabulary(unittest.TestCase):
         self.assertTrue(self.conformance["accountedFor"])
 
     def test_a_kind_the_contract_needs_and_the_domain_lacks_is_named_not_hidden(self):
-        self.assertEqual(self.conformance["declaredKindsNotRecorded"],
-                         ["intent-accepted", "intent-refused"])
+        self.assertEqual(self.conformance["declaredKindsNotRecorded"], [])
+        self.assertEqual(set(self.conformance["requiredUnmappedAuditGroups"]),
+                         {"currency-admission", "eth-gas-admission", "remint"})
 
     def test_a_chain_only_kind_is_not_reported_as_an_unrecorded_defect(self):
         chain_only = {entry["kind"] for entry in events.CHAIN_ONLY_KINDS}
@@ -230,13 +232,14 @@ class Coverage(unittest.TestCase):
         self.assertIn("not an acceptance result", said)
         self.assertIn("not a derivation presented as a record", said)
 
-    def test_the_intent_group_cannot_be_evidenced_until_the_domain_records_it(self):
+    def test_known_receipt_intent_records_do_not_hide_the_remaining_unbound_intake_gap(self):
         intent = {entry["group"]: entry
                   for entry in self.coverage["groups"]}["intent-decision"]
-        self.assertEqual(intent["status"], "not-observed")
+        self.assertEqual(intent["status"], "partly-recorded")
+        self.assertGreater(intent["observedCounts"]["intent-accepted"], 0)
+        self.assertEqual(intent["observedCounts"]["intent-refused"], 0)
         gaps = [gap["gap"] for gap in events.INTERFACE_GAPS]
-        self.assertIn("no event is recorded when an intent is accepted or refused",
-                      gaps)
+        self.assertIn("malformed or unknown-asset submissions have no receipt-correlated event", gaps)
 
 
 class Replay(unittest.TestCase):

@@ -215,14 +215,12 @@ INTERFACE_GAPS = (
         "nextStep": "join the exact original request, old/new token binding and verified atomic result",
     },
     {
-        "gap": "no event is recorded when an intent is accepted or refused",
-        "neededFor": "the intent-decision audit group",
-        "whyNotLocal": "recording it means writing to the recorder, which is the "
-                       "domain and ledger surface",
-        "owner": "the domain and ledger owner",
-        "nextStep": "record the decision where an intent is acted on, keeping "
-                    "validation a read that appends nothing, so a refreshing view "
-                    "does not grow the trail",
+        "gap": "malformed or unknown-asset submissions have no receipt-correlated event",
+        "neededFor": "unbound intent-decision intake auditing",
+        "whyNotLocal": "no verified receipt exists to attach those submissions to",
+        "owner": "the authenticated EX intake boundary owner",
+        "nextStep": "retain refusal evidence at the original intake boundary without inventing a receipt, "
+                    "while keeping validation and page reads free of new events",
     },
     {
         "gap": "the event shape carries no run identity",

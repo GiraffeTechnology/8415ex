@@ -275,11 +275,33 @@ class Exchange:
         require(isinstance(intent, TradeIntent), "EX_INTENT_REFUSED", "intent type")
         previous = self._intents.get(intent.intent_id)
         if previous is not None:
+            if previous.digest != intent.digest:
+                original_receipt = self._asset_keys.get(previous.asset.key)
+                if original_receipt is not None:
+                    self._record(original_receipt, "intent-refused", {
+                        "intentId": previous.intent_id, "signedTermsDigest": previous.digest,
+                        "attemptedTermsDigest": intent.digest, "reasonCodes": ["EX_INTENT_CONFLICT"],
+                        "decisionScope": "conflicting-submission", "executionAuthorized": False,
+                        "tradeFormed": False, "financialEffects": False, "observedAt": self._now(None)})
             require(previous.digest == intent.digest, "EX_INTENT_CONFLICT",
                     f"intent {intent.intent_id} was already submitted with different signed terms")
             return previous
         self._intents[intent.intent_id] = intent
-        if intent.counterparty is None and self.validate_intent(intent.intent_id)["executable"]:
+        report = self.validate_intent(intent.intent_id)
+        receipt_id = self._asset_keys.get(intent.asset.key)
+        if receipt_id is not None:
+            decision = {"intentId": intent.intent_id, "signedTermsDigest": intent.digest,
+                        "signer": intent.signer, "nonce": intent.nonce,
+                        "authorizationId": intent.authorization_id,
+                        "currency": intent.quote_asset, "reasonCodes": list(report["reasons"]),
+                        "decisionScope": "current-intent-scope-validation-only",
+                        "executionAuthorized": False, "tradeFormed": False,
+                        "financialEffects": False, "observedAt": report["observedAt"]}
+            if report["executable"]:
+                self._record(receipt_id, "intent-accepted", decision)
+            else:
+                self._record(receipt_id, "intent-refused", decision)
+        if intent.counterparty is None and report["executable"]:
             self.enter_order(intent.intent_id)
         return intent
 
