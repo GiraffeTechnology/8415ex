@@ -10,6 +10,7 @@ import hashlib
 import json
 import re
 import secrets
+from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from . import views
@@ -17,6 +18,7 @@ from .nft_detail import receipt_detail
 from .nft_detail_page import render_detail
 from .nft_directory import NftDirectory
 from .reference_feed import CommodityReferenceFeed
+from .market_page import render_market, ASSETS
 from .demo_ui import DemoHandler, DemoServer, MAX_BODY
 from .errors import DomainError
 
@@ -136,7 +138,7 @@ class WorkbenchHandler(DemoHandler):
         binding = self.server.binding
         body = views.page(binding.exchange, binding.receipt_id, name,
                           authorization_ids=binding.authorization_ids, run=binding.run)
-        extra = ('<p><a href="/nft">NFT detail</a> '
+        extra = ('<p><a href="/market">Market</a> <a href="/nft">NFT detail</a> '
                  '<a href="/demo">Six fixed scenario simulations</a> '
                  '<a href="/api/snapshot">Current domain JSON</a> '
                  '<a href="/api/operations">Command observations</a></p>'
@@ -183,6 +185,38 @@ class WorkbenchHandler(DemoHandler):
             return
         req = urlsplit(self.path)
         try:
+            if req.path.startswith("/assets/"):
+                name = req.path[len("/assets/"):]
+                if req.query or name not in ASSETS:
+                    self.send_body(404, "unknown asset")
+                    return
+                raw = (Path(__file__).resolve().parent / "assets" / name).read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", ASSETS[name])
+                self.send_header("Content-Length", str(len(raw)))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Content-Security-Policy", "sandbox; default-src 'none'; style-src 'unsafe-inline'")
+                self.end_headers()
+                self.wfile.write(raw)
+                return
+            if req.path in ("/market", "/api/catalogue"):
+                query = parse_qs(req.query, strict_parsing=True, keep_blank_values=True)
+                if set(query) - {"lang", "q"} or any(len(value) != 1 for value in query.values()):
+                    raise ValueError("one market locale and search only")
+                locale = query.get("lang", ["en"])[0]
+                search = query.get("q", [""])[0]
+                if len(search) > 64 or any(ord(char) < 32 for char in search):
+                    raise ValueError("bounded market search required")
+                rows = self.server.nft_directory.catalogue()
+                feed = self.server.reference_feed
+                reference = feed.snapshot() if feed is not None else {"status": "not-connected", "price": None}
+                if req.path == "/market":
+                    self.send_body(200, render_market(rows, reference, locale, search))
+                else:
+                    self.send_body(200, json.dumps({"nfts": rows, "reference": reference}, sort_keys=True),
+                                   "application/json; charset=utf-8")
+                return
             if req.path in ("/run",) or (req.path == "/evidence" and req.query):
                 return super().do_GET()
             if req.path == "/api/reference" and not req.query:
@@ -196,7 +230,7 @@ class WorkbenchHandler(DemoHandler):
                 return
             if req.path in ("/nft", "/api/nft-detail", "/api/nfts"):
                 query = parse_qs(req.query, strict_parsing=True, keep_blank_values=True)
-                allowed = {"lang", "nft"} if req.path == "/nft" else {"nft"}
+                allowed = {"lang", "nft", "q"} if req.path == "/nft" else {"nft"}
                 if set(query) - allowed or any(len(value) != 1 for value in query.values()):
                     raise ValueError("one NFT selection and locale only")
                 directory = self.server.nft_directory
@@ -211,8 +245,11 @@ class WorkbenchHandler(DemoHandler):
                     return
                 if req.path == "/nft":
                     locale = query.get("lang", ["en"])[0]
+                    search = query.get("q", [""])[0]
+                    if len(search) > 64 or any(ord(char) < 32 for char in search):
+                        raise ValueError("bounded market search required")
                     self.send_body(200, render_detail(detail, locale, nft_key=key,
-                                                     choices=directory.choices()))
+                                                     choices=directory.choices(), market_query=search))
                 else:
                     value = {"nfts": directory.choices()} if req.path == "/api/nfts" else detail
                     self.send_body(200, json.dumps(value, sort_keys=True),

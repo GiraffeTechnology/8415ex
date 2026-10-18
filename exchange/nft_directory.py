@@ -50,3 +50,6 @@ class NftDirectory:
             except Exception:
                 rows.append({"nftKey": key, "gap": "unknown"})
         return rows
+
+    def catalogue(self):
+        return [self.detail(key) for key in self._bindings]

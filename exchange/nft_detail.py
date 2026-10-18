@@ -7,6 +7,35 @@ from copy import deepcopy
 import re
 
 
+def _market_card(row, view):
+    card = row.get("marketCard")
+    if card is None:
+        return None
+    if not isinstance(card, dict) or card.get("identityExcluded") is not True:
+        raise ValueError("identity-excluding market projection required")
+    output = {}
+    for key in ("name", "spec", "quantity", "unit"):
+        value = card.get(key)
+        if not isinstance(value, str) or not value.strip() or len(value) > 512 or re.search(r"0x[0-9a-fA-F]{40}", value):
+            raise ValueError("bounded original business field required")
+        output[key] = value
+    code = card.get("commodityCode")
+    if code not in ("soy", "iron-ore", "copper", "other"):
+        raise ValueError("explicit commodity classification required")
+    output["commodityCode"] = code
+    quote = card.get("quote")
+    output["quote"] = None
+    if quote is not None:
+        value = quote.get("amountBaseUnits") if isinstance(quote, dict) else None
+        if (not isinstance(value, str) or not re.fullmatch(r"[1-9][0-9]{0,77}", value)
+                or int(value) >= 2**256 or quote.get("currency") not in view.get("allowedPriceCurrencies", ())
+                or quote.get("unit") != "base-units-per-whole-nft"
+                or quote.get("source") not in ("simulated", "original-order")):
+            raise ValueError("original whole-NFT single-currency quote required")
+        output["quote"] = {key: quote[key] for key in ("amountBaseUnits", "currency", "unit", "source")}
+    return output
+
+
 def _position(value):
     return value if type(value) is int and value >= 0 else None
 
@@ -70,6 +99,7 @@ def receipt_detail(exchange, receipt_id, *, read_details=None, verify_details=No
                 output.append({"label": clause["label"], "text": clause["text"]})
             result["terms"].update(status="provided-verified-projection", clauses=output)
         result["sourceStatus"] = "verified-original-reader"
+        result["marketCard"] = _market_card(row, view)
         return result
     except Exception:
         # Never leak resolver errors, private paths, raw JSON, names or addresses.
