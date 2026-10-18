@@ -56,7 +56,7 @@ def receipt_page(exchange, receipt_id, now=None, *, read_details=None, verify_de
     from .nft_detail import receipt_detail
     from .nft_detail_page import render_detail
     return render_detail(receipt_detail(exchange, receipt_id, read_details=read_details,
-                         verify_details=verify_details, verify_signature=verify_signature))
+                         verify_details=verify_details, verify_signature=verify_signature, now=now))
 
 
 def authorization_page(exchange, receipt_id, authorization_ids, now=None):

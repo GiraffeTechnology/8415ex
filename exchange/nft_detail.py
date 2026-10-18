@@ -43,8 +43,11 @@ def _position(value):
     return value if type(value) is int and value >= 0 else None
 
 
-def receipt_detail(exchange, receipt_id, *, read_details=None, verify_details=None, verify_signature=None):
-    view = exchange.receipt_view(receipt_id)
+def receipt_detail(exchange, receipt_id, *, read_details=None, verify_details=None, verify_signature=None, now=None):
+    # Preserve the explicit domain observation clock for legacy read callers.
+    # This is not an original chain queryTime, effectiveAt or block timestamp.
+    # The original resolver/verifier still owns those independent source facts.
+    view = exchange.receipt_view(receipt_id) if now is None else exchange.receipt_view(receipt_id, now)
     # Owner position is an existing domain field. It is not an independent
     # current-position record, a GapOf result or a signature attestation.
     result = {
