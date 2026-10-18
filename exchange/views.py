@@ -60,9 +60,9 @@ def receipt_page(exchange, receipt_id, now=None):
         _row("Asset", f"chain {view['asset']['chainId']} / {view['asset']['contract']} "
                       f"/ token {view['asset']['tokenId']}"),
         _row("Owner (on-chain trade position)",
-             f"{view['owner']['account']} at position {view['owner']['position']}"),
+             f"position {view['owner']['position']}"),
         _row("Holder (registration-confirmed position)",
-             f"{view['holder']['account']} at position {view['holder']['position']}"),
+             f"position {view['holder']['position']}"),
         _row("Owner and holder agree", "yes" if view["ownerEqualsHolder"] else
              "no - the registrar is behind the trade chain, which is the normal lag"),
         _row("Current trade head", f"position {view['owner']['position']}"),
@@ -94,8 +94,7 @@ def receipt_page(exchange, receipt_id, now=None):
     exit_state = exchange.exit_report(receipt_id, now)
     if exit_state["open"]:
         rows.extend([
-            _row("Historical retired request by", f"{exit_state['requester']} "
-                                      f"(request {exit_state['requestId']})"),
+            _row("Historical retired request", "retained privately; physical workflow retired"),
             _row("Historical checks on record", ", ".join(exit_state["verifiedChecks"]) or "none"),
             _row("Historical retired steps", ", ".join(
                 f"{entry['step']}: {entry['status']}"
@@ -116,18 +115,15 @@ def authorization_page(exchange, receipt_id, authorization_ids, now=None):
     blocks = ["<h2>Authorization and trade</h2>",
               "<p>Connecting a wallet authorizes nothing by itself. Each action below is "
               "checked against the constraints that wallet signed.</p>"]
-    for authorization_id in authorization_ids:
+    for ordinal, authorization_id in enumerate(authorization_ids, 1):
         state = exchange.authorization_state(authorization_id, now)
         grant = exchange.authorization(authorization_id)
         blocks.append(_table([
-            _row("Authorization", state["authorizationId"]),
-            _row("Wallet account", state["account"]),
+            _row("Authorization", f"scope {ordinal}"),
             _row("Applies right now", "yes" if state["applies"] else
-                 "no - " + ", ".join(state["reasons"])),
-            _row("Active session / bound session",
-                 f"{state['activeSession']} / {state['boundSession']}"),
+                 "no - original authorization checks did not pass"),
             _row("Allowed actions", ", ".join(grant.allowed_actions)),
-            _row("Allowed counterparties", ", ".join(grant.counterparties) or "any"),
+            _row("Counterparty scope", "restricted by original grant" if grant.counterparties else "unrestricted by this grant"),
             _row("Amount bound", f"{grant.max_amount} (smallest units of {grant.quote_asset})"),
             _row("Asset", f"chain {grant.chain_id} / token {grant.asset.token_id} "
                           f"(one whole receipt)"),
@@ -154,7 +150,7 @@ def timeline_page(exchange, receipt_id, now=None):
     rows = [header]
     for leg in view["legs"]:
         rows.append("<tr>" + "".join(f"<td>{escape(str(cell))}</td>" for cell in (
-            leg["legIndex"], leg["seller"], leg["buyer"],
+            leg["legIndex"], f"position {leg['legIndex']}", f"position {leg['legIndex'] + 1}",
             f"{leg['price']} {leg['quoteAsset']}",
             "trade submitted and observed locally",
             REGISTRATION_WORDING[leg["registrationStatus"]] + " (simulated)",
@@ -171,7 +167,7 @@ def timeline_page(exchange, receipt_id, now=None):
             + ("New trades are refused from that instant; registration, settlement and "
                "rollback already in flight continue under their own rules. "
                if deadline["pastDeadline"] else "")
-            + (f"Unfinished segments would return to {deadline['unfinishedSuffixReturnsTo']}, "
+            + (f"Unfinished segments would return to position {view['holder']['position']}, "
                f"the last confirmed holder. "
                if deadline["pastDeadline"] and deadline["unfinishedSuffixReturnsTo"] else "")
             + "</p>"
@@ -200,7 +196,7 @@ def rollback_page(exchange, receipt_id, now=None):
             _row("Affected interval", ", ".join(str(i) for i in state["affectedLegs"])),
             _row("Last finalized position", f"leg {state['lastFinalizedPosition']} - this prefix "
                                             f"is not reopened, reversed or re-collected"),
-            _row("Return boundary", f"{state['returnBoundaryAccount']} - the asset returns here, "
+            _row("Return boundary", f"position {state['lastFinalizedPosition']} - the asset returns here, "
                                     f"in one control operation, without walking the intermediate "
                                     f"wallets or needing their gas"),
             _row("Asset returned", "yes" if state["assetControl"]["returned"] else "not yet"),
@@ -225,7 +221,7 @@ def rollback_page(exchange, receipt_id, now=None):
                 segment["legIndex"], f"{segment['principal']} {segment['quoteAsset']}",
                 segment["escrowStatus"], segment["paymentStatus"] or "no attempt yet",
                 segment["netToPayee"], segment["netToPayer"],
-                f"{segment['gasTotal']} ({segment['gasBorneBy']})",
+                f"{segment['gasTotal']} ETH wei (buyer at position {segment['legIndex'] + 1})",
                 segment["rollbackStatus"])) + "</tr>")
         money = ("<p>Release and refund are mutually exclusive, and a released segment's "
                  "rollback capability is gone for good. A shared on-chain operation is "
@@ -331,4 +327,5 @@ def page(exchange, receipt_id, name, authorization_ids=(), run=None, now=None):
             f"<header><b>8415ex</b> status console</header><nav>{tabs}</nav>"
             f"<div class=\"banner\">{escape(banner)}</div>"
             f"<main>{body}</main></body></html>")
+
 

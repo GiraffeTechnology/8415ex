@@ -136,6 +136,11 @@ class WorkbenchServer(DemoServer):
 class WorkbenchHandler(DemoHandler):
     def native_page(self, name):
         binding = self.server.binding
+        if name == "receipt":
+            # Full applicable terms come only from the original verified,
+            # identity-excluding detail projection, never raw mint documents.
+            return render_detail(binding.public_detail(), nft_key=self.server.default_nft_key,
+                                 choices=self.server.nft_directory.choices())
         body = views.page(binding.exchange, binding.receipt_id, name,
                           authorization_ids=binding.authorization_ids, run=binding.run)
         extra = ('<p><a href="/market">Market</a> <a href="/nft">NFT detail</a> '
@@ -357,4 +362,5 @@ def main(argv=None):
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 
