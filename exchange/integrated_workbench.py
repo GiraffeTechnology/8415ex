@@ -55,17 +55,17 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
             raise ValueError("one supported disclosure locale required")
         return query["lang"][0]
 
-    def _page(self, title, content, locale="en"):
+    def _page(self, title, content, locale="en", language_path="/gas"):
         if locale not in GAS_WORDS:
             raise ValueError("supported disclosure locale required")
         words = TRANSPORT[locale]
         suffix = "" if locale == "en" else "?lang=" + locale
         links = ('<nav><a href="/receipt">' + escape(words["receipt"]) + '</a> '
                  '<a href="/gas' + suffix + '">' + escape(words["gas"]) + '</a> '
-                 '<a href="/registration-source">' + escape(words["registration"])
+                 '<a href="/registration-source' + suffix + '">' + escape(words["registration"])
                  + '</a></nav>')
         languages = '<nav aria-label="' + escape(words["language"]) + '">' + ' '.join(
-            '<a lang="' + key + '" href="/gas?lang=' + key + '">' + label + '</a>'
+            '<a lang="' + key + '" href="' + language_path + '?lang=' + key + '">' + label + '</a>'
             for key, label in (("en", "English"), ("zh-Hans", "简体中文"),
                                ("zh-Hant", "繁體中文"), ("fr", "Français"),
                                ("es", "Español"), ("ja", "日本語"))) + '</nav>'
@@ -86,9 +86,27 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
         if request.path not in ("/gas", "/registration-source"):
             return super().do_GET()
         locale = "en"
+        source_query = {}
         if request.path == "/gas":
             try:
                 locale = self._gas_locale(request)
+            except ValueError:
+                self.send_body(400, TRANSPORT["en"]["inputRefused"])
+                return
+        elif request.query:
+            try:
+                if len(request.query) > 1024:
+                    raise ValueError("bounded source query required")
+                source_query = parse_qs(request.query, strict_parsing=True,
+                                        keep_blank_values=True, max_num_fields=3)
+                if (set(source_query) - {"lang", "receipt", "source"}
+                        or any(len(values) != 1 for values in source_query.values())):
+                    raise ValueError("exact scalar source fields required")
+                locale = source_query.pop("lang", ["en"])[0]
+                if locale not in GAS_WORDS:
+                    raise ValueError("supported registration locale required")
+                if source_query and set(source_query) != {"receipt", "source"}:
+                    raise ValueError("receipt and source must be paired")
             except ValueError:
                 self.send_body(400, TRANSPORT["en"]["inputRefused"])
                 return
@@ -105,24 +123,16 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
                 title = GAS_WORDS[locale]["heading"]
             else:
                 rid = self.server.binding.receipt_id
-                if not request.query:
+                if not source_query:
                     content = self.server.registration_sources.render_choices(
-                        rid, "/registration-source")
+                        rid, "/registration-source", locale=locale)
                 else:
-                    if len(request.query) > 1024:
-                        raise ValueError("bounded source query required")
-                    query = parse_qs(request.query, strict_parsing=True,
-                                     keep_blank_values=True, max_num_fields=2)
-                    if set(query) != {"receipt", "source"} or any(
-                            len(values) != 1 for values in query.values()):
-                        raise ValueError("exact scalar source fields required")
-                    if query["receipt"][0] != rid:
+                    if source_query["receipt"][0] != rid:
                         raise ValueError("receipt differs from native workbench")
                     content = self.server.registration_sources.render_source(
-                        query["source"][0], rid)
-                title = "Registration source"
-            self.send_body(200, self._page(title, content,
-                                          locale if request.path == "/gas" else "en"))
+                        source_query["source"][0], rid, locale=locale)
+                title = TRANSPORT[locale]["registration"]
+            self.send_body(200, self._page(title, content, locale, request.path))
         except (ValueError, KeyError, GasBudgetRefused,
                 RegistrationSourceRefused):
             self.send_body(400, TRANSPORT[locale]["inputRefused"])
@@ -177,6 +187,7 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
             self.send_body(408, TRANSPORT[locale]["unknown"])
         except OSError:
             self.send_body(503, TRANSPORT[locale]["unknown"])
+
 
 
 

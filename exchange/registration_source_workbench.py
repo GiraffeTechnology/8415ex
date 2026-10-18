@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from html import escape
 from types import MappingProxyType
 import re
+from .registration_source_locales import WORDS
 from .model import WarehouseReceipt
 from .original_task_journal_reader import OriginalTaskJournalReader
 
@@ -74,38 +75,53 @@ class RegistrationSourceWorkbench:
                 'oracleRecord': 'UNBOUND', 'ownerHolderEvidence': 'UNBOUND',
                 'principalFunds': 'NOT_VERIFIED', 'gasFunds': 'NOT_VERIFIED'}
 
-    def render_source(self, source, receipt_id):
+    @staticmethod
+    def _words(locale):
+        if type(locale) is not str or locale not in WORDS:
+            raise RegistrationSourceRefused('supported registration locale required')
+        return WORDS[locale]
+
+    def render_source(self, source, receipt_id, locale="en"):
+        words = self._words(locale)
         data = self.read_source(source, receipt_id)
         native = data['taskProjection']['nativeOperation']
         def esc(value):
             return escape(str(value), quote=True)
-        def row(label, value):
-            return '<dt>' + esc(label) + '</dt><dd>' + esc(value) + '</dd>'
-        fields = [('Receipt', data['receiptId']), ('Source', data['source']),
-            ('Mint-declared voucher format', data['voucherFormatId'] + ' / ' + data['voucherFormatVersion']),
-            ('Required voucher fields', ', '.join(data['requiredVoucherFields'])),
-            ('Original native operation', native['id']), ('Original task status only', native['status']),
-            ('Original revision', native['revision']), ('Observed update', native['updatedAt']),
-            ('Original transaction identity', native.get('transactionHash', 'NOT_OBSERVED')),
-            ('Oracle chain record', data['oracleRecord']),
-            ('Owner / holder authority', data['ownerHolderEvidence']),
-            ('Principal funds', data['principalFunds']), ('Gas funds', data['gasFunds'])]
-        return ('<section><h2>' + esc(data['sourceLabel']) + '</h2>'
-            '<p role="status">Simulated source role. Installed runtime and registration acceptance '
-            'are not proved by this view.</p><p>' + esc(data['sourceExplanation']) + '</p><dl>'
-            + ''.join(row(label, value) for label, value in fields) + '</dl>'
-            '<p>Original task status is not Oracle registration or payment completion. '
-            'This interface accepts no original voucher, signs nothing and moves no funds.</p></section>')
+        def row(key, value):
+            return '<dt>' + esc(words[key]) + '</dt><dd>' + esc(value) + '</dd>'
+        fields = [('receipt', data['receiptId']), ('source', data['source']),
+            ('format', data['voucherFormatId'] + ' / ' + data['voucherFormatVersion']),
+            ('fields', ', '.join(data['requiredVoucherFields'])),
+            ('operation', native['id']), ('status', native['status']),
+            ('revision', native['revision']), ('updated', native['updatedAt']),
+            ('transaction', native.get('transactionHash', 'NOT_OBSERVED')),
+            ('oracle', data['oracleRecord']), ('authority', data['ownerHolderEvidence']),
+            ('principal', data['principalFunds']), ('gas', data['gasFunds'])]
+        source_key = {'REG-DIRECT': 'direct', 'REG-ELECTRONIC': 'electronic',
+                      'REG-INTERMEDIARY': 'intermediary'}[source]
+        return ('<section lang="' + locale + '"><h2>' + esc(words[source_key]) + '</h2>'
+            '<p role="status">' + esc(words['simulated']) + '</p><p>'
+            + esc(words[source_key + 'Explanation']) + '</p><dl>'
+            + ''.join(row(key, value) for key, value in fields) + '</dl><p>'
+            + esc(words['boundary']) + '</p></section>')
 
     @staticmethod
-    def render_choices(receipt_id, entry_path):
+    def render_choices(receipt_id, entry_path, locale="en"):
+        words = RegistrationSourceWorkbench._words(locale)
         if (not _identifier(receipt_id) or type(entry_path) is not str
                 or not entry_path.startswith('/') or entry_path.startswith('//')
                 or chr(92) in entry_path or any(ord(c) < 32 for c in entry_path)):
             raise RegistrationSourceRefused('explicit existing same-origin read route required')
+        labels = {'REG-DIRECT': 'direct', 'REG-ELECTRONIC': 'electronic',
+                  'REG-INTERMEDIARY': 'intermediary'}
         options = ''.join('<option value="' + escape(key, quote=True) + '">'
-            + escape(value[1], quote=True) + '</option>' for key, value in SOURCES.items())
-        return ('<form method="get" action="' + escape(entry_path, quote=True) + '">'
-            '<input type="hidden" name="receipt" value="' + escape(receipt_id, quote=True) + '">'
-            '<label>Registration source<select name="source">' + options + '</select></label>'
-            '<button type="submit">Read original source task</button></form>')
+            + escape(words[labels[key]], quote=True) + '</option>' for key in SOURCES)
+        language = ('' if locale == 'en' else
+            '<input type="hidden" name="lang" value="' + locale + '">')
+        return ('<form lang="' + locale + '" method="get" action="'
+            + escape(entry_path, quote=True) + '">' + language
+            + '<input type="hidden" name="receipt" value="' + escape(receipt_id, quote=True) + '">'
+            '<label>' + escape(words['source'], quote=True) + '<select name="source">'
+            + options + '</select></label><button type="submit">'
+            + escape(words['read'], quote=True) + '</button></form>')
+
