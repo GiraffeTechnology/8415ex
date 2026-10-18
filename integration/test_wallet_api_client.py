@@ -4,10 +4,13 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import threading
 import unittest
 
 from exchange.wallet_api_client import WalletAPIClient, WalletAPIRefused
+from exchange.wallet_execution_attempts import WalletExecutionAttempts
 
 ACTOR = "0x" + "a" * 40
 OTHER = "0x" + "b" * 40
@@ -17,7 +20,7 @@ EXECUTE = {"taskDigest": "0x" + "a" * 64, "operationId": "synthetic-operation",
 
 
 @contextmanager
-def original_protocol():
+def original_protocol(*, durable_attempts=True):
     state = {"now": NOW, "calls": [], "mode": None}
 
     class Handler(BaseHTTPRequestHandler):
@@ -117,15 +120,20 @@ def original_protocol():
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     state["origin"] = "http://127.0.0.1:" + str(server.server_port)
     worker = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
+    attempt_directory = TemporaryDirectory(prefix="8415ex-wallet-api-test-")
     worker.start()
-    client = WalletAPIClient(state["origin"], "synthetic", ACTOR, 11155111,
-                             clock_ms=lambda: state["now"], allow_loopback_http=True)
     try:
+        attempts = (WalletExecutionAttempts(str(Path(attempt_directory.name) / "attempts.sqlite3"))
+                    if durable_attempts else None)
+        client = WalletAPIClient(state["origin"], "synthetic", ACTOR, 11155111,
+                                 clock_ms=lambda: state["now"], allow_loopback_http=True,
+                                 execution_attempts=attempts)
         yield client, state
     finally:
         server.shutdown()
         server.server_close()
         worker.join(2)
+        attempt_directory.cleanup()
         if worker.is_alive():
             raise AssertionError("synthetic server did not stop")
 
@@ -168,6 +176,14 @@ class WalletAPIClientContracts(unittest.TestCase):
             with self.assertRaises(WalletAPIRefused):
                 client.task("reserve", {"taskDigest": EXECUTE["taskDigest"], "child": {}, "expectedBudgetRevision": "0"})
             self.assertFalse(any("/tasks/" in path for _, path, _ in state["calls"]))
+
+    def test_execute_without_durable_store_is_refused_before_any_request(self):
+        with original_protocol(durable_attempts=False) as (client, state):
+            client.login(self.signer)
+            before = list(state["calls"])
+            with self.assertRaisesRegex(WalletAPIRefused, "^EX_WALLET_DURABLE_ATTEMPT_STORE_REQUIRED$"):
+                client.task("execute", EXECUTE)
+            self.assertEqual(state["calls"], before)
 
     def test_unknown_execution_never_automatically_retries_or_resends(self):
         with original_protocol() as (client, state):
