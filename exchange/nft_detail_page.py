@@ -3,6 +3,7 @@ from html import escape
 from urllib.parse import urlencode
 from .gap_projection import gap_label
 from .register_projection_page import render_register
+from .settlement_record_page import render_settlement
 
 LOCALES = {
     "en": ("NFT transfer details", "Back", "This NFT’s individual quote", "Not provided",
@@ -106,5 +107,5 @@ def render_detail(detail, locale="en", *, nft_key=None, choices=(), market_query
             + '</h1><p class="gap ' + gap_class + '">' + e(gap) + '</p><section><h2>' + e(t[2]) + '</h2>' + quote_html
             + '<p class="muted">' + e(quote_labels[3]) + '</p></section><section><h2>' + e(t[4]) + '</h2><div class="markers">' + markers
             + '</div><ol class="timeline">' + ''.join(nodes) + '</ol><p class="rule">' + e(t[15])
-            + '</p></section>' + render_register(detail, locale) + '<section><h2>' + e(t[12]) + '</h2>' + terms + '<p class="muted">' + e(t[14])
+            + '</p></section>' + render_register(detail, locale) + render_settlement(detail, locale) + '<section><h2>' + e(t[12]) + '</h2>' + terms + '<p class="muted">' + e(t[14])
             + '</p></section><a href="' + e(market_back) + '">← ' + e(t[1]) + '</a></main></body></html>')

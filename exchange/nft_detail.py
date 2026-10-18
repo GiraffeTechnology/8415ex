@@ -5,7 +5,7 @@ projection reader. Their original bytes are never exposed through this module.
 """
 from copy import deepcopy
 import re
-from .gap_projection import display_gap
+from .gap_projection import display_gap, settlement_record
 from .signature_projection import signature_status
 from .register_projection import register_projection
 
@@ -53,6 +53,7 @@ def receipt_detail(exchange, receipt_id, *, read_details=None, verify_details=No
                       "holder": _position(view["holder"]["position"])},
         "gap": "unknown", "displayGap": {"state": "unknown"}, "signatureStatusByPosition": [],
         "registerProjection": {"status": "not-provided"},
+        "settlementRecord": {"status": "not-provided"},
         "terms": {"status": "not-provided", "clauses": [],
                   "meaning": "Identity-excluding business projection, not byte-identical signed original"},
         "ordinaryTransfer": {"gapEqualityFinalityGateApplied": False,
@@ -74,6 +75,7 @@ def receipt_detail(exchange, receipt_id, *, read_details=None, verify_details=No
         result["gap"] = row.get("gap") if row.get("gap") in ("open", "closed") else "unknown"
         # Existing EX application gap remains separate from supported ABI reads.
         result["displayGap"] = display_gap(row)
+        result["settlementRecord"] = settlement_record(row)
         result["registerProjection"] = register_projection(row)
         signatures = []
         for item in row.get("signatures", []):
@@ -114,6 +116,7 @@ def receipt_detail(exchange, receipt_id, *, read_details=None, verify_details=No
                 "positions": {"current": None, "owner": None, "holder": None},
                 "gap": "unknown", "displayGap": {"state": "unknown"}, "signatureStatusByPosition": [],
                 "registerProjection": {"status": "unavailable"},
+                "settlementRecord": {"status": "unavailable"},
                 "terms": {"status": "unavailable", "clauses": []},
                 "ordinaryTransfer": {"gapEqualityFinalityGateApplied": False,
                                      "executionEligibility": "not-evaluated"},
