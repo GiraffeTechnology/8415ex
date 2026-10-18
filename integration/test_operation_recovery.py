@@ -80,7 +80,7 @@ class RestartEnquiryContracts(unittest.TestCase):
         self.connection.execute("UPDATE ex_operation_claims SET receipt_id='another-receipt'")
         self.connection.commit()
         seen = []
-        with self.assertRaisesRegex(DurableOperationRefused, "index conflicts"):
+        with self.assertRaisesRegex(DurableOperationRefused, "^Stored operation binding is inconsistent$"):
             enquire_pending_operations(self.journal, lambda scope: seen.append(scope))
         self.assertEqual(seen, [])
 
