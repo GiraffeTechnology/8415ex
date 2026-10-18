@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from . import views
 from .nft_detail import receipt_detail
+from .nft_detail_page import render_detail
 from .demo_ui import DemoHandler, DemoServer, MAX_BODY
 from .errors import DomainError
 
@@ -114,7 +115,8 @@ class WorkbenchHandler(DemoHandler):
         binding = self.server.binding
         body = views.page(binding.exchange, binding.receipt_id, name,
                           authorization_ids=binding.authorization_ids, run=binding.run)
-        extra = ('<p><a href="/demo">Six fixed scenario simulations</a> '
+        extra = ('<p><a href="/nft">NFT detail</a> '
+                 '<a href="/demo">Six fixed scenario simulations</a> '
                  '<a href="/api/snapshot">Current domain JSON</a> '
                  '<a href="/api/operations">Command observations</a></p>'
                  '<p>Native domain pages and fixed scenario runs are separate observations '
@@ -162,6 +164,13 @@ class WorkbenchHandler(DemoHandler):
         try:
             if req.path in ("/run",) or (req.path == "/evidence" and req.query):
                 return super().do_GET()
+            if req.path == "/nft":
+                query = parse_qs(req.query, strict_parsing=True, keep_blank_values=True)
+                if set(query) - {"lang"} or any(len(value) != 1 for value in query.values()):
+                    raise ValueError("one detail locale only")
+                locale = query.get("lang", ["en"])[0]
+                self.send_body(200, render_detail(self.server.binding.public_detail(), locale))
+                return
             if req.query:
                 raise ValueError("this native view takes no query parameters")
             if req.path == "/demo":
