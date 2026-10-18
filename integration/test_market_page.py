@@ -18,6 +18,14 @@ class MarketDomain(OriginalReadOnlyDomain):
         return dict(super().receipt_view(receipt_id), allowedPriceCurrencies=("ETH",))
 
 
+def protocol_read(settlement_id):
+    # Explicit synthetic ABI-read fixture, independent of the EX application gap.
+    return {"projectionInterface": "0x6309e170", "settlementInterface": "0xf4a7d71b",
+            "projectionSupported": True, "settlementSupported": True,
+            "readStatus": "succeeded", "method": "openGapOf(uint256)",
+            "returnType": "bytes32", "settlementId": settlement_id}
+
+
 def original(receipt="private-market-one", name="Original soy", gap="open"):
     row = {"receiptId": receipt, "currentPosition": 20, "gap": gap,
            "marketCard": {"identityExcluded": True, "name": name,
@@ -57,18 +65,19 @@ class MarketSourceSurface(unittest.TestCase):
             page = render_market(directory.catalogue(), {"status": "not-connected", "price": None}, locale)
             self.assertIn('<html lang="' + locale + '">', page)
             self.assertIn(words[15], page)
-            for forbidden in ("520", "3,860", "private-empty", "private-owner-name", "GapOf=Open"):
+            for forbidden in ("520", "3,860", "private-empty", "private-owner-name", "openGapOF=YES", "openGapOF=NO"):
                 self.assertNotIn(forbidden, page)
 
     def test_search_and_back_links_keep_exact_nft_locale_and_independent_gap(self):
         first, _ = original()
-        second, _ = original("private-market-two", "Original ore", "closed")
+        second, second_row = original("private-market-two", "Original ore", "closed")
+        second_row["settlementProjection"] = protocol_read("0x" + "0" * 64)
         directory = NftDirectory((first, second))
         key = directory.key_for(second)
         page = render_market(directory.catalogue(), {"status": "unavailable"}, "fr", "ore")
         self.assertIn('id="nft-' + key + '"', page)
         self.assertNotIn('id="nft-' + directory.key_for(first) + '"', page)
-        self.assertIn("GapOf=Closed", page)
+        self.assertIn('class="badge no">openGapOF=NO', page)
         detail = render_detail(directory.detail(key), "fr", nft_key=key,
                                choices=directory.choices(), market_query="ore")
         self.assertIn('/market?lang=fr&amp;q=ore#nft-' + key, detail)
