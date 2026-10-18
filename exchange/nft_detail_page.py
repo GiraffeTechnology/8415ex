@@ -37,6 +37,14 @@ LOCALES = {
            "本人情報を除いた業務条件の表示です。変更していない署名済み原本は検証用に非公開で保存されます。翻訳は参考情報です。",
            "GapOf=Open は通常の連続取引を妨げません。", "利用不可", "言語"),
 }
+QUOTE_LABELS = {
+    "en": ("base units / whole NFT", "Simulated quote", "Original order quote", "ETH gas is checked separately. EX provides no conversion."),
+    "zh-Hans": ("最小单位 / 整张 NFT", "模拟报价", "原始订单报价", "ETH gas 单独校验。EX 不提供兑换。"),
+    "zh-Hant": ("最小單位 / 整張 NFT", "模擬報價", "原始訂單報價", "ETH gas 單獨校驗。EX 不提供兌換。"),
+    "fr": ("unités minimales / NFT entier", "Cotation simulée", "Cotation de l’ordre original", "Le gas ETH est vérifié séparément. EX ne convertit pas les devises."),
+    "es": ("unidades mínimas / NFT completo", "Cotización simulada", "Cotización de la orden original", "El gas ETH se verifica por separado. EX no convierte divisas."),
+    "ja": ("最小単位 / NFT 全体", "模擬見積り", "元の注文の見積り", "ETH gas は別途確認します。EX は通貨を交換しません。"),
+}
 STYLE = """
 :root{color-scheme:dark;--bg:#0b1012;--surface:#121a1d;--raised:#1a2529;--line:#2a363a;--ink:#edf3ef;--muted:#91a3a3;--accent:#c4ee8b;--gold:#c4a574}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px Inter,system-ui,sans-serif;line-height:1.5}
@@ -54,6 +62,12 @@ def render_detail(detail, locale="en", *, nft_key=None, choices=(), market_query
         raise ValueError("unsupported locale")
     t = LOCALES[locale]
     e = lambda value: escape(str(value), quote=True)
+    quote_labels = QUOTE_LABELS[locale]
+    card = detail.get("marketCard") or {}
+    quote = card.get("quote") if detail.get("sourceStatus") == "verified-original-reader" else None
+    quote_html = ('<p class="position">' + e(quote["amountBaseUnits"]) + ' ' + e(quote["currency"])
+                  + '</p><p class="muted">' + e(quote_labels[0]) + '</p><p>'
+                  + e(quote_labels[1] if quote["source"] == "simulated" else quote_labels[2]) + '</p>') if quote else '<p class="missing">' + e(t[3]) + '</p>'
     positions = detail["positions"]
     markers = "".join('<div class="marker"><span>' + t[5 + i] + '</span><span class="position">'
                       + e(positions[key] if positions[key] is not None else t[8]) + '</span></div>'
@@ -88,8 +102,8 @@ def render_detail(detail, locale="en", *, nft_key=None, choices=(), market_query
             '<meta name="viewport" content="width=device-width,initial-scale=1"><title>' + e(t[0])
             + '</title><style>' + STYLE + '</style><body><main><header><a href="' + e(market_back) + '">← ' + e(t[1])
             + '</a><nav aria-label="' + e(t[17]) + '">' + langs + '</nav></header><nav aria-label="NFT">' + selectors + '</nav><h1>' + e(t[0])
-            + '</h1><p class="gap">' + e(gap) + '</p><section><h2>' + e(t[2]) + '</h2><p class="missing">'
-            + e(t[3]) + '</p></section><section><h2>' + e(t[4]) + '</h2><div class="markers">' + markers
+            + '</h1><p class="gap">' + e(gap) + '</p><section><h2>' + e(t[2]) + '</h2>' + quote_html
+            + '<p class="muted">' + e(quote_labels[3]) + '</p></section><section><h2>' + e(t[4]) + '</h2><div class="markers">' + markers
             + '</div><ol class="timeline">' + ''.join(nodes) + '</ol><p class="rule">' + e(t[15])
             + '</p></section><section><h2>' + e(t[12]) + '</h2>' + terms + '<p class="muted">' + e(t[14])
             + '</p></section><a href="' + e(market_back) + '">← ' + e(t[1]) + '</a></main></body></html>')
