@@ -65,10 +65,10 @@ class ReceiptLocaleWiringTests(unittest.TestCase):
         self.assertEqual(calls, [])
         self.assertEqual(fixture.wallet_calls, [])
 
-    def test_unsupported_legacy_locale_is_not_silently_rendered_as_english(self):
+    def test_unsupported_native_locale_is_not_silently_rendered_as_english(self):
         fixture, server = self.fixture()
         with self.assertRaises(HTTPError) as raised:
-            urlopen(server.origin + "/queue?lang=ja", timeout=3)
+            urlopen(server.origin + "/rollback?lang=de", timeout=3)
         self.assertEqual(raised.exception.code, 400)
         self.assertEqual(fixture.wallet_calls, [])
 

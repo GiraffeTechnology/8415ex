@@ -22,13 +22,18 @@ from .market_page import render_market, ASSETS
 from .demo_ui import DemoHandler, DemoServer, MAX_BODY
 from .errors import DomainError
 from .public_workbench import snapshot as public_snapshot, command_result
+from .evidence_page import render_evidence, LANGUAGES
+from .queue_status_page import render_queue_status, CONTROLS, WORDS as QUEUE_WORDS
+from .authorization_page import render_authorizations, WORDS as AUTH_WORDS
+from .timeline_page import render_timeline, WORDS as TIMELINE_WORDS
+from .rollback_page import render_rollback, WORDS as ROLLBACK_WORDS
+from .health_observation import health_observation
 
 ACTIONS = {
     "submit-registration": "Submit registration",
     "reconcile-payment": "Enquire payment outcome",
     "resume-payment": "Resume an eligible payment",
     "advance-rollback": "Continue authorized suffix recovery",
-    "advance-exit": "Continue authorized exit",
 }
 SCHEMA = "8415ex-workbench/1"
 
@@ -60,11 +65,22 @@ class RuntimeBinding:
 
     def snapshot(self):
         ex, rid = self.exchange, self.receipt_id
-        value = {"receipt": ex.receipt_view(rid), "funds": ex.reconciliation(rid),
-                 "rollback": ex.rollback_report(rid), "exit": ex.exit_report(rid),
+        receipt = ex.receipt_view(rid)
+        if (type(receipt) is not dict or receipt.get("receiptId") != rid
+                or type(receipt.get("observedAt")) is not int
+                or not 0 <= receipt["observedAt"] < 2**64):
+            raise ValueError("original receipt observation required")
+        observed_at = receipt["observedAt"]
+        # One observation time prevents deadline-derived reports from reading
+        # different clocks. This does not provide an atomic state checkpoint;
+        # the original gateway still owns the execution-time state checks.
+        value = {"receipt": receipt, "funds": ex.reconciliation(rid, now=observed_at),
+                 "rollback": ex.rollback_report(rid, now=observed_at),
+                 "exit": ex.exit_report(rid, now=observed_at),
                  "timeline": list(ex.receipt_timeline(rid)),
-                 "overdue": list(ex.overdue_requests(rid)),
-                 "authorizations": [ex.authorization_state(i) for i in self.authorization_ids]}
+                 "overdue": list(ex.overdue_requests(rid, now=observed_at)),
+                 "authorizations": [ex.authorization_state(i, now=observed_at)
+                                    for i in self.authorization_ids]}
         # Observation time is not a concurrency revision. The original checked
         # gateway owns atomic head/nonce/authorization validation.
         revision_input = stable_revision(value)
@@ -134,14 +150,115 @@ class WorkbenchServer(DemoServer):
         return super().server_close()
 
 class WorkbenchHandler(DemoHandler):
+    @staticmethod
+    def native_navigation(locale):
+        """Reach every mounted native observation without losing its locale."""
+        if locale not in CONTROLS:
+            raise ValueError("supported navigation locale required")
+        words = CONTROLS[locale]
+        suffix = "" if locale == "en" else "?lang=" + locale
+        labels = {
+            "receipt": words["receipt"], "market": words["market"],
+            "evidence": words["evidence"], "queue": QUEUE_WORDS[locale]["heading"],
+            "authorization": AUTH_WORDS[locale]["heading"],
+            "timeline": TIMELINE_WORDS[locale]["heading"],
+            "rollback": ROLLBACK_WORDS[locale]["heading"],
+        }
+        return '<nav data-native-navigation="1">' + ' '.join(
+            '<a href="/' + path + suffix + '">' + escape(label) + '</a>'
+            for path, label in labels.items()) + '</nav>'
+
+    @staticmethod
+    def queue_locale(request):
+        if request.fragment or len(request.query) > 64:
+            raise ValueError("bounded queue locale required")
+        query = parse_qs(request.query, strict_parsing=True,
+                         keep_blank_values=True, max_num_fields=1)
+        if set(query) - {"lang"} or any(len(values) != 1 for values in query.values()):
+            raise ValueError("one queue locale required")
+        locale = query.get("lang", ["en"])[0]
+        if locale not in CONTROLS:
+            raise ValueError("supported queue locale required")
+        return locale
+
     def native_page(self, name, locale="en"):
         binding = self.server.binding
+        if name == "rollback":
+            if locale not in ROLLBACK_WORDS:
+                raise ValueError("supported rollback locale required")
+            words = CONTROLS[locale]
+            suffix = "" if locale == "en" else "?lang=" + locale
+            links = self.native_navigation(locale)
+            languages = '<nav aria-label="' + escape(words["language"]) + '">' + ' '.join(
+                '<a lang="' + key + '" href="/rollback?lang=' + key + '">' + label + '</a>'
+                for key, label in LANGUAGES) + '</nav>'
+            return ('<!doctype html><html lang="' + locale + '"><head><meta charset="utf-8">'
+                    '<meta name="viewport" content="width=device-width,initial-scale=1">'
+                    '<title>8415ex - ' + escape(ROLLBACK_WORDS[locale]["heading"]) + '</title><style>'
+                    + views.STYLE + '</style></head><body><main>' + links + languages
+                    + render_rollback(binding.exchange, binding.receipt_id, locale=locale)
+                    + '</main></body></html>')
+        if name == "timeline":
+            if locale not in TIMELINE_WORDS:
+                raise ValueError("supported timeline locale required")
+            words = CONTROLS[locale]
+            suffix = "" if locale == "en" else "?lang=" + locale
+            links = self.native_navigation(locale)
+            languages = '<nav aria-label="' + escape(words["language"]) + '">' + ' '.join(
+                '<a lang="' + key + '" href="/timeline?lang=' + key + '">' + label + '</a>'
+                for key, label in LANGUAGES) + '</nav>'
+            return ('<!doctype html><html lang="' + locale + '"><head><meta charset="utf-8">'
+                    '<meta name="viewport" content="width=device-width,initial-scale=1">'
+                    '<title>8415ex - ' + escape(TIMELINE_WORDS[locale]["heading"]) + '</title><style>'
+                    + views.STYLE + '</style></head><body><main>' + links + languages
+                    + render_timeline(binding.exchange, binding.receipt_id, locale=locale)
+                    + '</main></body></html>')
+        if name == "authorization":
+            if locale not in AUTH_WORDS:
+                raise ValueError("supported authorization locale required")
+            words = CONTROLS[locale]
+            suffix = "" if locale == "en" else "?lang=" + locale
+            links = self.native_navigation(locale)
+            languages = '<nav aria-label="' + escape(words["language"]) + '">' + ' '.join(
+                '<a lang="' + key + '" href="/authorization?lang=' + key + '">' + label + '</a>'
+                for key, label in LANGUAGES) + '</nav>'
+            return ('<!doctype html><html lang="' + locale + '"><head><meta charset="utf-8">'
+                    '<meta name="viewport" content="width=device-width,initial-scale=1">'
+                    '<title>8415ex - ' + escape(AUTH_WORDS[locale]["heading"]) + '</title><style>'
+                    + views.STYLE + '</style></head><body><main>' + links + languages
+                    + render_authorizations(binding.exchange, binding.receipt_id,
+                                            binding.authorization_ids, locale=locale)
+                    + '</main></body></html>')
+        if name == "queue":
+            if locale not in CONTROLS:
+                raise ValueError("supported queue locale required")
+            words = CONTROLS[locale]
+            suffix = "" if locale == "en" else "?lang=" + locale
+            links = self.native_navigation(locale)
+            languages = '<nav aria-label="' + escape(words["language"]) + '">' + ' '.join(
+                '<a lang="' + key + '" href="/queue?lang=' + key + '">' + label + '</a>'
+                for key, label in LANGUAGES) + '</nav>'
+            snapshot = public_snapshot(binding.snapshot())["state"]
+            detail = '<h3>' + escape(QUEUE_WORDS[locale]["detail"]) + '</h3><pre>' + escape(json.dumps(
+                {key: snapshot[key] for key in ("funds", "rollback", "overdue")},
+                sort_keys=True, indent=2)) + '</pre>'
+            return ('<!doctype html><html lang="' + locale + '"><head><meta charset="utf-8">'
+                    '<meta name="viewport" content="width=device-width,initial-scale=1">'
+                    '<title>8415ex - ' + escape(words["heading"]) + '</title><style>'
+                    + views.STYLE + '</style></head><body><main>' + links + languages
+                    + render_queue_status(binding.exchange, binding.receipt_id, locale=locale)
+                    + self.queue_controls(locale) + detail + '</main></body></html>')
+        if name == "evidence":
+            body = render_evidence(binding.exchange, binding.receipt_id, binding.run,
+                                   locale=locale, gateway_configured=binding.gateway is not None)
+            return body.replace('<main>', '<main>' + self.native_navigation(locale), 1)
         if name == "receipt":
             # Full applicable terms come only from the original verified,
             # identity-excluding detail projection, never raw mint documents.
-            return render_detail(binding.public_detail(), locale=locale,
+            body = render_detail(binding.public_detail(), locale=locale,
                                  nft_key=self.server.default_nft_key,
                                  choices=self.server.nft_directory.choices())
+            return body.replace('<main>', '<main>' + self.native_navigation(locale), 1)
         if locale != "en":
             raise ValueError("this native view has no verified localized renderer")
         body = views.page(binding.exchange, binding.receipt_id, name,
@@ -152,47 +269,54 @@ class WorkbenchHandler(DemoHandler):
                  '<a href="/api/operations">Command observations</a></p>'
                  '<p>Native domain pages and fixed scenario runs are separate observations '
                  'in this one process. A scenario run never changes the native receipt.</p>')
-        if name == "queue":
-            extra += self.queue_controls()
-            snapshot = public_snapshot(binding.snapshot())["state"]
-            extra += '<h3>Funds, recovery and exit queue detail</h3><pre>' + escape(json.dumps(
-                {k:snapshot[k] for k in ("funds", "rollback", "overdue")},
-                sort_keys=True, indent=2)) + '</pre>' 
-        if name == "evidence":
-            extra += '<h3>Runtime boundary</h3><pre>' + escape(json.dumps({
-                "source": public_snapshot(binding.snapshot())["source"], "commandGateway": "configured" if binding.gateway else "NOT_CONFIGURED",
-                "providerAcceptance": "NOT_RUN", "chainAcceptance": "NOT_RUN",
-                "durableRecovery": "NOT_RUN", "localHistory": "lost on process exit"},
-                sort_keys=True, indent=2)) + '</pre>'
         return body.replace('<main>', '<main>'+extra, 1)
 
-    def queue_controls(self):
+    def queue_controls(self, locale="en"):
+        if locale not in CONTROLS:
+            raise ValueError("supported queue locale required")
+        words = CONTROLS[locale]
         binding = self.server.binding
-        heading = '<h3>Checked operation requests</h3>'
+        heading = '<h3>' + escape(words["heading"]) + '</h3>'
         if binding.gateway is None:
-            return heading + ('<p>Original wallet/task-journal gateway NOT_CONFIGURED. '
-                              'No action is enabled. Read-only pages remain available.</p>')
+            return heading + '<p>' + escape(words["disabled"]) + '</p>'
         revision = binding.snapshot()["revision"]
-        options = ''.join('<option value="'+escape(k)+'">'+escape(v)+'</option>'
-                          for k,v in ACTIONS.items())
-        return heading + ('<p>These requests use the original wallet-authorized gateway. '
-                          'Connecting is not authorization. Unknown results are enquired '
-                          'and are never blindly resent. No success outcome can be supplied.</p>'
-                          '<form action="/operation" method="post">'
+        options = ''.join('<option value="'+escape(k)+'">'+escape(words[k])+'</option>'
+                          for k in ACTIONS)
+        suffix = "" if locale == "en" else "?lang=" + locale
+        return heading + ('<p>' + escape(words["boundary"]) + '</p>'
+                          '<form action="/operation' + suffix + '" method="post">'
                           '<input type="hidden" name="csrf" value="'+escape(self.server.csrf,quote=True)+'">'
                           '<input type="hidden" name="revision" value="'+revision+'">'
-                          '<label>Action <select name="action">'+options+'</select></label>'
-                          '<label>Original task journal key <input required name="key" maxlength="128"></label>'
-                          '<label>Leg index (only for segment actions) '
+                          '<label>' + escape(words["action"]) + ' <select name="action">'+options+'</select></label>'
+                          '<label>' + escape(words["key"]) + ' <input required name="key" maxlength="128"></label>'
+                          '<label>' + escape(words["leg"]) + ' '
                           '<input name="leg" inputmode="numeric" pattern="[0-9]{1,6}"></label>'
-                          '<button type="submit">Submit through checked gateway</button></form>')
+                          '<button type="submit">' + escape(words["submit"]) + '</button></form>')
 
     def do_GET(self):
         if not self.host_ok():
             self.send_body(421, "host refused")
             return
         req = urlsplit(self.path)
+        locale = "en"
         try:
+            if req.path == "/healthz":
+                if req.query or req.fragment:
+                    raise ValueError("health observation takes no parameters")
+                value = health_observation(
+                    self.server.source,
+                    gateway_configured=self.server.binding.gateway is not None,
+                    reference_feed_configured=self.server.reference_feed is not None,
+                    gas_page_configured=getattr(self.server, "gas_page", None) is not None,
+                    registration_sources_configured=getattr(
+                        self.server, "registration_sources", None) is not None)
+                self.send_body(200, json.dumps(value, sort_keys=True),
+                               "application/json; charset=utf-8")
+                return
+            if req.path in ("/queue", "/authorization", "/timeline", "/rollback"):
+                locale = self.queue_locale(req)
+                self.send_body(200, self.native_page(req.path.lstrip("/"), locale=locale))
+                return
             if req.path.startswith("/assets/"):
                 name = req.path[len("/assets/"):]
                 if req.query or name not in ASSETS:
@@ -220,11 +344,28 @@ class WorkbenchHandler(DemoHandler):
                 feed = self.server.reference_feed
                 reference = feed.snapshot() if feed is not None else {"status": "not-connected", "price": None}
                 if req.path == "/market":
-                    self.send_body(200, render_market(rows, reference, locale, search))
+                    body = render_market(rows, reference, locale, search)
+                    self.send_body(200, body.replace('<main>',
+                        '<main>' + self.native_navigation(locale), 1))
                 else:
                     self.send_body(200, json.dumps({"nfts": rows, "reference": reference}, sort_keys=True),
                                    "application/json; charset=utf-8")
                 return
+            if req.path == "/evidence":
+                if len(req.query) > 1024:
+                    raise ValueError("bounded evidence query required")
+                evidence_query = parse_qs(req.query, strict_parsing=True,
+                                          keep_blank_values=True, max_num_fields=4)
+                if not req.query or "lang" in evidence_query:
+                    if (req.fragment or len(req.query) > 64
+                            or set(evidence_query) - {"lang"}
+                            or any(len(values) != 1 for values in evidence_query.values())):
+                        raise ValueError("one native evidence locale only")
+                    locale = evidence_query.get("lang", ["en"])[0]
+                    if locale not in LOCALES:
+                        raise ValueError("supported evidence locale required")
+                    self.send_body(200, self.native_page("evidence", locale=locale))
+                    return
             if req.path in ("/run",) or (req.path == "/evidence" and req.query):
                 return super().do_GET()
             if req.path == "/api/reference" and not req.query:
@@ -256,8 +397,10 @@ class WorkbenchHandler(DemoHandler):
                     search = query.get("q", [""])[0]
                     if len(search) > 64 or any(ord(char) < 32 for char in search):
                         raise ValueError("bounded market search required")
-                    self.send_body(200, render_detail(detail, locale, nft_key=key,
-                                                     choices=directory.choices(), market_query=search))
+                    body = render_detail(detail, locale, nft_key=key,
+                                         choices=directory.choices(), market_query=search)
+                    self.send_body(200, body.replace('<main>',
+                        '<main>' + self.native_navigation(locale), 1))
                 else:
                     value = {"nfts": directory.choices()} if req.path == "/api/nfts" else detail
                     self.send_body(200, json.dumps(value, sort_keys=True),
@@ -292,15 +435,26 @@ class WorkbenchHandler(DemoHandler):
             else:
                 self.send_body(404, "unknown workbench entry")
         except (ValueError, KeyError, DomainError) as error:
-            self.send_body(400, "request refused; inspect the original private journal")
+            # Keep a valid selected language on failed observations too. Never
+            # echo the source exception, journal details or unknown locale.
+            self.send_body(400, CONTROLS.get(locale, CONTROLS["en"])["inputRefused"])
 
     def do_POST(self):
         if self.path == "/simulate":
             return super().do_POST()
+        request = urlsplit(self.path)
+        locale = "en"
+        if request.path == "/operation":
+            try:
+                locale = self.queue_locale(request)
+            except ValueError:
+                self.send_body(400, CONTROLS["en"]["inputRefused"])
+                return
+        words = CONTROLS[locale]
         if not self.host_ok() or self.headers.get("Origin") != self.server.origin:
-            self.send_body(403, "same-origin request required")
+            self.send_body(403, words["originRefused"])
             return
-        if self.path != "/operation":
+        if request.path != "/operation":
             self.send_body(404, "unknown workbench command")
             return
         try:
@@ -325,10 +479,12 @@ class WorkbenchHandler(DemoHandler):
             fields = {k:v[0] for k,v in form.items()}
             if (not fields["csrf"].isascii() or
                     not secrets.compare_digest(fields["csrf"], self.server.csrf)):
-                self.send_body(403, "request token refused")
+                self.send_body(403, words["csrfRefused"])
                 return
             if not re.fullmatch(r"[0-9a-f]{64}", fields["revision"]):
                 raise ValueError("state revision required")
+            if fields["action"] not in ACTIONS:
+                raise ValueError("unsupported workbench action")
             payload = {}
             if fields["leg"]:
                 if not re.fullmatch(r"[0-9]{1,6}",fields["leg"]):
@@ -344,16 +500,17 @@ class WorkbenchHandler(DemoHandler):
             self.server.command_observations[fields["key"]] = item
             while len(self.server.command_observations) > 64:
                 self.server.command_observations.popitem(last=False)
-            self.send_body(303, "", Location="/queue")
+            suffix = "" if locale == "en" else "?lang=" + locale
+            self.send_body(303, "", Location="/queue" + suffix)
         except PermissionError as error:
-            self.send_body(403, "original checked gateway refused this operation")
+            self.send_body(403, words["gatewayRefused"])
         except TimeoutError:
             self.close_connection = True
-            self.send_body(408, "operation timed out; enquire original journal before retry")
+            self.send_body(408, words["timeout"])
         except (ValueError, UnicodeError, DomainError) as error:
-            self.send_body(400, "request refused; inspect the original private journal")
+            self.send_body(400, words["inputRefused"])
         except OSError:
-            self.send_body(503, "operation outcome unknown; enquire original journal before retry")
+            self.send_body(503, words["outcomeUnknown"])
 
 
 def main(argv=None):

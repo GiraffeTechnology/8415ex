@@ -24,7 +24,7 @@ class WorkbenchContracts(unittest.TestCase):
         binding = self.binding()
         self.assertEqual(binding.snapshot()["commandGateway"],"NOT_CONFIGURED")
         with self.assertRaises(PermissionError):
-            binding.command("advance-exit","fixture-key",binding.snapshot()["revision"],{})
+            binding.command("advance-rollback","fixture-key",binding.snapshot()["revision"],{})
 
     def test_unknown_previous_operation_is_enquired_without_resend(self):
         gateway=Gateway({"status":"unknown"}); binding=self.binding(gateway)
@@ -51,7 +51,7 @@ class WorkbenchContracts(unittest.TestCase):
         with self.assertRaises(ValueError):
             binding.command("manual-success","fixture-key",binding.snapshot()["revision"],{})
         with self.assertRaises(ValueError):
-            binding.command("advance-exit","fixture-key","0"*64,{})
+            binding.command("advance-rollback","fixture-key","0"*64,{})
         self.assertEqual(gateway.enquired,[])
         self.assertEqual(gateway.dispatched,[])
 

@@ -26,7 +26,7 @@ class OperationTransportTests(unittest.TestCase):
 
     def body(self, server, **changes):
         fields = {"csrf": server.csrf, "revision": "0" * 64,
-                  "action": "advance-exit", "key": "fixture-operation", "leg": ""}
+                  "action": "advance-rollback", "key": "fixture-operation", "leg": ""}
         fields.update(changes)
         return urlencode(fields).encode("ascii")
 
@@ -83,7 +83,7 @@ class OperationTransportTests(unittest.TestCase):
         self.assertEqual(headers["Location"], "/queue")
         self.assertEqual(body, b"")
         self.assertEqual(self.calls, [
-            ("advance-exit", "fixture-operation", "0" * 64, {})])
+            ("advance-rollback", "fixture-operation", "0" * 64, {})])
         # Redirect acknowledges the original UNKNOWN observation, not success.
         self.assertEqual(server.command_observations["fixture-operation"]["result"],
                          {"status": "unknown"})

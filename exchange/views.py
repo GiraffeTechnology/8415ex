@@ -15,6 +15,7 @@ from html import escape
 import re
 
 from .model import REGISTRATION_PATHS
+from .timeline_projection import timeline_projection
 
 #: Wording for each registration status. "pending" must never read as complete.
 REGISTRATION_WORDING = {
@@ -95,12 +96,17 @@ def authorization_page(exchange, receipt_id, authorization_ids, now=None):
 def timeline_page(exchange, receipt_id, now=None):
     """Each hop with its registration and funding state, never collapsed."""
     view = exchange.receipt_view(receipt_id, now)
+    positions = {row["legIndex"]: row for row in
+                 timeline_projection(exchange, receipt_id, now=now)["legs"]}
     header = ("<tr><th>Leg</th><th>From</th><th>To</th><th>Price</th><th>Execution</th>"
               "<th>Registration</th><th>Funding</th><th>Rollback</th></tr>")
     rows = [header]
     for leg in view["legs"]:
+        position = positions[leg["legIndex"]]
+        source = position["fromPosition"]
         rows.append("<tr>" + "".join(f"<td>{escape(str(cell))}</td>" for cell in (
-            leg["legIndex"], f"position {leg['legIndex']}", f"position {leg['legIndex'] + 1}",
+            leg["legIndex"], f"position {source if source is not None else '?'}",
+            f"position {position['toPosition']}",
             f"{leg['price']} {leg['quoteAsset']}",
             "trade submitted and observed locally",
             REGISTRATION_WORDING[leg["registrationStatus"]] + " (simulated)",
