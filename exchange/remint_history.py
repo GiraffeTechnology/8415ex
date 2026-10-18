@@ -18,9 +18,8 @@ class RemintHistoryStore:
         if not any(row[1] == "main" and row[2] for row in
                    connection.execute("PRAGMA database_list").fetchall()):
             raise RemintTermsRefused("File-backed EX history required")
-        if connection.execute("PRAGMA synchronous").fetchone()[0] not in (2, 3):
-            raise RemintTermsRefused("FULL or EXTRA history durability required")
         self.connection = connection
+        self._durable_write_boundary()
 
     @staticmethod
     def initialize(connection):
@@ -41,6 +40,17 @@ class RemintHistoryStore:
     def _clean(self):
         if self.connection.in_transaction:
             raise RemintTermsRefused("Do not commit another owner's transaction")
+
+    def _durable_write_boundary(self):
+        self._clean()
+        # A caller-owned connection may change settings after construction.
+        # Never enter a remint effect relying on history stored without a
+        # persistent rollback journal/WAL and FULL/EXTRA synchronization.
+        if self.connection.execute("PRAGMA synchronous").fetchone()[0] not in (2, 3):
+            raise RemintTermsRefused("FULL or EXTRA history durability required")
+        mode = self.connection.execute("PRAGMA journal_mode").fetchone()[0]
+        if type(mode) is not str or mode.lower() not in ("delete", "truncate", "persist", "wal"):
+            raise RemintTermsRefused("Persistent SQLite history journal required")
 
     @staticmethod
     def _bound(scope, history):
@@ -104,7 +114,7 @@ class RemintHistoryStore:
         scope = _scope(binding)
         detached = deepcopy(history)
         self._bound(scope, detached)
-        self._clean()
+        self._durable_write_boundary()
         c = self.connection
         c.execute("BEGIN IMMEDIATE")
         try:
@@ -126,3 +136,4 @@ class RemintHistoryStore:
         finally:
             if c.in_transaction:
                 c.rollback()
+
