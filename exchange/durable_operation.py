@@ -108,7 +108,7 @@ class DurableEXOperationJournal:
 
     def _lookup(self, operation_id):
         row = self.connection.execute("SELECT scope_json,scope_digest,claimed_revision,status,"
-            "proof_reference,outcome FROM ex_operation_claims WHERE native_operation_id=?",
+            "proof_reference,outcome,receipt_id FROM ex_operation_claims WHERE native_operation_id=?",
             (operation_id,)).fetchone()
         if row is None:
             return None
@@ -116,12 +116,21 @@ class DurableEXOperationJournal:
         encoded = _canonical(scope)
         if (row[0] != encoded or row[1] != hashlib.sha256(encoded.encode()).hexdigest()
                 or scope["nativeOperationId"] != operation_id
-                or type(row[2]) is not int or row[2] < 1
+                or row[6] != scope["receiptId"]
+                or type(row[2]) is not int or not 1 <= row[2] < 2 ** 63
                 or row[3] not in ("UNKNOWN", "RECONCILED")
                 or (row[3] == "UNKNOWN" and (row[4] is not None or row[5] is not None))
                 or (row[3] == "RECONCILED" and
                     (type(row[4]) is not str or row[5] not in ("applied", "not-applied")))):
             raise DurableOperationRefused("Stored operation binding is inconsistent")
+        # The redundant receipt index and head are recovery/CAS inputs, not
+        # independent authorities. They must agree with the original scope.
+        head = self.connection.execute(
+            "SELECT revision FROM ex_operation_receipt_heads WHERE receipt_id=?",
+            (scope["receiptId"],)).fetchone()
+        if (head is None or type(head[0]) is not int
+                or not row[2] <= head[0] < 2 ** 63):
+            raise DurableOperationRefused("Stored receipt revision conflicts with original claim")
         return {"scope": scope, "scopeDigest": row[1], "claimedRevision": row[2],
                 "status": row[3], "proofReference": row[4], "outcome": row[5],
                 "dispatchAuthorized": False, "replayAllowed": False}
@@ -134,7 +143,11 @@ class DurableEXOperationJournal:
         self._clean()
         row = self.connection.execute("SELECT revision FROM ex_operation_receipt_heads "
                                       "WHERE receipt_id=?", (receipt_id,)).fetchone()
-        return row[0] if row else 0
+        if row is None:
+            return 0
+        if type(row[0]) is not int or not 0 <= row[0] < 2 ** 63:
+            raise DurableOperationRefused("Stored receipt revision is invalid")
+        return row[0]
 
     def claim(self, binding, expected_revision):
         scope = _scope(binding)
@@ -261,4 +274,5 @@ class DurableEXOperationJournal:
         finally:
             if c.in_transaction:
                 c.rollback()
+
 
