@@ -46,8 +46,17 @@ class NFT0PriceBalanceGate:
             return refused
         covered = row["availableBaseUnits"] + row["boundFrozenBaseUnits"]
         if covered < match.price:
-            return dict(refused, code="EX_PRICE_BALANCE_INSUFFICIENT",
-                        warning="Insufficient NFT0 price-currency balance; trading is disabled.")
+            shortfall = match.price - covered
+            return dict(refused, code="EX_PRICE_BALANCE_INSUFFICIENT", currency=currency,
+                        unit="base-units", availableBaseUnits=str(row["availableBaseUnits"]),
+                        boundFrozenBaseUnits=str(row["boundFrozenBaseUnits"]),
+                        requiredPrincipalBaseUnits=str(match.price), shortfallBaseUnits=str(shortfall),
+                        blockNumber=row["blockNumber"], blockHash=row["blockHash"], observedAt=row["observedAt"],
+                        conversionPerformed=False, nativeAtomicRecheckRequired=True,
+                        warning=f"Insufficient NFT0 price-currency balance for {currency}; available "
+                        f"{row['availableBaseUnits']} base-units, original bound principal "
+                        f"{row['boundFrozenBaseUnits']} base-units, required principal {match.price} base-units, "
+                        f"shortfall {shortfall} base-units. Trading is disabled.")
         if currency == "ETH":
             # Both liabilities use wei. The original snapshot must exclude all
             # reservations, including the disjoint principal freeze. A single
@@ -68,8 +77,21 @@ class NFT0PriceBalanceGate:
                 if required_gas <= 0 or gas_available < 0 or bound_gas < 0:
                     return refused
                 if min(row["availableBaseUnits"], gas_available) < needed:
+                    available = min(row["availableBaseUnits"], gas_available)
                     return dict(refused, code="EX_ETH_COMBINED_BALANCE_INSUFFICIENT",
-                                warning="ETH cannot cover both this price and gas; trading is disabled.")
+                                currency="ETH", unit="wei", availableWei=str(available),
+                                requiredPrincipalBaseUnits=str(match.price),
+                                boundFrozenBaseUnits=str(row["boundFrozenBaseUnits"]),
+                                remainingPrincipalWei=str(remaining_principal), requiredGasWei=str(required_gas),
+                                boundGasWei=str(bound_gas), unfundedGasWei=str(max(0, required_gas - bound_gas)),
+                                requiredUnfrozenWei=str(needed), shortfallWei=str(needed - available),
+                                blockNumber=row["blockNumber"], blockHash=row["blockHash"], observedAt=row["observedAt"],
+                                conversionPerformed=False, nativeAtomicRecheckRequired=True,
+                                warning=f"ETH cannot cover both this price and gas; available {available} wei, "
+                                f"remaining principal {remaining_principal} wei, "
+                                f"unfunded gas {max(0, required_gas - bound_gas)} wei, "
+                                f"required unfrozen {needed} wei, shortfall {needed - available} wei. "
+                                "Trading is disabled.")
             except (KeyError, TypeError, ValueError):
                 return refused
         return {"allowed": True, "code": None, "warning": None, "currency": currency,
