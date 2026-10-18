@@ -1,4 +1,8 @@
-"""Verify and load the current repository product contract, without domain execution."""
+"""Verify the historical published baseline, without claiming full current intake.
+
+The complete current v1.4 contract is privately controlled. These public v1.3
+bytes remain immutable historical inputs, not proof of v1.4 semantic coverage.
+"""
 import argparse
 import hashlib
 import json
@@ -6,6 +10,7 @@ import pathlib
 import sys
 
 VERSION = "1.3"
+CURRENT_COMPLETE_VERSION = "1.4"
 PINNED = {
     "prd": (73558, "1ce035ef10eb4e09c976dc4a070299afab36fef213b775efee922da19e9479cf"),
     "executionPlan": (77644, "1f995c74355281c0d06e59a2f0ca3569299910742f59c75e7f661687e83efcc3"),
@@ -35,14 +40,14 @@ def load(root=None):
     root = pathlib.Path(root) if root is not None else pathlib.Path(__file__).resolve().parents[1]
     lock = _json((root / "config/prd-lock.json").read_bytes())
     if lock.get("schema") != "8415ex-prd-lock/1" or lock.get("version") != VERSION:
-        raise ValueError("current PRD version pin is missing or stale")
+        raise ValueError("historical published PRD baseline pin is missing or stale")
     payloads = {}
     for key, expected_path in (("prd", "PRD.md"), ("executionPlan", "config/execution-plan.json")):
         item = lock[key]
         if item.get("path") != expected_path:
             raise ValueError("unexpected product-contract path")
         if (item.get("bytes"), item.get("sha256")) != PINNED[key]:
-            raise ValueError("current full v1.3 identity was replaced: " + expected_path)
+            raise ValueError("historical published v1.3 identity was replaced: " + expected_path)
         raw = (root / expected_path).read_bytes()
         if len(raw) != item["bytes"] or hashlib.sha256(raw).hexdigest() != item["sha256"]:
             raise ValueError("product-contract byte identity mismatch: " + expected_path)
@@ -79,6 +84,9 @@ def load(root=None):
 def report(kind="plan", root=None):
     plan = load(root)
     common = {"schema": "8415ex-current-prd-report/1", "version": plan["version"],
+              "publishedBaselineVersion": VERSION, "currentCompletePRDVersion": CURRENT_COMPLETE_VERSION,
+              "coverage": "HISTORICAL_PUBLISHED_BASELINE_ONLY", "completeCurrentContractLoaded": False,
+              "currentSemanticAcceptance": "OPEN", "baselinePassIsCurrentPass": False,
               "productStatus": "OPEN", "evidenceKind": "REQUIREMENTS_ONLY",
               "acceptedCases": [], "historicalPassInherited": False,
               "retiredRequirements": plan["retiredRequirements"]}
@@ -103,19 +111,21 @@ def report(kind="plan", root=None):
 
 def require_current_scenario(scenario_id, revision=None):
     load()
-    if scenario_id in LEGACY_DEMOS and revision != VERSION:
+    if scenario_id in LEGACY_DEMOS and revision != CURRENT_COMPLETE_VERSION:
         raise ValueError("PRD_MIGRATION_REQUIRED: " + scenario_id
-                         + " has not been accepted against v1.3; use the pinned execution plan. "
+                         + " requires migration against the complete current v1.4 contract; "
+                         "the pinned public v1.3 plan is historical only. "
                          "No legacy collection/burn/payment/grace step was executed.")
 
 
 def blocked(command, root=None):
     plan = load(root)
-    return {"schema": "8415ex-command-migration/1", "version": VERSION,
+    return {"schema": "8415ex-command-migration/1", "version": CURRENT_COMPLETE_VERSION,
+            "publishedBaselineVersion": VERSION, "completeCurrentContractLoaded": False,
             "command": command, "status": "PRD_MIGRATION_REQUIRED", "executed": False,
             "allPassed": False, "productStatus": "OPEN",
-            "reason": "This legacy path has not been accepted against v1.3. Migrate it "
-                      "against config/execution-plan.json; never inherit old PASS.",
+            "reason": "This legacy path has not been accepted against the complete current v1.4 contract. "
+                      "The public v1.3 plan remains historical; never inherit old PASS.",
             "retiredRequirements": plan["retiredRequirements"],
             "independentWorkMayContinue": True}
 
@@ -136,3 +146,4 @@ def main(argv=None):
 
 if __name__ == "__main__":
     sys.exit(main())
+
