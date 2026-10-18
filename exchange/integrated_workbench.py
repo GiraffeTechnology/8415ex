@@ -20,7 +20,7 @@ class IntegratedWorkbenchServer(WorkbenchServer):
     """Explicit application composition; constructor does not start serving."""
 
     def __init__(self, binding, *, gas_page, registration_sources, current_time,
-                 commit, tree, port=0):
+                 commit, tree, port=0, detail_bindings=(), reference_feed=None):
         if not isinstance(gas_page, GasConfirmationPage):
             raise ValueError("existing gas confirmation controller required")
         if not isinstance(registration_sources, RegistrationSourceWorkbench):
@@ -35,7 +35,8 @@ class IntegratedWorkbenchServer(WorkbenchServer):
         self.gas_page = gas_page
         self.registration_sources = registration_sources
         self.current_time = current_time
-        super().__init__(binding, port=port, commit=commit, tree=tree)
+        super().__init__(binding, port=port, commit=commit, tree=tree,
+                         detail_bindings=detail_bindings, reference_feed=reference_feed)
         self.RequestHandlerClass = IntegratedWorkbenchHandler
 
 
@@ -138,3 +139,4 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
             self.send_body(408, "outcome unknown; enquire original wallet before retry")
         except OSError:
             self.send_body(503, "outcome unknown; enquire original wallet before retry")
+
