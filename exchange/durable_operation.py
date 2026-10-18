@@ -68,8 +68,7 @@ class DurableEXOperationJournal:
         databases = connection.execute("PRAGMA database_list").fetchall()
         if not any(row[1] == "main" and row[2] for row in databases):
             raise DurableOperationRefused("A memory database is not restart persistence")
-        if connection.execute("PRAGMA synchronous").fetchone()[0] not in (2, 3):
-            raise DurableOperationRefused("Existing store must use FULL or EXTRA synchronous mode")
+        self._durable_write_boundary()
 
     @staticmethod
     def initialize(connection):
@@ -98,6 +97,12 @@ class DurableEXOperationJournal:
         # effective setting again immediately before each write transaction;
         # a constructor-time check cannot protect a later UNKNOWN claim.
         self._clean()
+        # FULL alone is insufficient when rollback journals are disabled or
+        # kept only in memory. Preserve claims and receipt CAS through a crash
+        # using the existing file journal or WAL; never change host settings.
+        mode = self.connection.execute("PRAGMA journal_mode").fetchone()[0]
+        if type(mode) is not str or mode.lower() not in ("delete", "truncate", "persist", "wal"):
+            raise DurableOperationRefused("Write requires a persistent SQLite journal mode")
         if self.connection.execute("PRAGMA synchronous").fetchone()[0] not in (2, 3):
             raise DurableOperationRefused("Write requires FULL or EXTRA synchronous mode")
 
@@ -256,3 +261,4 @@ class DurableEXOperationJournal:
         finally:
             if c.in_transaction:
                 c.rollback()
+
