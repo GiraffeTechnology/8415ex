@@ -78,6 +78,7 @@ jobs:
         with:
           ref: refs/pull/${{ matrix.number }}/merge
           path: source
+          fetch-depth: 2
           persist-credentials: false
       - name: Prepare explicit output paths and source identity
         shell: bash
@@ -256,7 +257,16 @@ jobs:
                   data=json.dumps(payload).encode(), method="POST")
               with urllib.request.urlopen(request, timeout=30) as response:
                   observed = json.load(response)
-              if observed["sha"] != row["head"] or observed["state"] != state:
+              if (observed["state"] != state or observed["context"] != "v1.4/full-ci"
+                      or observed["url"].rsplit("/", 1)[-1] != row["head"]):
+                  raise RuntimeError("Exact-head status response mismatch")
+              verify_url = f"https://api.github.com/repos/{repo}/commits/{row['head']}/status"
+              with urllib.request.urlopen(
+                      urllib.request.Request(verify_url, headers=headers), timeout=30) as response:
+                  confirmed = json.load(response)
+              if (confirmed["sha"] != row["head"]
+                      or not any(item["id"] == observed["id"] and item["state"] == state
+                                 for item in confirmed["statuses"])):
                   raise RuntimeError("Exact-head status readback mismatch")
               report.append({"number": row["number"], "head": row["head"],
                              "base": row["base"], "state": state, "target": target})
