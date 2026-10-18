@@ -6,6 +6,7 @@ projection reader. Their original bytes are never exposed through this module.
 from copy import deepcopy
 import re
 from .gap_projection import display_gap
+from .signature_projection import signature_status
 
 
 def _market_card(row, view):
@@ -41,7 +42,7 @@ def _position(value):
     return value if type(value) is int and value >= 0 else None
 
 
-def receipt_detail(exchange, receipt_id, *, read_details=None, verify_details=None):
+def receipt_detail(exchange, receipt_id, *, read_details=None, verify_details=None, verify_signature=None):
     view = exchange.receipt_view(receipt_id)
     # Owner position is an existing domain field. It is not an independent
     # current-position record, a GapOf result or a signature attestation.
@@ -81,7 +82,7 @@ def receipt_detail(exchange, receipt_id, *, read_details=None, verify_details=No
                 raise ValueError("signed status without verified original evidence")
             if any(previous["position"] == position for previous in signatures):
                 raise ValueError("duplicate signature position")
-            signatures.append({"position": position, "status": status})
+            signatures.append({"position": position, "status": signature_status(receipt_id, item, row, verify_signature)})
         result["signatureStatusByPosition"] = sorted(signatures, key=lambda item: item["position"])
         terms = row.get("businessTerms")
         if terms is not None:

@@ -47,7 +47,7 @@ class RuntimeBinding:
     provider. No credentials or signed payloads belong in snapshots.
     """
     def __init__(self, exchange, receipt_id, authorization_ids=(), run=None, gateway=None,
-                 read_details=None, verify_details=None):
+                 read_details=None, verify_details=None, verify_signature=None):
         self.exchange = exchange
         self.receipt_id = receipt_id
         self.authorization_ids = tuple(authorization_ids)
@@ -55,6 +55,7 @@ class RuntimeBinding:
         self.gateway = gateway
         self.read_details = read_details
         self.verify_details = verify_details
+        self.verify_signature = verify_signature
 
     def snapshot(self):
         ex, rid = self.exchange, self.receipt_id
@@ -75,7 +76,8 @@ class RuntimeBinding:
 
     def public_detail(self):
         return receipt_detail(self.exchange, self.receipt_id,
-                              read_details=self.read_details, verify_details=self.verify_details)
+                              read_details=self.read_details, verify_details=self.verify_details,
+                              verify_signature=self.verify_signature)
 
     def command(self, action, key, revision, payload):
         if action not in ACTIONS:
