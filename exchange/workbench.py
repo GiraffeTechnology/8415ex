@@ -16,6 +16,7 @@ from . import views
 from .nft_detail import receipt_detail
 from .nft_detail_page import render_detail
 from .nft_directory import NftDirectory
+from .reference_feed import CommodityReferenceFeed
 from .demo_ui import DemoHandler, DemoServer, MAX_BODY
 from .errors import DomainError
 
@@ -104,14 +105,31 @@ def public_result(value):
     return {k: str(value[k])[:256] for k in allowed if k in value}
 
 class WorkbenchServer(DemoServer):
-    def __init__(self, binding, port=0, commit=None, tree=None, detail_bindings=()):
+    def __init__(self, binding, port=0, commit=None, tree=None, detail_bindings=(), reference_feed=None):
         self.binding = binding
+        if reference_feed is not None and not isinstance(reference_feed, CommodityReferenceFeed):
+            raise ValueError("verified original reference feed required")
+        self.reference_feed = reference_feed
         self.nft_directory = NftDirectory((binding,) + tuple(detail_bindings))
         self.default_nft_key = self.nft_directory.key_for(binding)
         self.command_observations = OrderedDict()
         super().__init__(port=port, commit=commit, tree=tree)
         self.binding.run.update(self.source)
         self.RequestHandlerClass = WorkbenchHandler
+
+    def serve_forever(self, *args, **kwargs):
+        if self.reference_feed is not None:
+            self.reference_feed.start()
+        try:
+            return super().serve_forever(*args, **kwargs)
+        finally:
+            if self.reference_feed is not None:
+                self.reference_feed.close()
+
+    def server_close(self):
+        if self.reference_feed is not None:
+            self.reference_feed.close()
+        return super().server_close()
 
 class WorkbenchHandler(DemoHandler):
     def native_page(self, name):
@@ -167,6 +185,15 @@ class WorkbenchHandler(DemoHandler):
         try:
             if req.path in ("/run",) or (req.path == "/evidence" and req.query):
                 return super().do_GET()
+            if req.path == "/api/reference" and not req.query:
+                feed = self.server.reference_feed
+                value = feed.snapshot() if feed is not None else {
+                    "kind": "external-spot-reference", "status": "not-connected",
+                    "price": None, "lastSuccessful": None, "executableOrder": False,
+                    "conversionPerformed": False}
+                self.send_body(200, json.dumps(value, sort_keys=True),
+                               "application/json; charset=utf-8")
+                return
             if req.path in ("/nft", "/api/nft-detail", "/api/nfts"):
                 query = parse_qs(req.query, strict_parsing=True, keep_blank_values=True)
                 allowed = {"lang", "nft"} if req.path == "/nft" else {"nft"}
