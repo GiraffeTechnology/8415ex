@@ -29,7 +29,15 @@ jobs:
           repo = os.environ["REPOSITORY"]
           headers = {"Authorization": "Bearer " + os.environ["GH_TOKEN"],
                      "Accept": "application/vnd.github+json"}
-          rows, page = [], 1
+          rows, page, refs = [], 1, {}
+          def current_ref(branch):
+              if branch not in refs:
+                  request = urllib.request.Request(
+                      f"https://api.github.com/repos/{repo}/git/ref/heads/{branch}",
+                      headers=headers)
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      refs[branch] = json.load(response)["object"]["sha"]
+              return refs[branch]
           while True:
               request = urllib.request.Request(
                   f"https://api.github.com/repos/{repo}/pulls?state=open&per_page=100&page={page}",
@@ -39,8 +47,8 @@ jobs:
               for pr in batch:
                   if pr["head"]["repo"]["full_name"] != repo:
                       raise RuntimeError("This controller is scoped to same-repository branches")
-                  rows.append({"number": pr["number"], "head": pr["head"]["sha"],
-                               "base": pr["base"]["sha"]})
+                  rows.append({"number": pr["number"], "head": current_ref(pr["head"]["ref"]),
+                               "base": current_ref(pr["base"]["ref"])})
               if len(batch) < 100:
                   break
               page += 1
