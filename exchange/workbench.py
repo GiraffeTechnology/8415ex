@@ -293,14 +293,18 @@ class WorkbenchHandler(DemoHandler):
                 raise ValueError("encoded body refused")
             if self.headers.get("Content-Type") != "application/x-www-form-urlencoded":
                 raise ValueError("form content type required")
-            length = int(self.headers.get("Content-Length", "0"))
+            lengths = self.headers.get_all("Content-Length", [])
+            if len(lengths) != 1 or re.fullmatch(r"[0-9]{1,8}", lengths[0]) is None:
+                raise ValueError("single bounded content length required")
+            length = int(lengths[0])
             if not 0 < length <= MAX_BODY:
                 raise ValueError("bounded body required")
             raw = self.rfile.read(length)
             if len(raw) != length:
                 self.close_connection = True
                 raise ValueError("incomplete request body")
-            form = parse_qs(raw.decode("utf-8"), strict_parsing=True, keep_blank_values=True)
+            form = parse_qs(raw.decode("utf-8"), strict_parsing=True,
+                            keep_blank_values=True, max_num_fields=5)
             if set(form) != {"csrf", "revision", "action", "key", "leg"} or any(len(v)!=1 for v in form.values()):
                 raise ValueError("fixed operation fields required; no outcomes accepted")
             fields = {k:v[0] for k,v in form.items()}
@@ -362,5 +366,6 @@ def main(argv=None):
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 
 
