@@ -5,6 +5,7 @@ This book does not execute, reserve funds or replace canonical transfer checks.
 from threading import RLock
 from .model import TradeIntent
 from .errors import DomainError
+from .priority_journal import DurablePriorityStore, PriorityPersistenceRefused
 
 
 class PriorityRefused(ValueError):
@@ -12,7 +13,7 @@ class PriorityRefused(ValueError):
 
 
 class PriorityBook:
-    def __init__(self, exchange, receipt_id, quote_asset, clock):
+    def __init__(self, exchange, receipt_id, quote_asset, clock, *, sequence_store=None, generation=0):
         if not callable(clock) or not isinstance(quote_asset, str) or not quote_asset:
             raise PriorityRefused('explicit clock and quote asset required')
         self.exchange = exchange
@@ -24,6 +25,40 @@ class PriorityBook:
         self._nonces = {}
         self._sequence = 0
         self._lock = RLock()
+        if sequence_store is not None and not isinstance(sequence_store, DurablePriorityStore):
+            raise PriorityRefused('original durable priority store required')
+        self._store = sequence_store
+        self._book_scope = {'receiptId': receipt_id, 'chainId': self.asset.chain_id,
+            'contract': self.asset.contract, 'tokenId': str(self.asset.token_id),
+            'currency': quote_asset, 'generation': generation}
+        self._unresolved = ()
+
+    def _restore(self):
+        if self._store is None:
+            return
+        try:
+            rows = self._store.read(self._book_scope)
+            entries, nonces, unresolved = {}, {}, []
+            for row in rows:
+                nonces[(row['signer'], int(row['nonce']))] = row['intentId']
+                try:
+                    intent = self.exchange.intent(row['intentId'])
+                except DomainError as error:
+                    if error.code != 'EX_INTENT_UNKNOWN':
+                        raise
+                    unresolved.append(row['intentId'])
+                    continue
+                if (not isinstance(intent, TradeIntent) or intent.digest != row['intentDigest']
+                        or (intent.signer, str(intent.nonce)) != (row['signer'], row['nonce'])
+                        or intent.asset.key != self.asset.key or intent.quote_asset != self.quote_asset
+                        or intent.counterparty is not None):
+                    raise PriorityRefused('original admitted terms differ from persisted order')
+                entries[intent.intent_id] = (intent, row['sequence'])
+            self._entries, self._nonces = entries, nonces
+            self._sequence = len(rows)
+            self._unresolved = tuple(unresolved)
+        except PriorityPersistenceRefused as error:
+            raise PriorityRefused(str(error)) from None
 
     def _now(self):
         now = self.clock()
@@ -51,6 +86,7 @@ class PriorityBook:
     def enter(self, intent_id):
         """Assign receipt-local server sequence; no client timestamp is accepted."""
         with self._lock:
+            self._restore()
             intent = self.exchange.intent(intent_id)
             if not isinstance(intent, TradeIntent):
                 raise PriorityRefused('intent-type-refused')
@@ -65,6 +101,13 @@ class PriorityBook:
             key = (intent.signer, intent.nonce)
             if key in self._nonces:
                 raise PriorityRefused('nonce reused by another order')
+            if self._store is not None:
+                try:
+                    sequence = self._store.admit(self._book_scope, intent)
+                except PriorityPersistenceRefused as error:
+                    raise PriorityRefused(str(error)) from None
+                self._restore()
+                return sequence
             self._sequence += 1
             self._entries[intent_id] = (intent, self._sequence)
             self._nonces[key] = intent_id
@@ -73,6 +116,9 @@ class PriorityBook:
     def proposal(self):
         """Revalidate current orders and report priority, never move the head."""
         with self._lock:
+            self._restore()
+            if self._unresolved:
+                raise PriorityRefused('original persisted order terms must be restored before matching')
             now = self._now()
             head = (self.exchange.owner_index(self.receipt_id),
                     self.exchange.owner_of(self.receipt_id))
@@ -119,3 +165,4 @@ class PriorityBook:
             }
             result['reason'] = 'priority-selected-execution-pending'
             return result
+

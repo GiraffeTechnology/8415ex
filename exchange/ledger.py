@@ -99,7 +99,8 @@ class Exchange:
 
     def __init__(self, clock, payment_adapter=None, release_sources=(), funding_required=False,
                  asset_control=None, rollback_sources=(), gas_budgets=None,
-                 voucher_desk=None, mint_verifier=None, eth_gas_gate=None, price_balance_gate=None):
+                 voucher_desk=None, mint_verifier=None, eth_gas_gate=None, price_balance_gate=None,
+                 priority_store=None):
         """``funding_required`` turns on the Stage 2 rule that a leg only forms
         once its own buyer's money is in escrow. Stage 1 leaves it off and
         records funding as not modelled rather than implying a payment.
@@ -112,6 +113,7 @@ class Exchange:
         self._clock = clock
         self._eth_gas_gate = eth_gas_gate
         self._price_balance_gate = price_balance_gate
+        self._priority_store = priority_store
         self.payments = payment_adapter
         self.funding_required = bool(funding_required)
         self._release_sources = frozenset(identifier(s, "EX_RELEASE_SOURCE_REFUSED")
@@ -354,7 +356,8 @@ class Exchange:
         require(receipt_id is not None, "EX_ASSET_UNKNOWN", str(intent.asset.key))
         key = (receipt_id, intent.quote_asset)
         if key not in self._order_books:
-            self._order_books[key] = PriorityBook(self, receipt_id, intent.quote_asset, self._clock)
+            self._order_books[key] = PriorityBook(self, receipt_id, intent.quote_asset, self._clock,
+                sequence_store=self._priority_store, generation=len(self._rollback_history[receipt_id]))
         try:
             return self._order_books[key].enter(intent_id)
         except PriorityRefused as error:
