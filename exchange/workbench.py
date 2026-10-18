@@ -15,7 +15,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from . import views
 from .nft_detail import receipt_detail
-from .nft_detail_page import render_detail
+from .nft_detail_page import render_detail, LOCALES
 from .nft_directory import NftDirectory
 from .reference_feed import CommodityReferenceFeed
 from .market_page import render_market, ASSETS
@@ -134,13 +134,16 @@ class WorkbenchServer(DemoServer):
         return super().server_close()
 
 class WorkbenchHandler(DemoHandler):
-    def native_page(self, name):
+    def native_page(self, name, locale="en"):
         binding = self.server.binding
         if name == "receipt":
             # Full applicable terms come only from the original verified,
             # identity-excluding detail projection, never raw mint documents.
-            return render_detail(binding.public_detail(), nft_key=self.server.default_nft_key,
+            return render_detail(binding.public_detail(), locale=locale,
+                                 nft_key=self.server.default_nft_key,
                                  choices=self.server.nft_directory.choices())
+        if locale != "en":
+            raise ValueError("this native view has no verified localized renderer")
         body = views.page(binding.exchange, binding.receipt_id, name,
                           authorization_ids=binding.authorization_ids, run=binding.run)
         extra = ('<p><a href="/market">Market</a> <a href="/nft">NFT detail</a> '
@@ -260,6 +263,18 @@ class WorkbenchHandler(DemoHandler):
                     self.send_body(200, json.dumps(value, sort_keys=True),
                                    "application/json; charset=utf-8")
                 return
+            if req.path in ("/", "/receipt"):
+                if req.fragment or len(req.query) > 64:
+                    raise ValueError("bounded receipt locale required")
+                query = parse_qs(req.query, strict_parsing=True,
+                                 keep_blank_values=True, max_num_fields=1)
+                if set(query) - {"lang"} or any(len(values) != 1 for values in query.values()):
+                    raise ValueError("one receipt locale only")
+                locale = query.get("lang", ["en"])[0]
+                if locale not in LOCALES:
+                    raise ValueError("supported receipt locale required")
+                self.send_body(200, self.native_page("receipt", locale=locale))
+                return
             if req.query:
                 raise ValueError("this native view takes no query parameters")
             if req.path == "/demo":
@@ -366,6 +381,7 @@ def main(argv=None):
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 
 
 

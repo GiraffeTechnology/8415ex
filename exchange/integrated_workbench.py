@@ -60,7 +60,7 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
             raise ValueError("supported disclosure locale required")
         words = TRANSPORT[locale]
         suffix = "" if locale == "en" else "?lang=" + locale
-        links = ('<nav><a href="/receipt">' + escape(words["receipt"]) + '</a> '
+        links = ('<nav><a href="/receipt' + suffix + '">' + escape(words["receipt"]) + '</a> '
                  '<a href="/gas' + suffix + '">' + escape(words["gas"]) + '</a> '
                  '<a href="/registration-source' + suffix + '">' + escape(words["registration"])
                  + '</a></nav>')
@@ -83,11 +83,14 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
         status = 503 if error.code in ("QUOTE_UNAVAILABLE", "QUOTE_MISSING") else 400
         self.send_body(status, self._page(GAS_WORDS[locale]["heading"], content, locale))
 
-    def native_page(self, name):
-        body = super().native_page(name)
-        links = ('<nav aria-label="Integrated components">'
-                 '<a href="/gas">Gas confirmation</a> '
-                 '<a href="/registration-source">Registration source</a></nav>')
+    def native_page(self, name, locale="en"):
+        body = super().native_page(name, locale=locale)
+        words = TRANSPORT[locale]
+        suffix = "" if locale == "en" else "?lang=" + locale
+        links = ('<nav aria-label="' + escape(words["components"]) + '">'
+                 '<a href="/gas' + suffix + '">' + escape(words["gas"]) + '</a> '
+                 '<a href="/registration-source' + suffix + '">'
+                 + escape(words["registration"]) + '</a></nav>')
         return body.replace("<main>", "<main>" + links, 1)
 
     def do_GET(self):
@@ -200,6 +203,7 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
             self.send_body(408, TRANSPORT[locale]["unknown"])
         except OSError:
             self.send_body(503, TRANSPORT[locale]["unknown"])
+
 
 
 
