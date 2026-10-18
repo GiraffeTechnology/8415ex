@@ -113,6 +113,9 @@ jobs:
           echo "CONFIG_SHA256=$(sha256sum "$GITHUB_WORKSPACE/controller/.github/workflows/open-pr-matrix.yml" | cut -d' ' -f1)" >> "$GITHUB_ENV"
           git rev-parse HEAD > "$root/evidence/commit.txt"
           git rev-parse HEAD^{tree} > "$root/evidence/tree.txt"
+          git show --no-patch --format=raw HEAD > "$root/evidence/source-commit.txt"
+          printf '%s\n' "$EXPECTED_HEAD" > "$root/evidence/head.txt"
+          printf '%s\n' "$EXPECTED_BASE" > "$root/evidence/base.txt"
           python3 --version > "$root/evidence/python.txt"
       - name: Run standard-library tests
         if: always() && env.BOOTSTRAP_ROOT != ''
