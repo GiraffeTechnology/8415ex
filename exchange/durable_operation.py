@@ -93,6 +93,14 @@ class DurableEXOperationJournal:
         if self.connection.in_transaction:
             raise DurableOperationRefused("Do not commit another owner's transaction")
 
+    def _durable_write_boundary(self):
+        # The connection remains caller-owned after construction. Check the
+        # effective setting again immediately before each write transaction;
+        # a constructor-time check cannot protect a later UNKNOWN claim.
+        self._clean()
+        if self.connection.execute("PRAGMA synchronous").fetchone()[0] not in (2, 3):
+            raise DurableOperationRefused("Write requires FULL or EXTRA synchronous mode")
+
     def _lookup(self, operation_id):
         row = self.connection.execute("SELECT scope_json,scope_digest,claimed_revision,status,"
             "proof_reference,outcome FROM ex_operation_claims WHERE native_operation_id=?",
@@ -127,7 +135,7 @@ class DurableEXOperationJournal:
         scope = _scope(binding)
         if type(expected_revision) is not int or not 0 <= expected_revision < 2 ** 63 - 1:
             raise DurableOperationRefused("Exact bounded EX revision required")
-        self._clean()
+        self._durable_write_boundary()
         c = self.connection
         c.execute("BEGIN IMMEDIATE")
         committed = False
@@ -223,7 +231,7 @@ class DurableEXOperationJournal:
                 or type(proof_reference) is not str
                 or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", proof_reference)):
             raise DurableOperationRefused("Original authoritative reconciliation proof required")
-        self._clean()
+        self._durable_write_boundary()
         c = self.connection
         c.execute("BEGIN IMMEDIATE")
         try:

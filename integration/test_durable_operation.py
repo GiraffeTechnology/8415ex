@@ -118,6 +118,46 @@ class DurableOperationContracts(unittest.TestCase):
         finally:
             self.connection.rollback()
 
+    def test_synchronous_downgrade_after_construction_refuses_claim_and_dispatch(self):
+        self.connection.execute("PRAGMA synchronous=NORMAL")
+        sent = []
+        with self.assertRaisesRegex(DurableOperationRefused, "Write requires FULL"):
+            self.journal.invoke_once(self.scope, 0, lambda scope: None,
+                                     lambda scope: sent.append(scope))
+        self.assertEqual(sent, [])
+        self.assertIsNone(self.journal.lookup(self.scope["nativeOperationId"]))
+        self.assertEqual(self.journal.revision(self.scope["receiptId"]), 0)
+        self.assertFalse(self.connection.in_transaction)
+
+    def test_enquiry_cannot_downgrade_durability_before_claim(self):
+        sent = []
+        def enquire(scope):
+            self.connection.execute("PRAGMA synchronous=OFF")
+            return None
+        with self.assertRaisesRegex(DurableOperationRefused, "Write requires FULL"):
+            self.journal.invoke_once(self.scope, 0, enquire,
+                                     lambda scope: sent.append(scope))
+        self.assertEqual(sent, [])
+        self.assertIsNone(self.journal.lookup(self.scope["nativeOperationId"]))
+        self.assertEqual(self.journal.revision(self.scope["receiptId"]), 0)
+
+    def test_downgrade_blocks_reconciliation_but_preserves_read_only_recovery(self):
+        self.journal.claim(self.scope, 0)
+        self.connection.execute("PRAGMA synchronous=OFF")
+        proofs = []
+        with self.assertRaisesRegex(DurableOperationRefused, "Write requires FULL"):
+            self.journal.reconcile(self.scope, "applied", "original-proof",
+                                   lambda *args: proofs.append(args) or True)
+        self.assertEqual(proofs, [])
+        observed = self.journal.observe(self.scope, lambda scope: {"status": "submitted"})
+        self.assertFalse(observed["nativeGateInvoked"])
+        self.assertEqual(observed["localClaim"]["status"], "UNKNOWN")
+        self.assertEqual(self.journal.revision(self.scope["receiptId"]), 1)
+        self.assertFalse(self.connection.in_transaction)
+        self.connection.execute("PRAGMA synchronous=FULL")
+        result = self.journal.reconcile(self.scope, "applied", "original-proof", lambda *args: True)
+        self.assertEqual(result["status"], "RECONCILED")
+
     def test_committed_claim_with_lost_ack_is_recovered_without_replay(self):
         path = str(Path(self.directory.name) / "lost-ack.sqlite")
         connection = sqlite3.connect(path, factory=LostCommitAcknowledgement)
