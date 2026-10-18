@@ -51,13 +51,23 @@ class ETHTradeGasGate:
         except Exception:
             return refused
         bound_gas = row.get("boundGasWei", 0)
-        if row["balanceWei"] == 0 and bound_gas == 0:
-            return dict(refused, code="EX_ETH_GAS_EMPTY",
-                        warning="No ETH is available for gas. Add ETH before trading.")
         available = row["balanceWei"] - row["reservedWei"]
+        amounts = {"balanceWei": str(row["balanceWei"]), "reservedWei": str(row["reservedWei"]),
+                   "availableWei": str(available), "boundGasWei": str(bound_gas),
+                   "requiredWei": str(row["requiredWei"]),
+                   "shortfallWei": str(max(0, row["requiredWei"] - available - bound_gas)),
+                   "blockNumber": row["blockNumber"], "blockHash": row["blockHash"],
+                   "observedAt": row["observedAt"], "nativeAtomicRecheckRequired": True}
+        if row["balanceWei"] == 0 and bound_gas == 0:
+            return dict(refused, **amounts, code="EX_ETH_GAS_EMPTY",
+                        warning=f"No ETH is available for gas; available {available} wei, "
+                        f"required {row['requiredWei']} wei, shortfall {amounts['shortfallWei']} wei. "
+                        "Trading is disabled.")
         if available + bound_gas < row["requiredWei"]:
-            return dict(refused, code="EX_ETH_GAS_INSUFFICIENT",
-                        warning="Available ETH cannot cover this operation's gas; trading is disabled.")
+            return dict(refused, **amounts, code="EX_ETH_GAS_INSUFFICIENT",
+                        warning=f"Available ETH cannot cover this operation's gas; available {available} wei, "
+                        f"original bound gas {bound_gas} wei, required {row['requiredWei']} wei, "
+                        f"shortfall {amounts['shortfallWei']} wei. Trading is disabled.")
         return {"allowed": True, "code": None, "warning": None, "asset": "ETH", "unit": "wei",
                 "balanceWei": str(row["balanceWei"]), "reservedWei": str(row["reservedWei"]),
                 "requiredWei": str(row["requiredWei"]), "boundGasWei": str(bound_gas),
