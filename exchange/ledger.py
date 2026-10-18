@@ -1611,10 +1611,10 @@ class Exchange:
         """Read existing bill terms and positions without physical fulfillment.
 
         This is the model's recorded view, not independent chain evidence or an
-        assertion that every v1.2 mint field has already been implemented.
+        assertion of independent chain or current authorization verification.
         """
         view = self.receipt_view(receipt_id, now)
-        return {"prdVersion": "1.2", "receipt": view,
+        return {"prdVersion": "1.3", "receipt": view,
                 "scope": "bill-of-lading-transfer",
                 "physicalFulfillment": "outside-ex-scope",
                 "physicalActions": (), "historyPreserved": True}
@@ -1625,14 +1625,14 @@ class Exchange:
         view = self.bill_of_lading_view(receipt_id, now)
         return {"receiptId": receipt_id, "requester": requester, "eligible": False,
                 "reasons": ("EX_PHYSICAL_FULFILLMENT_RETIRED",),
-                "prdVersion": "1.2", "scope": view["scope"],
+                "prdVersion": "1.3", "scope": view["scope"],
                 "physicalActions": (), "observedAt": view["receipt"]["observedAt"]}
 
     def request_redemption(self, receipt_id, requester, authorization_id, request_id,
                            verified_checks=(), now=None):
         """Never create a new retired physical operation, even with a grant."""
         require(False, "EX_PHYSICAL_FULFILLMENT_RETIRED",
-                "EX v1.2 transfers the bill of lading; physical fulfillment is outside scope")
+                "EX v1.3 transfers the bill of lading; physical fulfillment is outside scope")
 
     def advance_exit(self, receipt_id, through=None, now=None):
         """Preserve old records for enquiry; never resume their physical acts."""
@@ -1642,7 +1642,7 @@ class Exchange:
     def _replace_leg_free_burn(self, receipt_id):
         """Retired private entry must not manufacture a destruction event."""
         require(False, "EX_PHYSICAL_FULFILLMENT_RETIRED",
-                "collection-driven destruction is outside EX v1.2")
+                "collection-driven destruction is outside EX v1.3")
 
     def exit_report(self, receipt_id, now=None):
         """Read retained historical evidence without making it executable."""
@@ -1650,7 +1650,7 @@ class Exchange:
         state = self._exits[self.receipt(receipt_id).receipt_id]
         if state is None:
             return {"receiptId": receipt_id, "open": False, "state": None, "complete": False,
-                    "retiredOperation": True, "executable": False, "prdVersion": "1.2",
+                    "retiredOperation": True, "executable": False, "prdVersion": "1.3",
                     "observedAt": now}
         steps = tuple({"step": step.name, "status": step.status,
                        "completedAt": step.completed_at, "detail": dict(step.detail)}
@@ -1669,7 +1669,7 @@ class Exchange:
                 "completionInstantsDiffer": len(instants) > 1,
                 "undefinedOrdering": (),
                 "retiredOperation": True, "executable": False,
-                "prdVersion": "1.2",
+                "prdVersion": "1.3",
                 "historyPreserved": True,
                 "observedAt": now}
 

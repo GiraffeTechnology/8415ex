@@ -46,9 +46,10 @@ def _table(rows):
 
 
 def receipt_page(exchange, receipt_id, now=None):
-    """Whole receipt, both positions, the registered prefix and exit readiness."""
+    """Whole bill terms and positions; physical fulfillment is retired."""
     view = exchange.receipt_view(receipt_id, now)
-    readiness = exchange.redemption_readiness(receipt_id, view["owner"]["account"], now)
+    bill = exchange.bill_of_lading_view(receipt_id, now)
+    declaration = view["mintDeclaration"]["canonicalDeclaration"]
     rows = [
         _row("Receipt", f"{view['receiptId']} / {view['commodity']['receiptNumber']}"),
         _row("Whole receipt", f"1 NFT = 1 whole warehouse receipt (tradeable units: "
@@ -74,29 +75,37 @@ def receipt_page(exchange, receipt_id, now=None):
              "closed - no new trade is accepted for this receipt"),
         _row("Segmented funding", "each leg funds its own escrow; released per segment"
              if view["fundingModelled"] else "not modelled in this stage"),
-        _row("Exit / collection", "not available from this page. "
-             + ("the necessary condition owner == holder holds, and it is not sufficient"
-                if readiness["necessaryConditionMet"] else
-                "blocked: " + ", ".join(readiness["blockingReasons"]))),
-        _row("Further checks not performed here",
-             ", ".join(readiness["furtherChecksNotPerformedHere"])),
+        _row("Bill of lading", declaration["billOfLadingNumber"]),
+        _row("Issuer", declaration["issuer"]),
+        _row("Registrar", declaration["registrar"]),
+        _row("Storage location", declaration["storageLocation"]),
+        _row("Bill-of-lading terms", declaration["billTerms"]),
+        _row("NFT0 immutable allowed price currencies", ", ".join(view["allowedPriceCurrencies"])),
+        _row("NFT0 currency declaration", view["nft0CurrencyReference"]),
+        _row("Gas settlement", "ETH only; separate from selected-currency principal; EX provides no conversion"),
+        _row("Ordinary continuous transfer", "owner and holder need not agree; current owner, cutoff, "
+             "authorization and separate principal/ETH checks still apply"),
+        _row("Holder remint", "a separate atomic old-NFT burn and new-NFT mint; requires holder possession "
+             "and holder = owner, with original current-state verification. This page does not execute remint"),
+        _row("EX scope", bill["scope"]),
+        _row("Physical fulfillment", "retired from EX: no collection, shipping or outbound workflow; "
+             "bill terms remain recorded without making EX responsible for physical performance"),
     ]
     exit_state = exchange.exit_report(receipt_id, now)
     if exit_state["open"]:
         rows.extend([
-            _row("Exit requested by", f"{exit_state['requester']} "
+            _row("Historical retired request by", f"{exit_state['requester']} "
                                       f"(request {exit_state['requestId']})"),
-            _row("Verified checks on record", ", ".join(exit_state["verifiedChecks"]) or "none"),
-            _row("Exit progress", ", ".join(
+            _row("Historical checks on record", ", ".join(exit_state["verifiedChecks"]) or "none"),
+            _row("Historical retired steps", ", ".join(
                 f"{entry['step']}: {entry['status']}"
                 + (f" at {entry['completedAt']}" if entry["completedAt"] else "")
                 for entry in exit_state["steps"])),
-            _row("Physical hand-over and on-chain burn", "these are not one atomic act; each "
-                 "step records its own completion instant"),
-            _row("Token burned", "yes - the asset link, registration order, funds and "
+            _row("Historical operation status", "read-only retained evidence; retired physical steps cannot be resumed"),
+            _row("Historical token burned", "yes - the asset link, registration order, funds and "
                                  "collection records are retained"
                  if exit_state["burned"] else "no"),
-            _row("Undefined exit ordering", "; ".join(exit_state["undefinedOrdering"])),
+            _row("Historical ordering notes", "; ".join(exit_state["undefinedOrdering"])),
         ])
     return "<h2>Receipt detail</h2>" + _table(rows)
 
@@ -322,3 +331,4 @@ def page(exchange, receipt_id, name, authorization_ids=(), run=None, now=None):
             f"<header><b>8415ex</b> status console</header><nav>{tabs}</nav>"
             f"<div class=\"banner\">{escape(banner)}</div>"
             f"<main>{body}</main></body></html>")
+
