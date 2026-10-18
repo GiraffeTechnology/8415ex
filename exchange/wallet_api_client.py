@@ -222,6 +222,11 @@ class WalletAPIClient:
         request = deepcopy(payload)
         if set(request) != self._FIELDS[action]:
             raise WalletAPIRefused("EX_WALLET_TASK_FIELDS_REFUSED")
+        if action == "execute" and self._execution_attempts is None:
+            # A process-local uncertain set cannot prevent a restart resend.
+            # The host must bind its existing dedicated durable attempt store;
+            # never silently create a production DB or select a fallback path.
+            raise WalletAPIRefused("EX_WALLET_DURABLE_ATTEMPT_STORE_REQUIRED")
         self.session()
         operation = (request.get("taskDigest"), request.get("operationId"))
         if action == "execute" and operation in self._uncertain:
@@ -253,3 +258,4 @@ class WalletAPIClient:
                 self._request("logout", {})
         finally:
             self._reset()
+
