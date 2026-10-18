@@ -1,0 +1,264 @@
+name: Open PR full CI
+on:
+  push:
+    branches: [main, ci/all-open-pr-matrix-v14-20261019]
+    paths: [.github/workflows/open-pr-matrix.yml]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: open-pr-full-ci
+  cancel-in-progress: false
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      matrix: ${{ steps.prs.outputs.matrix }}
+    steps:
+      - name: Bind current open PR identities
+        id: prs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          repo = os.environ["REPOSITORY"]
+          headers = {"Authorization": "Bearer " + os.environ["GH_TOKEN"],
+                     "Accept": "application/vnd.github+json"}
+          rows, page = [], 1
+          while True:
+              request = urllib.request.Request(
+                  f"https://api.github.com/repos/{repo}/pulls?state=open&per_page=100&page={page}",
+                  headers=headers)
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  batch = json.load(response)
+              for pr in batch:
+                  if pr["head"]["repo"]["full_name"] != repo:
+                      raise RuntimeError("This controller is scoped to same-repository branches")
+                  rows.append({"number": pr["number"], "head": pr["head"]["sha"],
+                               "base": pr["base"]["sha"]})
+              if len(batch) < 100:
+                  break
+              page += 1
+          if not rows:
+              raise RuntimeError("No open PRs; no passing matrix is fabricated")
+          encoded = json.dumps({"include": rows}, separators=(",", ":"))
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write("matrix=" + encoded + "\n")
+          print(json.dumps({"pullRequests": rows}, sort_keys=True))
+          PY
+  test:
+    name: PR ${{ matrix.number }}
+    needs: discover
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    defaults:
+      run:
+        working-directory: source
+    env:
+      EXPECTED_HEAD: ${{ matrix.head }}
+      EXPECTED_BASE: ${{ matrix.base }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          persist-credentials: false
+      - name: Check out current PR merge
+        uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ matrix.number }}/merge
+          path: source
+          persist-credentials: false
+      - name: Prepare explicit output paths and source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^2)" = "$EXPECTED_HEAD"
+          test "$(git rev-parse HEAD^1)" = "$EXPECTED_BASE"
+          SOURCE_COMMIT="$(git rev-parse HEAD)"
+          echo "SOURCE_COMMIT=$SOURCE_COMMIT" >> "$GITHUB_ENV"
+          python3 -c 'import sys; assert sys.version_info >= (3, 10)'
+          root="$(mktemp -d "$RUNNER_TEMP/8415ex.XXXXXX")"
+          mkdir "$root/tests" "$root/failure" "$root/success" "$root/evidence"
+          echo "BOOTSTRAP_ROOT=$root" >> "$GITHUB_ENV"
+          echo "BOOTSTRAP_TEST_ROOT=$root/tests" >> "$GITHUB_ENV"
+          echo "PYTHONDONTWRITEBYTECODE=1" >> "$GITHUB_ENV"
+          echo "SOURCE_TREE=$(git rev-parse HEAD^{tree})" >> "$GITHUB_ENV"
+          echo "CONFIG_SHA256=$(sha256sum "$GITHUB_WORKSPACE/controller/.github/workflows/open-pr-matrix.yml" | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          git rev-parse HEAD > "$root/evidence/commit.txt"
+          git rev-parse HEAD^{tree} > "$root/evidence/tree.txt"
+          python3 --version > "$root/evidence/python.txt"
+      - name: Run standard-library tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s ci/tests -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/unit-tests.log"
+      - name: Run Stage 1 domain tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s exchange/tests -t . -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/stage1-tests.log"
+      - name: Run local Stage 5 preparation tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s scenarios/tests -t . -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/stage5-preparation-tests.log"
+      - name: Run joined Stage 5 integration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s integration -t . -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/stage5-integration-tests.log"
+      - name: Run the six local scenarios and the three route contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          # An external observer captures final status and saves full raw logs.
+          # Published calculation files do not claim their own delivery succeeded.
+          python3 -B - <<'PYCODE'
+          import json, os, sys
+          from pathlib import Path
+          from scenarios import evidence_index, execution
+          directory = Path(os.environ["BOOTSTRAP_ROOT"]) / "evidence"
+          argv = [sys.executable, "-B", "-m", "scenarios.cli", "run-all", "--json",
+                  "--json-out", str(directory / "stage5-delivery.json"),
+                  "--text-out", str(directory / "stage5-scenarios.log")]
+          observed = execution.capture_cli(argv, raw_log_dir=directory)
+          (directory / "stage5-process.json").write_text(json.dumps(observed, indent=2) + "\n")
+          if "stdout" in observed.get("rawLog", {}):
+              stdout = Path(observed["rawLog"]["stdout"]["path"]).read_text()
+              try:
+                  bundle = json.loads(stdout)
+              except ValueError:
+                  print("CLI did not produce a parseable final record", file=sys.stderr)
+                  sys.exit(observed["exitCode"] or 1)
+              observed["cases"] = ["T-39", "T-40"]
+              index = evidence_index.build(
+                  bundle["scenarioReport"], bundle["pathReport"], ".",
+                  {"runId": bundle["runId"], "startedAt": bundle["startedAt"]},
+                  commands=bundle["commands"] + [observed],
+                  observations={key: bundle[key] for key in
+                                ("secretScan", "resourceObservation", "workload")},
+                  source=bundle["source"], guarantee_report=bundle["guaranteeReport"])
+              (directory / "stage5-evidence-index.json").write_text(json.dumps(index, indent=2) + "\n")
+          sys.exit(observed["exitCode"] if observed["exitCode"] is not None else 1)
+          PYCODE
+          cat "$BOOTSTRAP_ROOT/evidence/stage5-scenarios.log"
+      - name: Verify deliberate failure and successful smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          common=(--repository GiraffeTechnology/8415ex --commit-sha "$SOURCE_COMMIT" --tree-sha "$SOURCE_TREE" --config-sha256 "$CONFIG_SHA256")
+          set +e
+          python3 -B -m ci.smoke "${common[@]}" --run-id "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-failure" --output-dir "$BOOTSTRAP_ROOT/failure" --mode failure > "$BOOTSTRAP_ROOT/evidence/smoke-failure.log" 2>&1
+          code=$?
+          set -e
+          echo "$code" > "$BOOTSTRAP_ROOT/evidence/smoke-failure.exit"
+          test "$code" -eq 1
+          python3 -B -m ci.smoke "${common[@]}" --run-id "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-success" --output-dir "$BOOTSTRAP_ROOT/success" --mode success > "$BOOTSTRAP_ROOT/evidence/smoke-success.log" 2>&1
+          echo 0 > "$BOOTSTRAP_ROOT/evidence/smoke-success.exit"
+          python3 -B - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path(os.environ["BOOTSTRAP_ROOT"])
+          for mode in ("failure", "success"):
+              directory = root / mode
+              value = json.loads((directory / "smoke-manifest.json").read_text())
+              assert value["outcome"] == mode
+              assert value["identity"]["commit_sha"] == os.environ["SOURCE_COMMIT"]
+              assert value["identity"]["tree_sha"] == os.environ["SOURCE_TREE"]
+              assert value["identity"]["config_sha256"] == os.environ["CONFIG_SHA256"]
+              assert value["identity"]["run_id"] == os.environ["GITHUB_RUN_ID"] + "-" + os.environ["GITHUB_RUN_ATTEMPT"] + "-" + mode
+              if mode == "failure":
+                  assert value["artifacts"] == []
+                  assert not (directory / "smoke.txt").exists()
+              else:
+                  assert len(value["artifacts"]) == 1
+                  artifact = value["artifacts"][0]
+                  assert artifact["path"] == "smoke.txt"
+                  data = (directory / artifact["path"]).read_bytes()
+                  assert len(data) == artifact["size_bytes"]
+                  assert hashlib.sha256(data).hexdigest() == artifact["sha256"]
+          PY
+      - name: Package exact source commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive --format=zip HEAD -o "$BOOTSTRAP_ROOT/evidence/source.zip"
+          sha256sum "$BOOTSTRAP_ROOT/evidence/source.zip" > "$BOOTSTRAP_ROOT/evidence/source.sha256"
+          cp "$BOOTSTRAP_ROOT/failure/smoke-manifest.json" "$BOOTSTRAP_ROOT/evidence/failure-manifest.json"
+          cp "$BOOTSTRAP_ROOT/success/smoke-manifest.json" "$BOOTSTRAP_ROOT/evidence/success-manifest.json"
+          cp "$BOOTSTRAP_ROOT/success/smoke.txt" "$BOOTSTRAP_ROOT/evidence/smoke.txt"
+      - name: Retain run evidence
+        if: always() && env.BOOTSTRAP_ROOT != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-${{ matrix.number }}-${{ matrix.head }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.BOOTSTRAP_ROOT }}/evidence
+          if-no-files-found: error
+          retention-days: 7
+  publish:
+    name: Publish exact-head CI results
+    needs: [discover, test]
+    if: always() && needs.discover.result == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      statuses: write
+    steps:
+      - name: Publish from trusted job conclusions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          MATRIX_JSON: ${{ needs.discover.outputs.matrix }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          repo, run = os.environ["REPOSITORY"], os.environ["RUN_ID"]
+          headers = {"Authorization": "Bearer " + os.environ["GH_TOKEN"],
+                     "Accept": "application/vnd.github+json"}
+          jobs, page = [], 1
+          while True:
+              url = (f"https://api.github.com/repos/{repo}/actions/runs/{run}/attempts/"
+                     + os.environ["RUN_ATTEMPT"] + f"/jobs?per_page=100&page={page}")
+              with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as response:
+                  value = json.load(response)
+              jobs.extend(value["jobs"])
+              if len(value["jobs"]) < 100:
+                  break
+              page += 1
+          report = []
+          for row in json.loads(os.environ["MATRIX_JSON"])["include"]:
+              matches = [job for job in jobs if job["name"] == "PR " + str(row["number"])]
+              job = matches[0] if len(matches) == 1 else None
+              state = ("success" if job and job["status"] == "completed"
+                       and job["conclusion"] == "success" else "failure")
+              target = (job["html_url"] if job else
+                        f"https://github.com/{repo}/actions/runs/{run}")
+              payload = {"state": state, "context": "v1.4/full-ci",
+                         "description": ("Full test job passed" if state == "success"
+                                         else "Full test job failed or did not complete"),
+                         "target_url": target}
+              url = f"https://api.github.com/repos/{repo}/statuses/{row['head']}"
+              request = urllib.request.Request(url, headers=headers,
+                  data=json.dumps(payload).encode(), method="POST")
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  observed = json.load(response)
+              if observed["sha"] != row["head"] or observed["state"] != state:
+                  raise RuntimeError("Exact-head status readback mismatch")
+              report.append({"number": row["number"], "head": row["head"],
+                             "base": row["base"], "state": state, "target": target})
+          print(json.dumps({"observedJobs": report}, sort_keys=True))
+          PY
