@@ -4,7 +4,7 @@ Continuous trading of one whole warehouse receipt, with owner tracking the trade
 
 ## Current product and recovery contract
 
-Read [PRD.md](PRD.md), [AGENTS.md](AGENTS.md) and the exact [machine pin](config/prd-lock.json) before work. Version **1.3** replaces conflicting previous product requirements. The [execution plan](config/execution-plan.json) contains all 21 sections, 91 requirement IDs, 68 acceptance cases, 13 decisions, six stages and six revised demonstrations.
+Read [PRD.md](PRD.md), [AGENTS.md](AGENTS.md) and the exact [machine pin](config/prd-lock.json) before work. Version **1.3** is the retained historical public snapshot; the current complete private v1.4 contract is loaded by the existing private recovery entry. Do not publish its complete text or private locators. The [execution plan](config/execution-plan.json) contains all 21 sections, 91 requirement IDs, 68 acceptance cases, 13 decisions, six stages and six revised demonstrations.
 
 From the repository root on the existing approved Linux executor:
 
@@ -17,7 +17,7 @@ python3 -B -m scenarios.current_prd handoff
 python3 -B -m scenarios.current_prd sections
 ```
 
-These commands verify the exact PRD/plan bytes, reload repository files on every invocation, and report requirements and missing evidence. They do not sign, broadcast, deploy or grant acceptance. No original chat, credentials, network or installed third-party dependency is needed to recover the product contract.
+These commands verify the exact PRD/plan bytes, reload repository files on every invocation, and report requirements and missing evidence. They do not sign, broadcast, deploy or grant acceptance. No original chat, credentials, network or installed third-party dependency is needed to inspect that historical checklist; it does not validate the current private contract.
 
 The existing scenarios CLI routes its matrix, stages, decisions, handoff and sections commands to the same pinned data:
 
@@ -69,9 +69,15 @@ Product suites and genuine runtime/chain/browser/material acceptance remain sepa
 
 | Area | Purpose |
 | --- | --- |
-| PRD.md / config/ | Current complete sanitized product specification and machine contract |
+| PRD.md / config/ | Historical public v1.3 snapshot and its machine checklist; current private requirements are recovered separately |
 | exchange/ | Existing domain, adapters, UI and stage execution code; legacy scenarios require migration |
 | scenarios/ | Pinned checklist loader and existing evidence/reporting infrastructure |
 | ci/ | Existing bootstrap and source/evidence checks |
 
 Public files are English and sanitized. Private source links, internal topology, operational paths, credentials and full private handoffs stay outside GitHub. Existing approved Linux execution, wallet consent and no mainnet/real-value/new-resource boundaries remain. No Drive timer or automatic server synchronization is introduced.
+
+## Protocol observations and application state
+
+Use the approved ERC-8415 Draft and the actual deployed ABI. Display openGapOF=YES in red or openGapOF=NO in green only after the original verifier binds the NFT and source, both projection and optional settlement interface support are established, and openGapOf(uint256) successfully returns a valid bytes32 settlementId. Nonzero maps to YES and zero to NO. Unknown, unsupported, loading and failed reads stay explicit and neutral across all six locales. The UI spelling does not rename the ABI or stored application gap. NO is not evidence of registration, finality, equal owner/holder, legal title or settled funds; optional-interface support is not an ordinary-transfer gate.
+
+ownerOf returns an address, not an EX timeline position. currentEntry describes the latest admitted entry; holderAsOf describes a specified time. Preserve query time, effectiveAt and observed block; do not make future-effective entries current early. Registration versions and transfer positions remain separate. Historical signatures bind their original role, position/transfer, payload and verified signing scheme, never the current owner's inferred role. Historical finality and EX finalized business prefix remain separate. Oracle relay identity is not registry authority. These semantics require original runtime evidence; source projections and synthetic definitions do not establish chain acceptance.

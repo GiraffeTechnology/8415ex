@@ -32,7 +32,7 @@ class NftDirectory:
         except Exception:
             detail = {"schema": "8415ex-public-nft-detail/1",
                       "positions": {"current": None, "owner": None, "holder": None},
-                      "gap": "unknown", "signatureStatusByPosition": [],
+                      "gap": "unknown", "displayGap": {"state": "unknown"}, "signatureStatusByPosition": [],
                       "terms": {"status": "unavailable", "clauses": []},
                       "sourceStatus": "detail-source-unavailable",
                       "ordinaryTransfer": {"gapEqualityFinalityGateApplied": False,
@@ -46,9 +46,10 @@ class NftDirectory:
         rows = []
         for key in self._bindings:
             try:
-                rows.append({"nftKey": key, "gap": self.detail(key)["gap"]})
+                detail = self.detail(key)
+                rows.append({"nftKey": key, "gap": detail["gap"], "displayGap": detail.get("displayGap", {"state": "unknown"})})
             except Exception:
-                rows.append({"nftKey": key, "gap": "unknown"})
+                rows.append({"nftKey": key, "gap": "unknown", "displayGap": {"state": "unknown"}})
         return rows
 
     def catalogue(self):

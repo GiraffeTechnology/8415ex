@@ -2,6 +2,7 @@
 from html import escape
 from urllib.parse import urlencode
 from .nft_detail_page import LOCALES, STYLE
+from .gap_projection import gap_label
 
 ASSETS = {name: ("image/png" if name.endswith(".png") else "image/svg+xml") for name in
           ("soy.png", "ore.png", "copper.png", "cube.svg", "search.svg", "sparkline.svg", "sparkline-stale.svg")}
@@ -63,14 +64,14 @@ def render_market(entries, reference, locale="en", query=""):
         href = '/nft?' + urlencode({"lang": locale, "nft": key, "q": query})
         photo = PHOTOS.get(card.get("commodityCode"))
         image = ('<img class="product-photo" src="/assets/' + photo + '" alt="' + e(t[9]) + '">') if photo else ''
-        gap = 'GapOf=Open' if entry["gap"] == "open" else ('GapOf=Closed' if entry["gap"] == "closed" else common[8])
+        gap, gap_class = gap_label(entry, locale)
         quote = card.get("quote")
         price = (e(quote["amountBaseUnits"]) + ' ' + e(quote["currency"]) + '<small> ' + e(BASE_UNITS[locale]) + '</small><p class="muted">'
                  + e(states[4] if quote["source"] == "simulated" else states[5]) + '</p>') if quote else e(common[3])
         quantity = e(card["quantity"] + ' ' + card["unit"]) if card else e(t[8])
         cards.append('<a class="nft-card" id="nft-' + key + '" href="' + e(href) + '">' + image
                      + '<h2>' + e(name) + '</h2><p class="muted">' + e(card.get("spec", t[8])) + '</p><div class="quote">'
-                     + price + '</div><p>' + quantity + ' · 1 NFT</p><p><span class="badge' + (' open' if entry["gap"] == "open" else '')
+                     + price + '</div><p>' + quantity + ' · 1 NFT</p><p><span class="badge ' + gap_class
                      + '">' + e(gap) + '</span></p><span>' + e(t[10]) + ' →</span></a>')
     status = reference.get("status", "not-connected")
     status_label = {"fresh": states[0], "stale": states[1], "unavailable": states[2], "unknown": states[3], "not-connected": t[15]}.get(status, states[3])

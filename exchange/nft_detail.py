@@ -5,6 +5,7 @@ projection reader. Their original bytes are never exposed through this module.
 """
 from copy import deepcopy
 import re
+from .gap_projection import display_gap
 
 
 def _market_card(row, view):
@@ -48,7 +49,7 @@ def receipt_detail(exchange, receipt_id, *, read_details=None, verify_details=No
         "schema": "8415ex-public-nft-detail/1", "receiptId": receipt_id,
         "positions": {"current": None, "owner": _position(view["owner"]["position"]),
                       "holder": _position(view["holder"]["position"])},
-        "gap": "unknown", "signatureStatusByPosition": [],
+        "gap": "unknown", "displayGap": {"state": "unknown"}, "signatureStatusByPosition": [],
         "terms": {"status": "not-provided", "clauses": [],
                   "meaning": "Identity-excluding business projection, not byte-identical signed original"},
         "ordinaryTransfer": {"gapEqualityFinalityGateApplied": False,
@@ -68,6 +69,8 @@ def receipt_detail(exchange, receipt_id, *, read_details=None, verify_details=No
             raise ValueError("detail source not verified")
         result["positions"]["current"] = _position(row.get("currentPosition"))
         result["gap"] = row.get("gap") if row.get("gap") in ("open", "closed") else "unknown"
+        # Existing EX application gap remains separate from supported ABI reads.
+        result["displayGap"] = display_gap(row)
         signatures = []
         for item in row.get("signatures", []):
             position = _position(item.get("position"))
@@ -105,7 +108,7 @@ def receipt_detail(exchange, receipt_id, *, read_details=None, verify_details=No
         # Never leak resolver errors, private paths, raw JSON, names or addresses.
         return {"schema": result["schema"], "receiptId": receipt_id,
                 "positions": {"current": None, "owner": None, "holder": None},
-                "gap": "unknown", "signatureStatusByPosition": [],
+                "gap": "unknown", "displayGap": {"state": "unknown"}, "signatureStatusByPosition": [],
                 "terms": {"status": "unavailable", "clauses": []},
                 "ordinaryTransfer": {"gapEqualityFinalityGateApplied": False,
                                      "executionEligibility": "not-evaluated"},
