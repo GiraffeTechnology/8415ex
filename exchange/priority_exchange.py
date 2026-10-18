@@ -150,18 +150,44 @@ class PriorityBook:
             if not asks or not bids:
                 result['reason'] = 'no-eligible-ask-or-bid'
                 return result
-            ask, ask_sequence = asks[0]
-            bid, bid_sequence = bids[0]
-            if bid.limit_price < ask.limit_price:
+            if bids[0][0].limit_price < asks[0][0].limit_price:
                 result['reason'] = 'limits-do-not-cross'
                 return result
+            # The individually eligible heads need not be eligible together.
+            # Use the same original grant restrictions and resting-order price
+            # as Exchange.match_intents; this remains a proposal, not a trade.
+            chosen = None
+            for ask, ask_sequence in asks:
+                ask_grant = self.exchange.authorization(ask.authorization_id)
+                for bid, bid_sequence in bids:
+                    if bid.limit_price < ask.limit_price:
+                        break
+                    bid_grant = self.exchange.authorization(bid.authorization_id)
+                    if ask_grant.counterparties and bid.signer not in ask_grant.counterparties:
+                        continue
+                    if bid_grant.counterparties and ask.signer not in bid_grant.counterparties:
+                        continue
+                    price = ask.limit_price if ask_sequence < bid_sequence else bid.limit_price
+                    if price > ask_grant.max_amount or price > bid_grant.max_amount:
+                        continue
+                    chosen = (ask, ask_sequence, bid, bid_sequence, price)
+                    break
+                if chosen is not None:
+                    break
+            if head != (self.exchange.owner_index(self.receipt_id),
+                        self.exchange.owner_of(self.receipt_id)):
+                raise PriorityRefused('trade head changed while proposing')
+            if chosen is None:
+                result['reason'] = 'no-executable-crossing-pair'
+                return result
+            ask, ask_sequence, bid, bid_sequence, price = chosen
             result['selected'] = {
                 'sellIntentId': ask.intent_id, 'buyIntentId': bid.intent_id,
                 'sellDigest': ask.digest, 'buyDigest': bid.digest,
                 'askLimit': ask.limit_price, 'bidLimit': bid.limit_price,
                 'askSequence': ask_sequence, 'bidSequence': bid_sequence,
-                'priceRule': 'UNRESOLVED_INTEGRATION',
-                'executionPrice': None,
+                'priceRule': 'price-time-resting-order-limit',
+                'executionPrice': price,
             }
             result['reason'] = 'priority-selected-execution-pending'
             return result
