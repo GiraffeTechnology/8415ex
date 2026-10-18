@@ -1182,6 +1182,9 @@ class Exchange:
         authenticity. The installed original observer must verify actual fees
         and the segment binding first. Distinct retry transactions can incur
         distinct actual fees; repeating one transaction cannot charge again.
+        Replay identity is chain-wide within this ledger, not per receipt.
+        A batch spanning receipts cannot be charged in full to each receipt;
+        no cross-receipt allocation rule is inferred from the transaction hash.
         Legacy identity-free simulation records retain their conservative
         shared-operation guard and are not authoritative native fee evidence.
         """
@@ -1205,12 +1208,15 @@ class Exchange:
                     and re.fullmatch(r"0x[0-9a-f]{64}", transaction_hash) is not None,
                     "EX_GAS_TRANSACTION_REFUSED", "canonical original transaction hash required")
             entry["transactionHash"] = transaction_hash
-            for records in self._gas[receipt_id].values():
-                for previous in records:
-                    if previous.get("transactionHash") == transaction_hash:
-                        require(previous == entry, "EX_GAS_TRANSACTION_CONFLICT",
-                                "same actual transaction cannot change fees or segment responsibility")
-                        return deepcopy(previous)
+            for recorded_receipt, by_leg in self._gas.items():
+                for records in by_leg.values():
+                    for previous in records:
+                        if (previous.get("transactionHash") == transaction_hash
+                                and previous.get("chainId") == entry["chainId"]):
+                            require(recorded_receipt == receipt_id and previous == entry,
+                                    "EX_GAS_TRANSACTION_CONFLICT",
+                                    "same chain transaction cannot change receipt, fees or segment responsibility")
+                            return deepcopy(previous)
         if len(shared) > 1:
             # A shared operation is recorded once against the leg that is paying
             # for it here. Charging every sharer the full amount is exactly what
@@ -1815,4 +1821,5 @@ class Exchange:
 
     def _now(self, now):
         return instant(self._clock() if now is None else now, "EX_INSTANT_REFUSED")
+
 
