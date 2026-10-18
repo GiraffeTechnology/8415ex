@@ -13,6 +13,7 @@ import secrets
 from urllib.parse import parse_qs, urlsplit
 
 from . import views
+from .nft_detail import receipt_detail
 from .demo_ui import DemoHandler, DemoServer, MAX_BODY
 from .errors import DomainError
 
@@ -40,12 +41,15 @@ class RuntimeBinding:
     unknown result before a retry. A configured gateway is not proof of a live
     provider. No credentials or signed payloads belong in snapshots.
     """
-    def __init__(self, exchange, receipt_id, authorization_ids=(), run=None, gateway=None):
+    def __init__(self, exchange, receipt_id, authorization_ids=(), run=None, gateway=None,
+                 read_details=None, verify_details=None):
         self.exchange = exchange
         self.receipt_id = receipt_id
         self.authorization_ids = tuple(authorization_ids)
         self.run = dict(run or {})
         self.gateway = gateway
+        self.read_details = read_details
+        self.verify_details = verify_details
 
     def snapshot(self):
         ex, rid = self.exchange, self.receipt_id
@@ -63,6 +67,10 @@ class RuntimeBinding:
         return {"schema": SCHEMA, "source": dict(self.run), "revision": revision,
                 "state": value, "commandGateway": "configured" if self.gateway else "NOT_CONFIGURED",
                 "meaning": "domain observation, not deployment or real-evidence acceptance"}
+
+    def public_detail(self):
+        return receipt_detail(self.exchange, self.receipt_id,
+                              read_details=self.read_details, verify_details=self.verify_details)
 
     def command(self, action, key, revision, payload):
         if action not in ACTIONS:
@@ -158,6 +166,9 @@ class WorkbenchHandler(DemoHandler):
                 raise ValueError("this native view takes no query parameters")
             if req.path == "/demo":
                 self.send_body(200, super().home())
+            elif req.path == "/api/nft-detail":
+                self.send_body(200, json.dumps(self.server.binding.public_detail(), sort_keys=True),
+                               "application/json; charset=utf-8")
             elif req.path == "/api/snapshot":
                 self.send_body(200, json.dumps(self.server.binding.snapshot(), sort_keys=True),
                                "application/json; charset=utf-8")
