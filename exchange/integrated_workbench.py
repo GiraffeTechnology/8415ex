@@ -11,7 +11,7 @@ from .workbench import WorkbenchServer, WorkbenchHandler
 from .demo_ui import MAX_BODY
 from .gas_confirmation_ui import GasConfirmationPage
 from .gas_budget import GasBudgetRefused
-from .gas_disclosure_locales import WORDS as GAS_WORDS
+from .gas_disclosure_locales import WORDS as GAS_WORDS, TRANSPORT
 from .registration_source_workbench import (
     RegistrationSourceWorkbench, RegistrationSourceRefused,
 )
@@ -42,16 +42,37 @@ class IntegratedWorkbenchServer(WorkbenchServer):
 
 
 class IntegratedWorkbenchHandler(WorkbenchHandler):
+    @staticmethod
+    def _gas_locale(request):
+        if request.fragment or len(request.query) > 64:
+            raise ValueError("bounded disclosure locale required")
+        if not request.query:
+            return "en"
+        query = parse_qs(request.query, strict_parsing=True,
+                         keep_blank_values=True, max_num_fields=1)
+        if (set(query) != {"lang"} or len(query["lang"]) != 1
+                or query["lang"][0] not in GAS_WORDS):
+            raise ValueError("one supported disclosure locale required")
+        return query["lang"][0]
+
     def _page(self, title, content, locale="en"):
         if locale not in GAS_WORDS:
             raise ValueError("supported disclosure locale required")
+        words = TRANSPORT[locale]
+        suffix = "" if locale == "en" else "?lang=" + locale
+        links = ('<nav><a href="/receipt">' + escape(words["receipt"]) + '</a> '
+                 '<a href="/gas' + suffix + '">' + escape(words["gas"]) + '</a> '
+                 '<a href="/registration-source">' + escape(words["registration"])
+                 + '</a></nav>')
+        languages = '<nav aria-label="' + escape(words["language"]) + '">' + ' '.join(
+            '<a lang="' + key + '" href="/gas?lang=' + key + '">' + label + '</a>'
+            for key, label in (("en", "English"), ("zh-Hans", "简体中文"),
+                               ("zh-Hant", "繁體中文"), ("fr", "Français"),
+                               ("es", "Español"), ("ja", "日本語"))) + '</nav>'
         return ('<!doctype html><html lang="' + locale + '"><meta charset="utf-8">'
                 '<meta name="viewport" content="width=device-width,initial-scale=1">'
                 '<title>' + escape(title) + '</title><body><main>'
-                '<nav><a href="/receipt">Receipt</a> '
-                '<a href="/gas">Gas confirmation</a> '
-                '<a href="/registration-source">Registration source</a></nav>'
-                + content + '</main></body></html>')
+                + links + languages + content + '</main></body></html>')
 
     def native_page(self, name):
         body = super().native_page(name)
@@ -64,24 +85,21 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
         request = urlsplit(self.path)
         if request.path not in ("/gas", "/registration-source"):
             return super().do_GET()
+        locale = "en"
+        if request.path == "/gas":
+            try:
+                locale = self._gas_locale(request)
+            except ValueError:
+                self.send_body(400, TRANSPORT["en"]["inputRefused"])
+                return
         if not self.host_ok():
-            self.send_body(421, "host refused")
+            self.send_body(421, TRANSPORT[locale]["hostRefused"])
             return
         try:
             if request.fragment:
                 raise ValueError("fragment refused")
             if request.path == "/gas":
-                locale = "en"
-                if request.query:
-                    if len(request.query) > 64:
-                        raise ValueError("bounded locale query required")
-                    query = parse_qs(request.query, strict_parsing=True,
-                                     keep_blank_values=True, max_num_fields=1)
-                    if set(query) != {"lang"} or len(query["lang"]) != 1:
-                        raise ValueError("one disclosure locale required")
-                    locale = query["lang"][0]
-                    if locale not in GAS_WORDS:
-                        raise ValueError("supported disclosure locale required")
+                locale = self._gas_locale(request)
                 content = self.server.gas_page.render(
                     self.server.current_time(), self.server.csrf, locale=locale)
                 title = GAS_WORDS[locale]["heading"]
@@ -107,16 +125,22 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
                                           locale if request.path == "/gas" else "en"))
         except (ValueError, KeyError, GasBudgetRefused,
                 RegistrationSourceRefused):
-            self.send_body(400, "current component input or binding refused")
+            self.send_body(400, TRANSPORT[locale]["inputRefused"])
         except OSError:
-            self.send_body(503, "original component unavailable")
+            self.send_body(503, TRANSPORT[locale]["unavailable"])
 
     def do_POST(self):
-        if urlsplit(self.path).path != "/gas/confirm":
+        request = urlsplit(self.path)
+        if request.path != "/gas/confirm":
             return super().do_POST()
-        if (self.path != "/gas/confirm" or not self.host_ok()
+        try:
+            locale = self._gas_locale(request)
+        except ValueError:
+            self.send_body(403, TRANSPORT["en"]["originRefused"])
+            return
+        if (not self.host_ok()
                 or self.headers.get("Origin") != self.server.origin):
-            self.send_body(403, "same-origin confirmation required")
+            self.send_body(403, TRANSPORT[locale]["originRefused"])
             return
         try:
             if self.headers.get("Transfer-Encoding") is not None:
@@ -144,13 +168,15 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
             # action, grant and wallet-confirmation verification. Form fields
             # cannot select those bindings or supply financial outcomes.
             self.server.gas_page.submit(fields, self.server.current_time())
-            self.send_body(303, "", Location="/gas")
+            self.send_body(303, "", Location="/gas" + (
+                "" if locale == "en" else "?lang=" + locale))
         except (ValueError, UnicodeError, GasBudgetRefused):
-            self.send_body(400, "gas confirmation refused; refresh current quote")
+            self.send_body(400, TRANSPORT[locale]["confirmationRefused"])
         except TimeoutError:
             self.close_connection = True
-            self.send_body(408, "outcome unknown; enquire original wallet before retry")
+            self.send_body(408, TRANSPORT[locale]["unknown"])
         except OSError:
-            self.send_body(503, "outcome unknown; enquire original wallet before retry")
+            self.send_body(503, TRANSPORT[locale]["unknown"])
+
 
 

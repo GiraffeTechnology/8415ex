@@ -153,3 +153,86 @@ WORDS = {
     },
 }
 
+
+# Transport labels do not enter the signed quote or confirmation fields.
+TRANSPORT = {
+    "en": {
+        "receipt": "Receipt",
+        "gas": "Gas confirmation",
+        "registration": "Registration source",
+        "components": "Integrated components",
+        "language": "Language",
+        "hostRefused": "Host refused",
+        "inputRefused": "Current component input or binding refused",
+        "unavailable": "Original component unavailable",
+        "originRefused": "Same-origin confirmation required",
+        "confirmationRefused": "Gas confirmation refused; refresh current quote",
+        "unknown": "Outcome unknown; enquire original wallet before retry"
+    },
+    "zh-Hans": {
+        "receipt": "仓单",
+        "gas": "Gas 确认",
+        "registration": "登记来源",
+        "components": "已接入组件",
+        "language": "语言",
+        "hostRefused": "主机不匹配，已拒绝",
+        "inputRefused": "当前组件输入或绑定不匹配，已拒绝",
+        "unavailable": "原组件不可用",
+        "originRefused": "确认请求必须来自同一来源",
+        "confirmationRefused": "Gas 确认被拒绝，请刷新当前报价",
+        "unknown": "结果未知；重试前请查询原钱包"
+    },
+    "zh-Hant": {
+        "receipt": "倉單",
+        "gas": "Gas 確認",
+        "registration": "登記來源",
+        "components": "已接入元件",
+        "language": "語言",
+        "hostRefused": "主機不符，已拒絕",
+        "inputRefused": "目前元件輸入或綁定不符，已拒絕",
+        "unavailable": "原元件無法使用",
+        "originRefused": "確認請求必須來自相同來源",
+        "confirmationRefused": "Gas 確認遭拒，請重新整理目前報價",
+        "unknown": "結果未知；重試前請查詢原錢包"
+    },
+    "fr": {
+        "receipt": "Récépissé",
+        "gas": "Confirmation du gas",
+        "registration": "Source d’enregistrement",
+        "components": "Composants intégrés",
+        "language": "Langue",
+        "hostRefused": "Hôte refusé",
+        "inputRefused": "Entrée ou liaison du composant refusée",
+        "unavailable": "Composant d’origine indisponible",
+        "originRefused": "Confirmation de même origine requise",
+        "confirmationRefused": "Confirmation du gas refusée ; actualisez le devis",
+        "unknown": "Résultat inconnu ; consultez le portefeuille d’origine avant de réessayer"
+    },
+    "es": {
+        "receipt": "Resguardo",
+        "gas": "Confirmación del gas",
+        "registration": "Fuente de registro",
+        "components": "Componentes integrados",
+        "language": "Idioma",
+        "hostRefused": "Host rechazado",
+        "inputRefused": "Entrada o vínculo del componente rechazado",
+        "unavailable": "Componente original no disponible",
+        "originRefused": "Se requiere confirmación del mismo origen",
+        "confirmationRefused": "Confirmación del gas rechazada; actualice la cotización",
+        "unknown": "Resultado desconocido; consulte la cartera original antes de reintentar"
+    },
+    "ja": {
+        "receipt": "倉荷証券",
+        "gas": "Gas の確認",
+        "registration": "登録元",
+        "components": "統合コンポーネント",
+        "language": "言語",
+        "hostRefused": "ホストが一致しないため拒否しました",
+        "inputRefused": "現在の入力またはコンポーネントの紐付けを拒否しました",
+        "unavailable": "元のコンポーネントを利用できません",
+        "originRefused": "同一オリジンからの確認が必要です",
+        "confirmationRefused": "Gas の確認を拒否しました。現在の見積もりを更新してください",
+        "unknown": "結果が不明です。再試行前に元のウォレットで照合してください"
+    }
+}
+

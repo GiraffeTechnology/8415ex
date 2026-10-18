@@ -1,5 +1,6 @@
 """Server-rendered gas disclosure and existing-wallet confirmation boundary."""
 from html import escape
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 from .gas_budget import GasQuote, BuyerConfirmation, GasBudgetRefused
 from .gas_disclosure_locales import WORDS
 
@@ -53,6 +54,14 @@ class GasConfirmationPage:
         if type(csrf_token) is not str or not csrf_token:
             raise GasBudgetRefused('existing application CSRF token required')
         data = quote.disclosure()
+        target = self.post_path
+        if locale != 'en':
+            route = urlsplit(target)
+            query = parse_qsl(route.query, keep_blank_values=True)
+            if any(key == 'lang' for key, _ in query):
+                raise GasBudgetRefused('confirmation locale already bound')
+            target = urlunsplit((route.scheme, route.netloc, route.path,
+                                urlencode(query + [('lang', locale)]), route.fragment))
         rows = ''.join('<tr><td>' + '</td><td>'.join(_escape(value) for value in (
             sample.sample_id, sample.fee_wei, sample.observed_at, sample.block_number,
             sample.source, sample.raw_sha256)) + '</td></tr>' for sample in quote.samples)
@@ -83,7 +92,7 @@ class GasConfirmationPage:
             + _escape(quote.scope) + '; FX SHA-256 ' + _escape(quote.rate_sha256)
             + '</p><table><thead><tr>' + headers + '</tr></thead><tbody>'
             + rows + '</tbody></table></details>'
-            '<form method="post" action="' + _escape(self.post_path) + '">'
+            '<form method="post" action="' + _escape(target) + '">'
             + hidden('csrf', csrf_token) + hidden('quoteId', quote.quote_id)
             + hidden('version', quote.version) + hidden('quoteDigest', quote.digest)
             + '<label><input type="checkbox" name="accepted" value="yes" required>'
@@ -116,4 +125,5 @@ class GasConfirmationPage:
         if self._quote(now).digest != quote.digest:
             raise GasBudgetRefused('quote changed during confirmation; do not send')
         return confirmation
+
 

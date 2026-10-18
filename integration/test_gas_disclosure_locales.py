@@ -32,7 +32,8 @@ class GasDisclosureLocaleTests(unittest.TestCase):
                               fixture.quote.rate_sha256, fixture.quote.scope,
                               "sorted-P50-middle-or-two-middle-mean"):
                     self.assertIn(escape(str(value), quote=True), html)
-                self.assertIn('action="/existing-route"', html)
+                self.assertIn('action="/existing-route' + (
+                    '' if locale == 'en' else '?lang=' + locale) + '"', html)
                 self.assertEqual(fixture.calls, [])
 
     def test_locale_cannot_change_confirmation_fields_or_trusted_binding(self):
@@ -65,11 +66,13 @@ class GasDisclosureLocaleTests(unittest.TestCase):
                 html = response.read().decode("utf-8")
                 self.assertIn('<html lang="' + locale + '">', html)
                 self.assertIn(escape(words["heading"], quote=True), html)
-                self.assertIn('action="/gas/confirm"', html)
+                self.assertIn('action="/gas/confirm' + (
+                    '' if locale == 'en' else '?lang=' + locale) + '"', html)
         for query in ("lang=de", "lang=", "lang=ja&lang=en", "lang=ja&buyer=other",
                       "buyer=other"):
             with self.subTest(query=query), self.assertRaises(HTTPError) as raised:
                 urlopen(server.origin + "/gas?" + query, timeout=3)
             self.assertEqual(raised.exception.code, 400)
         self.assertEqual(fixture.wallet_calls, [])
+
 
