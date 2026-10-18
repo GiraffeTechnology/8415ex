@@ -12,6 +12,7 @@ from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import (build_opener, ProxyHandler, HTTPSHandler,
                             HTTPCookieProcessor, HTTPRedirectHandler, Request)
+from .wallet_execution_attempts import WalletExecutionAttempts
 
 
 class WalletAPIRefused(ValueError):
@@ -63,7 +64,7 @@ class WalletAPIClient:
     }
 
     def __init__(self, origin, tenant, account, chain_id, *, clock_ms=None,
-                 timeout_seconds=10, allow_loopback_http=False):
+                 timeout_seconds=10, allow_loopback_http=False, execution_attempts=None):
         if type(origin) is not str:
             raise WalletAPIRefused("EX_WALLET_BINDING_REFUSED")
         url = urlsplit(origin)
@@ -86,6 +87,9 @@ class WalletAPIClient:
         self._csrf, self._session = None, None
         self._used_challenges, self._uncertain = set(), set()
         self._operation_lock = RLock()
+        if execution_attempts is not None and not isinstance(execution_attempts, WalletExecutionAttempts):
+            raise WalletAPIRefused("EX_WALLET_ATTEMPT_STORE_REFUSED")
+        self._execution_attempts = execution_attempts
 
     def _reset(self):
         self._jar.clear()
@@ -222,6 +226,14 @@ class WalletAPIClient:
         operation = (request.get("taskDigest"), request.get("operationId"))
         if action == "execute" and operation in self._uncertain:
             raise WalletAPIRefused("EX_WALLET_UNKNOWN_RECONCILE_FIRST")
+        if action == "execute" and self._execution_attempts is not None:
+            try:
+                claimed = self._execution_attempts.claim({"origin": self._origin,
+                    "tenant": self._tenant, "account": self._account, "chainId": self._chain}, request)
+            except Exception:
+                raise WalletAPIRefused("EX_WALLET_ATTEMPT_STORE_UNAVAILABLE") from None
+            if claimed is not True:
+                raise WalletAPIRefused("EX_WALLET_ATTEMPT_RECONCILE_FIRST")
         try:
             return self._request("tasks/" + action, request)
         except Exception as error:
