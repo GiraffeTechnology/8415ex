@@ -286,6 +286,13 @@ class Exchange:
                         "tradeFormed": False, "financialEffects": False, "observedAt": self._now(None)})
             require(previous.digest == intent.digest, "EX_INTENT_CONFLICT",
                     f"intent {intent.intent_id} was already submitted with different signed terms")
+            # A prior durable admission may have failed or returned UNKNOWN
+            # after the immutable intent was retained. Reconcile the same
+            # original order through its store; never issue a new identity,
+            # client timestamp, funding call or execution here.
+            if (previous.counterparty is None
+                    and self.validate_intent(previous.intent_id)["executable"]):
+                self.enter_order(previous.intent_id)
             return previous
         self._intents[intent.intent_id] = intent
         report = self.validate_intent(intent.intent_id)
@@ -1821,5 +1828,6 @@ class Exchange:
 
     def _now(self, now):
         return instant(self._clock() if now is None else now, "EX_INSTANT_REFUSED")
+
 
 
