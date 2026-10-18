@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, urlsplit
 from . import views
 from .nft_detail import receipt_detail
 from .nft_detail_page import render_detail
+from .nft_directory import NftDirectory
 from .demo_ui import DemoHandler, DemoServer, MAX_BODY
 from .errors import DomainError
 
@@ -103,8 +104,10 @@ def public_result(value):
     return {k: str(value[k])[:256] for k in allowed if k in value}
 
 class WorkbenchServer(DemoServer):
-    def __init__(self, binding, port=0, commit=None, tree=None):
+    def __init__(self, binding, port=0, commit=None, tree=None, detail_bindings=()):
         self.binding = binding
+        self.nft_directory = NftDirectory((binding,) + tuple(detail_bindings))
+        self.default_nft_key = self.nft_directory.key_for(binding)
         self.command_observations = OrderedDict()
         super().__init__(port=port, commit=commit, tree=tree)
         self.binding.run.update(self.source)
@@ -164,20 +167,34 @@ class WorkbenchHandler(DemoHandler):
         try:
             if req.path in ("/run",) or (req.path == "/evidence" and req.query):
                 return super().do_GET()
-            if req.path == "/nft":
+            if req.path in ("/nft", "/api/nft-detail", "/api/nfts"):
                 query = parse_qs(req.query, strict_parsing=True, keep_blank_values=True)
-                if set(query) - {"lang"} or any(len(value) != 1 for value in query.values()):
-                    raise ValueError("one detail locale only")
-                locale = query.get("lang", ["en"])[0]
-                self.send_body(200, render_detail(self.server.binding.public_detail(), locale))
+                allowed = {"lang", "nft"} if req.path == "/nft" else {"nft"}
+                if set(query) - allowed or any(len(value) != 1 for value in query.values()):
+                    raise ValueError("one NFT selection and locale only")
+                directory = self.server.nft_directory
+                key = query.get("nft", [self.server.default_nft_key])[0]
+                if not re.fullmatch(r"[0-9a-f]{64}", key):
+                    self.send_body(404, "unknown NFT")
+                    return
+                try:
+                    detail = directory.detail(key)
+                except KeyError:
+                    self.send_body(404, "unknown NFT")
+                    return
+                if req.path == "/nft":
+                    locale = query.get("lang", ["en"])[0]
+                    self.send_body(200, render_detail(detail, locale, nft_key=key,
+                                                     choices=directory.choices()))
+                else:
+                    value = {"nfts": directory.choices()} if req.path == "/api/nfts" else detail
+                    self.send_body(200, json.dumps(value, sort_keys=True),
+                                   "application/json; charset=utf-8")
                 return
             if req.query:
                 raise ValueError("this native view takes no query parameters")
             if req.path == "/demo":
                 self.send_body(200, super().home())
-            elif req.path == "/api/nft-detail":
-                self.send_body(200, json.dumps(self.server.binding.public_detail(), sort_keys=True),
-                               "application/json; charset=utf-8")
             elif req.path == "/api/snapshot":
                 self.send_body(200, json.dumps(self.server.binding.snapshot(), sort_keys=True),
                                "application/json; charset=utf-8")

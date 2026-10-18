@@ -1,5 +1,6 @@
 """Native HTML over the existing identity-free detail read model."""
 from html import escape
+from urllib.parse import urlencode
 
 LOCALES = {
     "en": ("NFT transfer details", "Back", "This NFT’s individual quote", "Not provided",
@@ -48,7 +49,7 @@ section,article,details{border:1px solid var(--line);border-radius:12px;padding:
 """
 
 
-def render_detail(detail, locale="en"):
+def render_detail(detail, locale="en", *, nft_key=None, choices=()):
     if locale not in LOCALES:
         raise ValueError("unsupported locale")
     t = LOCALES[locale]
@@ -71,12 +72,19 @@ def render_detail(detail, locale="en"):
     if not clauses:
         terms = '<p class="missing">' + e(t[16] if detail["terms"]["status"] == "unavailable" else t[13]) + '</p>'
     gap = 'GapOf=Open' if detail["gap"] == "open" else ('GapOf=Closed' if detail["gap"] == "closed" else t[8])
-    langs = ''.join('<a lang="' + key + '" href="/nft?lang=' + key + '"'
+    selection = {"nft": nft_key} if nft_key is not None else {}
+    langs = ''.join('<a lang="' + key + '" href="/nft?' + e(urlencode(dict(selection, lang=key))) + '"'
                     + (' aria-current="page"' if key == locale else '') + '>' + key + '</a>' for key in LOCALES)
+    selectors = ''.join('<a href="/nft?' + e(urlencode({"lang": locale, "nft": item["nftKey"]}))
+                        + '"' + (' aria-current="page"' if item["nftKey"] == nft_key else '')
+                        + '>NFT ' + str(index + 1) + ' · '
+                        + e('GapOf=Open' if item["gap"] == "open" else
+                            ('GapOf=Closed' if item["gap"] == "closed" else t[8])) + '</a>'
+                        for index, item in enumerate(choices))
     return ('<!doctype html><html lang="' + locale + '"><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1"><title>' + e(t[0])
             + '</title><style>' + STYLE + '</style><body><main><header><a href="/">← ' + e(t[1])
-            + '</a><nav aria-label="' + e(t[17]) + '">' + langs + '</nav></header><h1>' + e(t[0])
+            + '</a><nav aria-label="' + e(t[17]) + '">' + langs + '</nav></header><nav aria-label="NFT">' + selectors + '</nav><h1>' + e(t[0])
             + '</h1><p class="gap">' + e(gap) + '</p><section><h2>' + e(t[2]) + '</h2><p class="missing">'
             + e(t[3]) + '</p></section><section><h2>' + e(t[4]) + '</h2><div class="markers">' + markers
             + '</div><ol class="timeline">' + ''.join(nodes) + '</ol><p class="rule">' + e(t[15])
