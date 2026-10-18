@@ -2,8 +2,7 @@ name: Bootstrap checks
 on:
   push:
     branches: [main, bootstrap/commit-bound-ci, fix/zos-bucket-identity-20261013]
-  pull_request:
-    branches: [main, bootstrap/commit-bound-ci, feat/stage1-domain-state-20261014, feat/stage2-segmented-settlement-20261014, feat/stage3-suffix-rollback-20261014, feat/stage4-deadline-exit-20261014]
+  pull_request: {}
 permissions:
   contents: read
 concurrency:
