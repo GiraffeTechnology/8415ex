@@ -15,6 +15,7 @@ from scenarios import events
 ROOT = str(Path(__file__).resolve().parents[2])
 
 CURRENT_DOMAIN_KINDS = {
+    "price-currency-admission-refused", "eth-gas-admission-refused", "combined-eth-admission-refused",
     "intent-accepted", "intent-refused",
     "receipt-minted", "trading-resumed", "transfer-executed", "registration-submitted",
     "registration-result-idempotent", "registration-result", "registration-result-drained",
@@ -63,7 +64,7 @@ class Vocabulary(unittest.TestCase):
     def test_a_kind_the_contract_needs_and_the_domain_lacks_is_named_not_hidden(self):
         self.assertEqual(self.conformance["declaredKindsNotRecorded"], [])
         self.assertEqual(set(self.conformance["requiredUnmappedAuditGroups"]),
-                         {"currency-admission", "eth-gas-admission", "remint"})
+                         {"remint"})
 
     def test_a_chain_only_kind_is_not_reported_as_an_unrecorded_defect(self):
         chain_only = {entry["kind"] for entry in events.CHAIN_ONLY_KINDS}
@@ -174,11 +175,14 @@ class Coverage(unittest.TestCase):
 
     def test_unjoined_current_requirements_are_explicit_gaps_not_recorded_coverage(self):
         groups = {entry["group"]: entry for entry in self.coverage["groups"]}
-        for name in ("currency-admission", "eth-gas-admission", "remint"):
+        for name in ("remint",):
             with self.subTest(group=name):
                 self.assertEqual(groups[name]["status"], "not-recorded-interface-gap")
                 self.assertTrue(groups[name]["whyNotLocal"])
                 self.assertNotIn(name, self.coverage["recordedGroups"])
+        for name in ("currency-admission", "eth-gas-admission"):
+            self.assertEqual(groups[name]["status"], "not-observed")
+            self.assertNotIn(name, self.coverage["recordedGroups"])
 
     def test_retired_physical_events_are_not_required_current_domain_events(self):
         self.assertTrue(set(events.RETIRED_PHYSICAL_KINDS).isdisjoint(events.DECLARED_KINDS))

@@ -301,6 +301,13 @@ class Exchange:
                 self._record(receipt_id, "intent-accepted", decision)
             else:
                 self._record(receipt_id, "intent-refused", decision)
+                for code in report["reasons"]:
+                    if code.startswith("EX_NFT0_CURRENCY_"):
+                        self._record_admission_refusal(receipt_id,
+                            DomainError(code, "Original NFT0 currency declaration refused"),
+                            {"action": "submit-intent", "operationReference": intent.intent_id,
+                             "signedTermsDigest": intent.digest, "currency": intent.quote_asset,
+                             "observedAt": report["observedAt"]})
         if intent.counterparty is None and report["executable"]:
             self.enter_order(intent.intent_id)
         return intent
@@ -630,7 +637,7 @@ class Exchange:
                     f"{report['intentId']}: {','.join(report['reasons'])}")
         match = self._check_match_binding(match, now)
         require(transfer_id not in self._transfer_ids(), "EX_TRANSFER_DUPLICATE_REFUSED", transfer_id)
-        self._check_trade_funds(match, escrow_id, now)
+        self._check_trade_funds(match, escrow_id, now, "execute-transfer", transfer_id)
         funding_status, rollback_status = "not-modelled", "none"
         if self.funding_required or escrow_id is not None:
             require(escrow_id is not None, "EX_SEGMENT_NOT_FUNDED",
@@ -679,13 +686,33 @@ class Exchange:
                 "currency set differs from the verified original mint declaration")
         return stored
 
-    def _check_trade_funds(self, match, escrow_id, now):
-        require(isinstance(self._eth_gas_gate, ETHTradeGasGate),
-                "EX_ETH_GAS_UNVERIFIED",
-                "Warning: authenticated ETH gas balance is unavailable; trading is disabled")
-        gas_admission = self._eth_gas_gate.admit(match, now, escrow_id)
-        require(gas_admission["allowed"], gas_admission["code"], gas_admission["warning"])
-        return self._check_price_balance(match, escrow_id, now, gas_admission)
+    def _check_trade_funds(self, match, escrow_id, now, action="funds-check", operation_ref=None):
+        try:
+            require(isinstance(self._eth_gas_gate, ETHTradeGasGate),
+                    "EX_ETH_GAS_UNVERIFIED",
+                    "Warning: authenticated ETH gas balance is unavailable; trading is disabled")
+            gas_admission = self._eth_gas_gate.admit(match, now, escrow_id)
+            require(gas_admission["allowed"], gas_admission["code"], gas_admission["warning"])
+            return self._check_price_balance(match, escrow_id, now, gas_admission)
+        except DomainError as error:
+            self._record_admission_refusal(self._asset_keys.get(match.asset.key), error,
+                {"action": action, "operationReference": operation_ref,
+                 "sellIntentDigest": match.sell_intent_digest, "buyIntentDigest": match.buy_intent_digest,
+                 "currency": match.quote_asset, "escrowId": escrow_id, "observedAt": now})
+            raise
+
+    def _record_admission_refusal(self, receipt_id, error, context):
+        if receipt_id not in self._receipts:
+            return
+        detail = dict(context, code=error.code, warning=error.detail,
+                      tradeFormed=False, financialEffects=False,
+                      nativeFinancialOutcome="not-asserted")
+        if error.code == "EX_ETH_COMBINED_BALANCE_INSUFFICIENT":
+            self._record(receipt_id, "combined-eth-admission-refused", detail)
+        elif error.code.startswith("EX_ETH_GAS_"):
+            self._record(receipt_id, "eth-gas-admission-refused", detail)
+        elif error.code.startswith(("EX_NFT0_CURRENCY_", "EX_PRICE_BALANCE_")):
+            self._record(receipt_id, "price-currency-admission-refused", detail)
 
     def _check_price_balance(self, match, escrow_id, now, gas_admission):
         receipt_id = self._asset_keys.get(match.asset.key)
@@ -911,7 +938,7 @@ class Exchange:
         require(leg_index not in self._escrow_by_leg[receipt_id], "EX_ESCROW_DUPLICATE_REFUSED",
                 f"leg {leg_index} is already funded")
         require(escrow_id not in self._escrows, "EX_ESCROW_DUPLICATE_REFUSED", escrow_id)
-        self._check_trade_funds(match, None, now)
+        self._check_trade_funds(match, None, now, "lock-escrow", escrow_id)
         position = EscrowPosition(escrow_id=escrow_id, receipt_id=receipt_id, leg_index=leg_index,
                                   payer=match.buyer, payee=match.seller,
                                   quote_asset=match.quote_asset, principal=match.price,

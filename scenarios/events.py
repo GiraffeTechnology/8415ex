@@ -90,16 +90,14 @@ AUDIT_GROUPS = (
     {
         "group": "currency-admission",
         "requires": "NFT0 missing, mismatched or insufficient selected-currency refusal",
-        "kinds": (),
-        "evidence": "interface-gap",
-        "whyNotLocal": "original currency refusal decisions are not yet carried by this timeline",
+        "kinds": ("price-currency-admission-refused", "combined-eth-admission-refused"),
+        "evidence": "recorded",
     },
     {
         "group": "eth-gas-admission",
         "requires": "zero or insufficient ETH warning and refusal before execution",
-        "kinds": (),
-        "evidence": "interface-gap",
-        "whyNotLocal": "original ETH admission decisions are not yet carried by this timeline",
+        "kinds": ("eth-gas-admission-refused", "combined-eth-admission-refused"),
+        "evidence": "recorded",
     },
     {
         "group": "remint",
@@ -143,9 +141,9 @@ RETIRED_PHYSICAL_KINDS = ("exit-step-blocked", "exit-step-done",
                           "receipt-burned", "redemption-requested")
 
 #: Every kind this contract names.
-DECLARED_KINDS = tuple(sorted(
+DECLARED_KINDS = tuple(sorted(set(
     [kind for group in AUDIT_GROUPS for kind in group["kinds"]]
-    + [entry["kind"] for entry in ANCILLARY_KINDS]))
+    + [entry["kind"] for entry in ANCILLARY_KINDS])))
 
 #: Kinds whose record is a movement that definitely happened. An attempt is not
 #: a movement: where an attempt has its own completed counterpart - a refund
@@ -194,18 +192,18 @@ CORRELATION_SOURCES = {
 #: the next step. Each is a dependency, not a defect and not a local failure.
 INTERFACE_GAPS = (
     {
-        "gap": "currency admission decisions are not joined to the timeline",
-        "neededFor": "the currency-admission audit group",
-        "whyNotLocal": "a report cannot invent the original admission decision",
+        "gap": "native financial currency admission runtime is not independently accepted",
+        "neededFor": "actual native financial acceptance beyond recorded domain refusals",
+        "whyNotLocal": "a recorded domain refusal does not prove a live native balance or atomic writer",
         "owner": "EX admission and original native financial integration owners",
-        "nextStep": "record the actual source-bound decision without signing or dispatching a refused trade",
+        "nextStep": "bind original native source and atomic financial gate; keep refused trades unsigned and undispatched",
     },
     {
-        "gap": "ETH gas warning and refusal decisions are not joined to the timeline",
-        "neededFor": "the eth-gas-admission audit group",
-        "whyNotLocal": "a gas amount alone is not an admission or refusal event",
+        "gap": "native ETH gas admission runtime is not independently accepted",
+        "neededFor": "actual ETH source and fee reservation acceptance beyond domain refusal records",
+        "whyNotLocal": "a recorded domain warning is not proof of a native balance, freeze or transaction",
         "owner": "EX gas admission and original native financial integration owners",
-        "nextStep": "join the real ETH admission outcome before execution without creating an invented event",
+        "nextStep": "verify original native ETH source and atomic reservation binding without inventing results",
     },
     {
         "gap": "original atomic remint evidence is not joined to the timeline",
