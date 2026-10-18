@@ -14,6 +14,7 @@ ASSET = Asset(11155111, '0x' + '1' * 40, 7)
 class OriginalSurface:
     def __init__(self):
         self.orders = {}
+        self.grants = {}
         self.invalid = set()
         self.position = 0
         self.owner = OWNER
@@ -21,6 +22,9 @@ class OriginalSurface:
 
     def intent(self, key):
         return self.orders[key]
+
+    def authorization(self, key):
+        return self.grants[key]
 
     def receipt(self, key):
         return SimpleNamespace(asset=ASSET)
@@ -44,8 +48,10 @@ class PriorityContracts(unittest.TestCase):
         self.book = PriorityBook(self.original, 'receipt-1', 'PYUSD-fixture', lambda: self.now)
 
     def add(self, key, side, price, nonce, signer=None, counterparty=None):
+        authorization_id = 'auth-' + key
+        self.original.grants[authorization_id] = SimpleNamespace(counterparties=(), max_amount=1000)
         intent = TradeIntent(key, side, signer or (OWNER if side == 'sell' else BUYER),
-            ASSET, price, 'PYUSD-fixture', 1, nonce, 1000, 'auth-1', counterparty)
+            ASSET, price, 'PYUSD-fixture', 1, nonce, 1000, authorization_id, counterparty)
         self.original.orders[key] = intent
         return self.book.enter(key)
 
@@ -59,7 +65,8 @@ class PriorityContracts(unittest.TestCase):
         self.assertEqual(result['bidPriority'], ['bid-high', 'bid-low'])
         self.assertEqual(result['selected']['buyIntentId'], 'bid-high')
         self.assertEqual(result['selected']['sellIntentId'], 'ask-low')
-        self.assertIsNone(result['selected']['executionPrice'])
+        self.assertEqual(result['selected']['executionPrice'], 100)
+        self.assertEqual(result['selected']['priceRule'], 'price-time-resting-order-limit')
         self.assertEqual(result['execution'], 'NOT_RUN')
         self.assertEqual(result['funding'], 'NOT_RUN')
         self.assertEqual(self.original.position, 0)
@@ -108,3 +115,28 @@ class PriorityContracts(unittest.TestCase):
         self.now = True
         with self.assertRaises(PriorityRefused):
             self.add('bid-1', 'buy', 150, 1)
+
+    def test_original_grant_counterparty_restriction_filters_the_pair(self):
+        self.add('ask-1', 'sell', 100, 1)
+        self.add('bid-best', 'buy', 150, 2)
+        self.add('bid-eligible', 'buy', 140, 3, OTHER)
+        self.original.grants['auth-ask-1'].counterparties = (OTHER,)
+        result = self.book.proposal()
+        self.assertEqual(result['bidPriority'], ['bid-best', 'bid-eligible'])
+        self.assertEqual(result['selected']['buyIntentId'], 'bid-eligible')
+        self.assertEqual(result['selected']['executionPrice'], 100)
+        self.assertEqual(result['execution'], 'NOT_RUN')
+        self.assertEqual(self.original.position, 0)
+
+    def test_both_original_grant_amount_bounds_apply_to_the_resting_price(self):
+        self.add('ask-1', 'sell', 100, 1)
+        self.add('bid-1', 'buy', 150, 2)
+        for authorization_id in ('auth-ask-1', 'auth-bid-1'):
+            with self.subTest(authorization_id=authorization_id):
+                grant = self.original.grants[authorization_id]
+                grant.max_amount = 99
+                self.assertIsNone(self.book.proposal()['selected'])
+                grant.max_amount = 100
+                self.assertEqual(self.book.proposal()['selected']['executionPrice'], 100)
+                grant.max_amount = 1000
+        self.assertEqual(self.original.position, 0)
