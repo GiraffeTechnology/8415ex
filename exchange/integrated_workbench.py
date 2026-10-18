@@ -11,6 +11,7 @@ from .workbench import WorkbenchServer, WorkbenchHandler
 from .demo_ui import MAX_BODY
 from .gas_confirmation_ui import GasConfirmationPage
 from .gas_budget import GasBudgetRefused
+from .gas_disclosure_locales import WORDS as GAS_WORDS
 from .registration_source_workbench import (
     RegistrationSourceWorkbench, RegistrationSourceRefused,
 )
@@ -41,8 +42,10 @@ class IntegratedWorkbenchServer(WorkbenchServer):
 
 
 class IntegratedWorkbenchHandler(WorkbenchHandler):
-    def _page(self, title, content):
-        return ('<!doctype html><html lang="en"><meta charset="utf-8">'
+    def _page(self, title, content, locale="en"):
+        if locale not in GAS_WORDS:
+            raise ValueError("supported disclosure locale required")
+        return ('<!doctype html><html lang="' + locale + '"><meta charset="utf-8">'
                 '<meta name="viewport" content="width=device-width,initial-scale=1">'
                 '<title>' + escape(title) + '</title><body><main>'
                 '<nav><a href="/receipt">Receipt</a> '
@@ -68,11 +71,20 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
             if request.fragment:
                 raise ValueError("fragment refused")
             if request.path == "/gas":
+                locale = "en"
                 if request.query:
-                    raise ValueError("gas page takes no query fields")
+                    if len(request.query) > 64:
+                        raise ValueError("bounded locale query required")
+                    query = parse_qs(request.query, strict_parsing=True,
+                                     keep_blank_values=True, max_num_fields=1)
+                    if set(query) != {"lang"} or len(query["lang"]) != 1:
+                        raise ValueError("one disclosure locale required")
+                    locale = query["lang"][0]
+                    if locale not in GAS_WORDS:
+                        raise ValueError("supported disclosure locale required")
                 content = self.server.gas_page.render(
-                    self.server.current_time(), self.server.csrf)
-                title = "Gas confirmation"
+                    self.server.current_time(), self.server.csrf, locale=locale)
+                title = GAS_WORDS[locale]["heading"]
             else:
                 rid = self.server.binding.receipt_id
                 if not request.query:
@@ -91,7 +103,8 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
                     content = self.server.registration_sources.render_source(
                         query["source"][0], rid)
                 title = "Registration source"
-            self.send_body(200, self._page(title, content))
+            self.send_body(200, self._page(title, content,
+                                          locale if request.path == "/gas" else "en"))
         except (ValueError, KeyError, GasBudgetRefused,
                 RegistrationSourceRefused):
             self.send_body(400, "current component input or binding refused")
@@ -139,4 +152,5 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
             self.send_body(408, "outcome unknown; enquire original wallet before retry")
         except OSError:
             self.send_body(503, "outcome unknown; enquire original wallet before retry")
+
 
