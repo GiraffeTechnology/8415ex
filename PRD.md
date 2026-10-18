@@ -12,7 +12,7 @@ Build a commodity spot-intermediary Web3 infrastructure DEMO with a cryptocurren
 
 Implement the confirmed whole-receipt trading, Oracle registration, segment settlement and suffix rollback model, then Linux integration and Sepolia demonstrations. Commercial pricing, legal advice and real-asset admission remain local later decisions. Six stages are development and acceptance scopes, not a serial CI waiting queue. After a stage PR, continue the next independent authorized stage immediately. CI and exact-head acceptance are verified separately before merge. Existing approved environments and grants remain controlling; this document creates no new infrastructure, credentials or funds authority. A source file, HTTP 200 or CI success alone is not delivery.
 
-P0 execution boundary: no on-chain action may originate from any CTyun server. This overrides earlier wording that allowed CTyun-originated Sepolia work. Existing approved CTyun Linux servers may perform permitted non-chain work; authorized chain actions must use the existing approved non-CTyun Linux execution path. Sepolia remains the EX demonstration network. No new server, credentials, permission expansion or substitute chain is authorized by this document.
+Execution boundary: GitHub Actions is permitted for CI and its automated checks. Other product execution uses the existing approved non-Windows Linux paths. On-chain operations must obey the restricted-host prohibitions in the private execution policy and use only an already authorized chain-execution path. Sepolia remains the EX demonstration network. CI permission creates no deployment, credential, permission-expansion, real-value or chain-broadcast authority. Server identities and network addresses remain private.
 
 ## 2. Requirement states and change control
 
@@ -304,7 +304,7 @@ Use the existing approved independent EX design, not a wallet design. Its six-la
 
 | ID | Requirement |
 | --- | --- |
-| EX-NFR-01 | All product/unit/model/fixture/integration/UI/API/EVM/syntax/type/build/package tests run only on existing approved non-Windows Linux servers with verified CTyun or Aliyun provider binding; never local, Windows, WSL, assistant workspace or an unverified runner. Read rules on reconnect and reuse existing entry points. No on-chain action may originate from any CTyun server; use only the existing approved non-CTyun path for authorized chain work. A saved script alone is not enforcement. |
+| EX-NFR-01 | CI and its applicable automated unit/model/fixture/integration/UI/API/EVM simulation, syntax/type, build and package checks may run in GitHub Actions. Other product tests/execution use existing approved non-Windows Linux environments. No local, Windows, WSL, assistant-workspace or unapproved execution fallback. Record exact source, configuration and run evidence. Chain work follows the separate private restricted-host policy and existing authority; CI permission is not chain/deployment permission. |
 | EX-NFR-02 | Prevent funds/asset reentry and replay with authority and state preconditions. |
 | EX-NFR-03 | Safely recover reorg, duplicate logs, RPC timeout and unknown results. |
 | EX-NFR-04 | Restart and duplicate queue consumption preserve correlations and never duplicate settlement. |
@@ -312,7 +312,7 @@ Use the existing approved independent EX design, not a wallet design. Its six-la
 | EX-NFR-06 | Keep secrets out of code, public artifacts, logs, chain and metadata; encrypted receipt-access storage is separate from wallet-key custody. |
 | EX-NFR-07 | Explicit network, chain, contracts, units, confirmation and timeout parameters enter configuration digest. |
 | EX-NFR-08 | Measure load, duration, backlog and failure rate; do not invent throughput/latency SLAs. |
-| EX-NFR-09 | Public repository text is English and sanitized; private links, operational topology and secrets stay private. |
+| EX-NFR-09 | Public repository text is English and sanitized. Do not publish real usernames, account identities, wallet addresses, server names, IP addresses, private links, operational topology, credentials or other private information in documents, source, commits, comments, logs or artifacts. Retain necessary private values only in the existing authorized private channel. |
 | EX-NFR-11 | Trace reference-source timing and UI projections; do not expose wallet identities, private records, signing secrets or raw authorization material. Data failure and locale changes cannot rewrite signed content. |
 | EX-NFR-10 | Upgrade, pause and recovery cannot bypass ownership or finalized-prefix boundaries. |
 
@@ -509,7 +509,7 @@ Stage 0 also verifies v1.4 document identity, current design and exact base, pro
 
 Stage 1 additionally implements the full commodity/crypto market, individual quote cards and gap details, complete identity-free signed-business-terms projections, actual independent positions and per-position signature evidence, long-chain interactions, six candidate languages, real reference adapter/freshness states, both collateral choices and ordinary market-maker participation. T-69..84 apply where relevant; actual feed/browser evidence stays NOT_RUN/NOT_VERIFIED until genuinely obtained. A missing feed cannot stop independent trading or registration work.
 
-Stage 5 additionally supplies real UI/data evidence for T-69..84: continuous source reading/refresh/failure recovery, simulation separation, individual gap/terms/positions/signatures/privacy, six-language responsive navigation, market-maker ordering and both collateral scenarios. Undefined financing/liquidation/revenue mechanisms remain honestly open. All CTyun-originated chain actions are prohibited; any authorized Sepolia execution uses the existing approved non-CTyun Linux path. A model, design or historical loader pass cannot replace these results.
+Stage 5 additionally supplies real UI/data evidence for T-69..84: continuous source reading/refresh/failure recovery, simulation separation, individual gap/terms/positions/signatures/privacy, six-language responsive navigation, market-maker ordering and both collateral scenarios. Undefined financing/liquidation/revenue mechanisms remain honestly open. All chain actions from hosts prohibited by the private execution policy remain prohibited; authorized Sepolia execution uses the existing approved chain-execution path. A model, design or historical loader pass cannot replace these results.
 
 ## 17. Acceptance matrix
 
@@ -543,7 +543,7 @@ The complete matrix retains T-01 through T-68 with revised semantics and extends
 | T-24 | Honor mint time units and boundaries; refuse new trades after cutoff; overdue unregistered suffix fails and owner returns to effective holder; preserve registered and settled prefix. | EX-TIME-01 / EX-TIME-02 / EX-TIME-03 | 4 |
 | T-25 | EX transfers the bill of lading without physical collection, transport, warehouse exit or collection-driven burn. Terms remain readable; owner ahead of holder may resell. Authorized atomic holder remint is separately covered by T63-68. | EX-SCOPE-08 / EX-EXIT-01 / EX-INV-08 / EX-SCOPE-12 | 4 |
 | T-26 | Separate simulated/real, pending/complete, owner/holder, NONE/OPEN/ADMITTED/CANCELLED/SUPERSEDED, historical provisional/final, Oracle application refusal, admission and funds. No protocol REJECTED or overall-complete inference from NO/green. | EX-NFR-05 | 1 |
-| T-27 | Record exact approved remote non-Windows Linux provider/server, source/config/run/commands/fixtures and reconnect-rule entry-point evidence. No local/Windows/unverified-runner result is compliant runtime evidence. CTyun may not originate any chain action. | EX-NFR-01 / EX-NFR-07 | 1 |
+| T-27 | Record exact source/config/run/commands/fixtures for GitHub Actions CI or the existing approved non-Windows Linux execution path, as applicable. CI validates only checks actually run; it does not prove deployment or live-chain acceptance. Preserve restricted-host chain prohibitions and keep actual server identities/IPs private. | EX-NFR-01 / EX-NFR-07 | 1 |
 | T-28 | On duplicate consumption, restart or unknown freeze/release/refund, query before retry; never duplicate funds or gas actions. | EX-NFR-03 / EX-NFR-04 / EX-SETTLE-05 | 2 |
 | T-29 | Reject rollback without sufficient authority; no arbitrary confiscation or rewriting a finalized prefix. | EX-SCOPE-07 / EX-NFR-10 | 3 |
 | T-30 | Recover reorg, duplicate logs, RPC timeout and reordered events without early or repeated release. | EX-INV-10 / EX-NFR-03 | 3 |
@@ -551,7 +551,7 @@ The complete matrix retains T-01 through T-68 with revised semantics and extends
 | T-32 | Trace bill-of-lading terms, original Oracle registration, holder and funds. Physical collection or collection-driven destruction is not completion; authorized remint separately preserves old/new NFT links and existing evidence. | EX-EXIT-02 / EX-EXIT-03 / EX-SCOPE-09 / EX-REMINT-04 | 4 / 5 |
 | T-33 | Reject duplicate valid mappings, transfer replay and repeated funds actions; failed old segments stay dead, valid NFTs can start a new chain, history remains. | EX-EXIT-03 / EX-ROLLBACK-05 | 4 |
 | T-34 | Agent actions already authorized in the wallet need no extra platform step approval; refuse out-of-scope actions. | EX-AUTH-01 / EX-AUTH-05 | 1 |
-| T-35 | Sepolia 11155111 only; fixture NFT0 immutably permits the verified designated test PYUSD and each scenario order explicitly selects it; gas is test ETH. Refuse wrong chain/asset/NFT0 selection before sending, without currency substitution, conversion or Hoodi. Never send from CTyun. | EX-DEMO-01 / EX-SCOPE-11 / EX-GAS-09 | 5 |
+| T-35 | Sepolia 11155111 only; fixture NFT0 immutably permits the verified designated test PYUSD and each scenario order explicitly selects it; gas is test ETH. Refuse wrong chain/asset/NFT0 selection before sending, without currency substitution, conversion or Hoodi. Never send from a host prohibited by the private execution policy. | EX-DEMO-01 / EX-SCOPE-11 / EX-GAS-09 | 5 |
 | T-36 | All six scenarios have matching actual transactions, simulated registration evidence, UI states and final assertions. | EX-DEMO-02 | 5 |
 | T-37 | Demo, PPT and playable film consistently label real test-chain actions, simulated roles and animation; no implied institutional cooperation. | EX-DEMO-03 | 5 |
 | T-38 | Required CI belongs to exact head; actual deployed commit matches; read back artifact bytes and hashes. | EX-NFR-07 | 5 |
@@ -642,7 +642,7 @@ A funded account is not a gas-policy decision; a token/provider interface is not
 
 ## 20. Source and decision traceability
 
-This publication synchronizes the complete v1.4 product baseline, including the 2026-10-18 UI-literal and ERC semantic corrections. Private source locators, internal dispatch messages and operational topology are not reproduced. Original source records remain independently retained for audit. The subsequent publication instruction supersedes the previous private-only product-document destination; it does not authorize disclosure of operational materials. The subsequent P0 prohibition on all CTyun-originated chain actions overrides earlier conflicting runtime-location wording.
+This publication synchronizes the complete v1.4 product baseline, including the 2026-10-18 UI-literal and ERC semantic corrections. Private source locators, internal dispatch messages and operational topology are not reproduced. Original source records remain independently retained for audit. The subsequent publication instruction supersedes the previous private-only product-document destination; it does not authorize disclosure of operational materials. Subsequent execution instructions permit GitHub Actions CI while retaining restricted-host chain prohibitions. Public repository content must not disclose real usernames, wallet addresses, server names, IPs or other private information.
 
 | Source group | Preserved product scope |
 | --- | --- |
@@ -653,7 +653,7 @@ This publication synchronizes the complete v1.4 product baseline, including the 
 | SRC-08 / SRC-10P | Historical private handling and delivery provenance, superseded only for the currently authorized product publication; operational privacy remains. |
 | SRC-10B | Whole-artwork backend alignment and direct/electronic/intermediary transaction sources, not new trading modes. |
 | SRC-10C / SRC-10D | Buyer-confirmed cap/P50, maximum prefreeze, actual consumption/unused refund and ETH-only gas with zero/insufficient-ETH refusal. |
-| SRC-10E | Approved CTyun/Aliyun non-Windows testing and reconnect rules, now constrained by the later CTyun no-chain P0. |
+| SRC-10E | Existing approved non-Windows execution and reconnect rules, updated by permission for GitHub Actions CI and the private restricted-host chain policy. No actual host identities are published. |
 | SRC-10F / SRC-10G / SRC-10H | Immutable one/multiple NFT0 currencies, explicit per-order selection, selected-currency shortage refusal and no conversion. |
 | SRC-10I | Separate development and independent QA/CI acceptance; exact-source required checks before merge, without stage development waiting for CI. |
 | SRC-10J / SRC-10K / SRC-10L | Authorized holder possession/equality remint, atomic old burn/new mint, editable new terms, no added cleanup/migration/product approval. |
@@ -681,4 +681,4 @@ The v1.4 completion scope additionally requires all applicable T-69..84: operabl
 
 Coverage preserves sections 1..21, all six stages/demonstrations, all 111 requirement IDs, T-01..84 and D-01..16. Conflicting old assertions are replaced in their applicable requirements and acceptance cases. Historical machine plans/locks must be reconciled separately and cannot certify this revision; no historical run inherits a revised-case PASS.
 
-This v1.4 edition preserves all 111 EX-* requirement rows, all T-01 through T-84, all D-01 through D-16, sections 1 through 21, Stage 0 through Stage 5 and DEMO-01 through DEMO-06. Private source/dispatch/host details are generalized, not product requirements removed. The publication and CTyun no-chain changes affect document destination and execution scope only. No product runtime test, deployment or on-chain action is evidenced by this publication.
+This v1.4 edition preserves all 111 EX-* requirement rows, all T-01 through T-84, all D-01 through D-16, sections 1 through 21, Stage 0 through Stage 5 and DEMO-01 through DEMO-06. Private source/dispatch/host details are generalized, not product requirements removed. The publication, CI and restricted-host/privacy changes affect document destination and execution scope only. No product runtime test, deployment or on-chain action is evidenced by this publication.

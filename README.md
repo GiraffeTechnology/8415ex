@@ -53,9 +53,9 @@ the reports below say so about themselves.
 
 ## Running the checks
 
-Run these existing entry points only from the repository root on existing approved non-Windows Linux CTyun/Aliyun servers, under AGENTS and current operational rules. Never run product checks locally, on Windows/WSL, in the assistant workspace or an unverified runner. No on-chain action may originate from any CTyun server; authorized chain execution uses only the existing approved non-CTyun Linux path. EX remains Sepolia 11155111, not Wallet Hoodi.
+GitHub Actions is permitted for CI. Run other product checks through the existing approved non-Windows Linux entry points under AGENTS and the private operational rules, not locally, on Windows/WSL, in the assistant workspace or an unapproved runner. The private restricted-host prohibitions on chain activity remain effective. CI permission does not authorize deployment or chain broadcasts. EX remains Sepolia 11155111, not Wallet Hoodi.
 
-Commands below are documentation, not permission to execute them here. Historical outputs or hosted CI are not compliant runtime/browser/deployment/chain acceptance. Record exact head/base and the tested commit; synthetic merge identity differs from head. Missing checks are not green.
+Commands below are documentation, not permission to execute them here. Historical outputs do not validate current code. GitHub Actions is valid evidence for its actual CI checks, not for unexecuted deployment or live-chain acceptance. Record exact head/base and the tested commit; synthetic merge identity differs from head. Missing checks are not green.
 
 The bootstrap checks need `APPROVED_TEST_ROOT` set to
 an existing, canonical directory chosen explicitly for them.
@@ -119,4 +119,6 @@ and the suite fails on either.
 
 After a stage PR, continue the next independent authorized stage while review/CI proceeds. Reuse existing CI and check exact-source outcomes, without historical PASS inheritance. Missing implementation/evidence remains NOT_RUN/NOT_VERIFIED. Publication grants no new credentials, permissions, deployment, chain-execution or real-value authority. Private documents/source locators, internal assignments, topology, paths, operational logs and secrets remain private.
 
-Published product baseline file integrity: PRD.md SHA-256 `28e7dac5920fc25f753ff6672d9475fc9a2597ebdc9970510f238e1a6f31c981`. This identifies document bytes, not a runtime acceptance result.
+Published product baseline file integrity: PRD.md SHA-256 `ea535c29ac5184d6eafcf8411b532428bc1800c2f8f37274bda92e444514f81d`. This identifies document bytes, not a runtime acceptance result.
+
+Public-repository privacy: do not publish real usernames, wallet addresses, server names, IP addresses, credentials or other private information in documents, source, commit messages, comments, logs or artifacts. Necessary actual values stay in the existing authorized private channel.
