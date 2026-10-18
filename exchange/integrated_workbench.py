@@ -5,7 +5,7 @@ wallet, session or registration authority is selected here.
 """
 from html import escape
 import re
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 from .workbench import WorkbenchServer, WorkbenchHandler
 from .demo_ui import MAX_BODY
@@ -13,7 +13,7 @@ from .gas_confirmation_ui import GasConfirmationPage, GasDisclosureUnavailable
 from .gas_budget import GasBudgetRefused
 from .gas_disclosure_locales import WORDS as GAS_WORDS, TRANSPORT
 from .registration_source_workbench import (
-    RegistrationSourceWorkbench, RegistrationSourceRefused,
+    RegistrationSourceWorkbench, RegistrationSourceRefused, SOURCES,
 )
 
 
@@ -55,17 +55,24 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
             raise ValueError("one supported disclosure locale required")
         return query["lang"][0]
 
-    def _page(self, title, content, locale="en", language_path="/gas"):
+    def _page(self, title, content, locale="en", language_path="/gas", language_context=None):
         if locale not in GAS_WORDS:
             raise ValueError("supported disclosure locale required")
         words = TRANSPORT[locale]
-        suffix = "" if locale == "en" else "?lang=" + locale
-        links = ('<nav><a href="/receipt' + suffix + '">' + escape(words["receipt"]) + '</a> '
-                 '<a href="/gas' + suffix + '">' + escape(words["gas"]) + '</a> '
-                 '<a href="/registration-source' + suffix + '">' + escape(words["registration"])
-                 + '</a></nav>')
+        links = self.native_navigation(locale)
+        context = {}
+        if language_context is not None:
+            if (language_path != "/registration-source"
+                    or type(language_context) is not dict
+                    or set(language_context) != {"receipt", "source"}
+                    or language_context["receipt"] != self.server.binding.receipt_id
+                    or type(language_context["source"]) is not str
+                    or language_context["source"] not in SOURCES):
+                raise ValueError("original selected registration source required")
+            context = dict(language_context)
         languages = '<nav aria-label="' + escape(words["language"]) + '">' + ' '.join(
-            '<a lang="' + key + '" href="' + language_path + '?lang=' + key + '">' + label + '</a>'
+            '<a lang="' + key + '" href="' + language_path + '?'
+            + escape(urlencode({"lang": key, **context}), quote=True) + '">' + label + '</a>'
             for key, label in (("en", "English"), ("zh-Hans", "简体中文"),
                                ("zh-Hant", "繁體中文"), ("fr", "Français"),
                                ("es", "Español"), ("ja", "日本語"))) + '</nav>'
@@ -83,15 +90,16 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
         status = 503 if error.code in ("QUOTE_UNAVAILABLE", "QUOTE_MISSING") else 400
         self.send_body(status, self._page(GAS_WORDS[locale]["heading"], content, locale))
 
-    def native_page(self, name, locale="en"):
-        body = super().native_page(name, locale=locale)
+    @staticmethod
+    def native_navigation(locale):
+        native = WorkbenchHandler.native_navigation(locale)
         words = TRANSPORT[locale]
         suffix = "" if locale == "en" else "?lang=" + locale
         links = ('<nav aria-label="' + escape(words["components"]) + '">'
                  '<a href="/gas' + suffix + '">' + escape(words["gas"]) + '</a> '
                  '<a href="/registration-source' + suffix + '">'
                  + escape(words["registration"]) + '</a></nav>')
-        return body.replace("<main>", "<main>" + links, 1)
+        return native + links
 
     def do_GET(self):
         request = urlsplit(self.path)
@@ -126,6 +134,7 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
             self.send_body(421, TRANSPORT[locale]["hostRefused"])
             return
         try:
+            language_context = None
             if request.fragment:
                 raise ValueError("fragment refused")
             if request.path == "/gas":
@@ -143,8 +152,13 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
                         raise ValueError("receipt differs from native workbench")
                     content = self.server.registration_sources.render_source(
                         source_query["source"][0], rid, locale=locale)
+                    # The original controller has validated this source against
+                    # the host-bound receipt. Preserve that exact read context
+                    # when changing language; never copy arbitrary query fields.
+                    language_context = {"receipt": rid, "source": source_query["source"][0]}
                 title = TRANSPORT[locale]["registration"]
-            self.send_body(200, self._page(title, content, locale, request.path))
+            self.send_body(200, self._page(title, content, locale, request.path,
+                                          language_context=language_context))
         except GasDisclosureUnavailable as error:
             self._quote_unavailable(error, locale)
         except (ValueError, KeyError, GasBudgetRefused,
