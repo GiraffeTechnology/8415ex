@@ -21,6 +21,7 @@ from .reference_feed import CommodityReferenceFeed
 from .market_page import render_market, ASSETS
 from .demo_ui import DemoHandler, DemoServer, MAX_BODY
 from .errors import DomainError
+from .public_workbench import snapshot as public_snapshot, command_result
 
 ACTIONS = {
     "submit-registration": "Submit registration",
@@ -102,11 +103,8 @@ class RuntimeBinding:
 
 
 def public_result(value):
-    """Expose only bounded status references, never arbitrary gateway payloads."""
-    if not isinstance(value, dict):
-        return {"status": "unclassified", "detail": "inspect the original task journal"}
-    allowed = ("status", "code", "state", "operationId", "transactionHash")
-    return {k: str(value[k])[:256] for k in allowed if k in value}
+    """Known statuses and valid transaction hashes; no opaque party-bearing text."""
+    return command_result(value)
 
 class WorkbenchServer(DemoServer):
     def __init__(self, binding, port=0, commit=None, tree=None, detail_bindings=(), reference_feed=None):
@@ -148,13 +146,13 @@ class WorkbenchHandler(DemoHandler):
                  'in this one process. A scenario run never changes the native receipt.</p>')
         if name == "queue":
             extra += self.queue_controls()
-            snapshot = binding.snapshot()["state"]
+            snapshot = public_snapshot(binding.snapshot())["state"]
             extra += '<h3>Funds, recovery and exit queue detail</h3><pre>' + escape(json.dumps(
-                {k:snapshot[k] for k in ("funds", "rollback", "exit", "overdue")},
+                {k:snapshot[k] for k in ("funds", "rollback", "overdue")},
                 sort_keys=True, indent=2)) + '</pre>' 
         if name == "evidence":
             extra += '<h3>Runtime boundary</h3><pre>' + escape(json.dumps({
-                "source": binding.run, "commandGateway": "configured" if binding.gateway else "NOT_CONFIGURED",
+                "source": public_snapshot(binding.snapshot())["source"], "commandGateway": "configured" if binding.gateway else "NOT_CONFIGURED",
                 "providerAcceptance": "NOT_RUN", "chainAcceptance": "NOT_RUN",
                 "durableRecovery": "NOT_RUN", "localHistory": "lost on process exit"},
                 sort_keys=True, indent=2)) + '</pre>'
@@ -262,10 +260,10 @@ class WorkbenchHandler(DemoHandler):
             if req.path == "/demo":
                 self.send_body(200, super().home())
             elif req.path == "/api/snapshot":
-                self.send_body(200, json.dumps(self.server.binding.snapshot(), sort_keys=True),
+                self.send_body(200, json.dumps(public_snapshot(self.server.binding.snapshot()), sort_keys=True),
                                "application/json; charset=utf-8")
             elif req.path == "/api/operations":
-                self.send_body(200, json.dumps({"source": self.server.source,
+                self.send_body(200, json.dumps({"source": public_snapshot(self.server.binding.snapshot())["source"],
                     "observations": list(self.server.command_observations.values()),
                     "meaning": "bounded RAM status references, not a durable journal"}, sort_keys=True),
                     "application/json; charset=utf-8")
@@ -274,7 +272,7 @@ class WorkbenchHandler(DemoHandler):
             else:
                 self.send_body(404, "unknown workbench entry")
         except (ValueError, KeyError, DomainError) as error:
-            self.send_body(400, escape(getattr(error,"code",str(error))))
+            self.send_body(400, "request refused; inspect the original private journal")
 
     def do_POST(self):
         if self.path == "/simulate":
@@ -316,7 +314,7 @@ class WorkbenchHandler(DemoHandler):
             if segment != ("legIndex" in payload):
                 raise ValueError("segment actions need a leg; receipt actions take no leg")
             observed = self.server.binding.command(fields["action"], fields["key"], fields["revision"], payload)
-            item = {"journalKey": observed["journalKey"], "enquired": observed["enquired"],
+            item = {"enquired": observed["enquired"],
                     "action": fields["action"], "result": public_result(observed["result"]),
                     "meaning": "gateway observation; verify original journal and evidence"}
             self.server.command_observations[fields["key"]] = item
@@ -324,12 +322,12 @@ class WorkbenchHandler(DemoHandler):
                 self.server.command_observations.popitem(last=False)
             self.send_body(303, "", Location="/queue")
         except PermissionError as error:
-            self.send_body(403, escape(str(error)))
+            self.send_body(403, "original checked gateway refused this operation")
         except TimeoutError:
             self.close_connection = True
             self.send_body(408, "operation timed out; enquire original journal before retry")
         except (ValueError, UnicodeError, DomainError) as error:
-            self.send_body(400, escape(getattr(error,"code",str(error))))
+            self.send_body(400, "request refused; inspect the original private journal")
         except OSError:
             self.send_body(503, "operation outcome unknown; enquire original journal before retry")
 
@@ -359,3 +357,4 @@ def main(argv=None):
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
