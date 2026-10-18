@@ -3,6 +3,7 @@ from html import escape
 from urllib.parse import urlencode
 from .nft_detail_page import LOCALES, STYLE
 from .gap_projection import gap_label
+from .reference_provenance_page import render_reference_fields
 
 ASSETS = {name: ("image/png" if name.endswith(".png") else "image/svg+xml") for name in
           ("soy.png", "ore.png", "copper.png", "cube.svg", "search.svg", "sparkline.svg", "sparkline-stale.svg")}
@@ -75,8 +76,7 @@ def render_market(entries, reference, locale="en", query=""):
                      + '">' + e(gap) + '</span></p><span>' + e(t[10]) + ' →</span></a>')
     status = reference.get("status", "not-connected")
     status_label = {"fresh": states[0], "stale": states[1], "unavailable": states[2], "unknown": states[3], "not-connected": t[15]}.get(status, states[3])
-    fields = ''.join('<dt>' + e(key) + '</dt><dd>' + e(reference.get(key) if reference.get(key) is not None else common[3]) + '</dd>'
-                     for key in ("provider", "sourceURL", "series", "spec", "market", "priceType", "currency", "unit", "sourceAsOf", "sourcePrecision", "fetchedAt", "sourceDelay", "lastSuccessful"))
+    fields = render_reference_fields(reference, locale)
     languages = ''.join('<a href="/market?' + e(urlencode({"lang": key, "q": query})) + '" lang="' + key + '">' + key + '</a>' for key in LOCALES)
     return ('<!doctype html><html lang="' + locale + '"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             '<title>8415EX · ' + e(t[0]) + '</title><style>' + STYLE + MARKET_STYLE + '</style><body><main><header class="market-top">'
