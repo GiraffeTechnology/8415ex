@@ -1734,11 +1734,11 @@ class Exchange:
     def receipt_timeline(self, receipt_id):
         """Trade, registration, funding and rollback records in one order."""
         self.receipt(receipt_id)
-        return tuple(self._events[receipt_id])
+        return tuple(deepcopy(self._events[receipt_id]))
 
     def _record(self, receipt_id, kind, detail):
         self._events[receipt_id].append({"sequence": len(self._events[receipt_id]), "kind": kind,
-                                         "receiptId": receipt_id, "detail": detail})
+                                         "receiptId": receipt_id, "detail": deepcopy(detail)})
 
     def _now(self, now):
         return instant(self._clock() if now is None else now, "EX_INSTANT_REFUSED")
