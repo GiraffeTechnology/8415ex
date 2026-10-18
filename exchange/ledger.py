@@ -14,6 +14,7 @@ value of an address.
 """
 from dataclasses import dataclass, field, replace
 from copy import deepcopy
+import re
 
 from .errors import DomainError, require
 from .eth_trade_gas import ETHTradeGasGate
@@ -912,13 +913,13 @@ class Exchange:
     def escrow(self, escrow_id):
         found = self._escrows.get(identifier(escrow_id, "EX_ESCROW_REFUSED"))
         require(found is not None, "EX_ESCROW_UNKNOWN", escrow_id)
-        return found
+        return deepcopy(found)
 
     def escrow_for_leg(self, receipt_id, leg_index):
         self.receipt(receipt_id)
         found = self._escrow_by_leg[receipt_id].get(leg_index)
         require(found is not None, "EX_ESCROW_UNKNOWN", f"leg {leg_index}")
-        return self._escrows[found]
+        return deepcopy(self._escrows[found])
 
     def lock_escrow(self, match, escrow_id, now=None):
         """Put this leg's buyer's own money in its own position.
@@ -1166,7 +1167,8 @@ class Exchange:
                 "secondPaymentSent": False})
         return tuple(resumed)
 
-    def record_gas(self, receipt_id, leg_index, kind, spent, shared_with=(), note=None):
+    def record_gas(self, receipt_id, leg_index, kind, spent, shared_with=(), note=None,
+                   *, transaction_hash=None):
         """Record actual gas this leg's buyer bore.
 
         The product rule is settled: each leg's buyer bears that leg's trade,
@@ -1175,6 +1177,13 @@ class Exchange:
         a fee is actually deducted, are still open, so this records the shared
         set and refuses to charge a shared operation to every leg at full
         amount. No apportionment formula is treated here as approved.
+
+        An original transaction hash provides replay identity, not receipt
+        authenticity. The installed original observer must verify actual fees
+        and the segment binding first. Distinct retry transactions can incur
+        distinct actual fees; repeating one transaction cannot charge again.
+        Legacy identity-free simulation records retain their conservative
+        shared-operation guard and are not authoritative native fee evidence.
         """
         self.receipt(receipt_id)
         leg = self.leg(receipt_id, leg_index)
@@ -1191,20 +1200,32 @@ class Exchange:
                  "sharedOperation": len(shared) > 1,
                  "apportionment": "undecided" if len(shared) > 1 else "single-leg",
                  "note": note}
+        if transaction_hash is not None:
+            require(type(transaction_hash) is str
+                    and re.fullmatch(r"0x[0-9a-f]{64}", transaction_hash) is not None,
+                    "EX_GAS_TRANSACTION_REFUSED", "canonical original transaction hash required")
+            entry["transactionHash"] = transaction_hash
+            for records in self._gas[receipt_id].values():
+                for previous in records:
+                    if previous.get("transactionHash") == transaction_hash:
+                        require(previous == entry, "EX_GAS_TRANSACTION_CONFLICT",
+                                "same actual transaction cannot change fees or segment responsibility")
+                        return deepcopy(previous)
         if len(shared) > 1:
             # A shared operation is recorded once against the leg that is paying
             # for it here. Charging every sharer the full amount is exactly what
             # the requirement forbids, and the split rule is not ours to invent.
             already = [e for index in shared for e in self._gas[receipt_id].get(index, ())
-                       if e["kind"] == kind and e["sharedWith"] == shared]
+                       if e["kind"] == kind and e["sharedWith"] == shared
+                       and (transaction_hash is None or e.get("transactionHash") is None)]
             require(already == [], "EX_GAS_DOUBLE_CHARGE_REFUSED",
                     f"the shared {kind} operation for legs {shared} is already recorded once")
         self._gas[receipt_id].setdefault(leg_index, [])
-        self._gas[receipt_id][leg_index].append(entry)
+        self._gas[receipt_id][leg_index].append(deepcopy(entry))
         self._update_escrow(escrow.escrow_id,
-                            gas_record=tuple(self._escrows[escrow.escrow_id].gas_record) + (entry,))
+                            gas_record=tuple(self._escrows[escrow.escrow_id].gas_record) + (deepcopy(entry),))
         self._record(receipt_id, "gas-recorded", dict(entry, amount=str(spent)))
-        return entry
+        return deepcopy(entry)
 
     def reconciliation(self, receipt_id, now=None):
         """Per-segment principal, gas and net, with no figure merged.
@@ -1219,7 +1240,7 @@ class Exchange:
         for leg in self._legs[receipt_id]:
             escrow_id = self._escrow_by_leg[receipt_id].get(leg.leg_index)
             escrow = self._escrows.get(escrow_id) if escrow_id else None
-            gas = tuple(self._gas[receipt_id].get(leg.leg_index, ()))
+            gas = deepcopy(tuple(self._gas[receipt_id].get(leg.leg_index, ())))
             gas_total = sum(entry["amount"] for entry in gas)
             segments.append({
                 "legIndex": leg.leg_index, "transferId": leg.transfer_id,
@@ -1794,3 +1815,4 @@ class Exchange:
 
     def _now(self, now):
         return instant(self._clock() if now is None else now, "EX_INSTANT_REFUSED")
+
