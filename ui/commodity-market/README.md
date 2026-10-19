@@ -7,7 +7,7 @@ A dependency-free, display-only homepage with desktop and mobile layouts.
 - English is the default. Explicit `?lang=` selection supports `en`, `zh-Hans`, `zh-Hant`, `fr`, `es`, and `ja`.
 - The category order is Gold, Silver, Copper, Iron Ore, Crude Oil, Coal, Soybeans, Corn.
 - Desktop shows eight reference tiles and eight commodity cards. Mobile uses a two-column category selector with a focused commodity card and a product-details dialog.
-- Navigation and the footer link to `https://8415wallet.com` in every language.
+- Navigation and the footer link to `https://8415wallet.com:9446/v3/web/index.html` in every language.
 - All assets are local. No analytics, wallet provider, API request, signing, order submission, or blockchain transaction is initiated.
 - Prices and quantities are unavailable (`—`). Product illustrations and the `DEMO` label do not represent live assets or executable orders.
 
