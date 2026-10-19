@@ -54,8 +54,9 @@ class AuthorizationChecks(unittest.TestCase):
         self.assertIn("EX_AUTH_REVOKED", report["reasons"])
 
     def test_a_revoked_authorization_cannot_start_a_new_trade(self):
-        self._sell()
-        self.exchange.submit_intent(F.intent("buy-1", "buy", F.B, "auth-b", F.A, 1))
+        self._sell(counterparty=None)
+        self.exchange.submit_intent(F.intent("buy-1", "buy", F.B, "auth-b", None, 1))
+        self.exchange.match_intents("sell-1", "buy-1")
         self.exchange.revoke_authorization("auth-a")
         with self.assertRaises(DomainError) as caught:
             self.exchange.match_intents("sell-1", "buy-1")
@@ -123,8 +124,9 @@ class SessionAndAccountChanges(unittest.TestCase):
         self.exchange.connect_wallet(F.B, "session-b")
         self.exchange.register_authorization(
             F.authorization(F.B, "auth-b", "session-b", counterparties=(F.A,)))
-        self.exchange.submit_intent(F.intent("sell-1", "sell", F.A, "auth-a", F.B, 1))
-        self.exchange.submit_intent(F.intent("buy-1", "buy", F.B, "auth-b", F.A, 1))
+        self.exchange.submit_intent(F.intent("sell-1", "sell", F.A, "auth-a", None, 1))
+        self.exchange.submit_intent(F.intent("buy-1", "buy", F.B, "auth-b", None, 1))
+        self.exchange.match_intents("sell-1", "buy-1")
 
     def test_a_lost_session_refuses_the_authorization(self):
         self.exchange.disconnect_wallet(F.A)

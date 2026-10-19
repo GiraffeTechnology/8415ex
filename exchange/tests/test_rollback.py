@@ -288,9 +288,17 @@ class InterruptionAndLateResults(unittest.TestCase):
         self.assertEqual(report["conflicts"][0]["resultId"], "res-cd-late")
 
     def test_a_returned_chain_is_not_re_traded_on_a_guess(self):
-        exchange, _, _ = refused_at_ab()
-        match, _ = F.funded_hop(exchange, F.A, F.B, 9, "transfer-prepared",
+        exchange, _ = F.rollback_exchange()
+        match, _ = F.funded_hop(exchange, F.A, F.B, 1, "transfer-ab",
                                "session-a", "session-b", lock=False)
+        escrow = exchange.lock_escrow(match, "escrow-ab")
+        exchange.execute_transfer(match, "transfer-ab", escrow_id=escrow.escrow_id)
+        F.funded_hop(exchange, F.B, F.C, 2, "transfer-bc", "session-b", "session-c",
+                     price=F.PRICE_BC)
+        F.funded_hop(exchange, F.C, F.D, 3, "transfer-cd", "session-c", "session-d",
+                     price=F.PRICE_CD)
+        requests = F.submit_all(exchange)
+        F.refuse(exchange, requests[0], "res-ab-refused")
         exchange.begin_rollback("rcpt-8415-0001", 0, F.rollback_authority(exchange, 0, "rb-1"))
         exchange.advance_rollback("rcpt-8415-0001")
         with self.assertRaises(DomainError) as caught:
@@ -299,7 +307,10 @@ class InterruptionAndLateResults(unittest.TestCase):
         with self.assertRaises(DomainError) as caught:
             F.funded_hop(exchange, F.A, F.B, 10, "transfer-again", "session-a", "session-b")
         self.assertEqual(caught.exception.code, "EX_MATCH_UNEXECUTABLE")
-        self.assertIn("EX_TRADE_RETURNED_CHAIN_CLOSED", caught.exception.detail)
+        self.assertIn("EX_TRADE_RETURNED_CHAIN_CLOSED",
+                      exchange.validate_intent("sell-again")["reasons"])
+        self.assertEqual(exchange.recorded_legs("rcpt-8415-0001"), 3)
+        self.assertEqual(exchange.owner_of("rcpt-8415-0001"), F.A)
 
 
 class RollbackPermission(unittest.TestCase):
@@ -377,7 +388,8 @@ class DuplicateAndReorderedEvents(unittest.TestCase):
             report = exchange.advance_rollback("rcpt-8415-0001")
         self.assertTrue(report["complete"])
         self.assertEqual(exchange.payments.movements, 3)
-        self.assertEqual(exchange.asset_control.returns, 1)
+        self.assertEqual(exchange.asset_control.returns, 3)
+        self.assertEqual(exchange.asset_control.hops_walked, 3)
 
     def test_a_replayed_release_after_a_refund_is_refused(self):
         exchange, _, _ = refused_at_ab()
@@ -427,10 +439,16 @@ class RollbackConsole(unittest.TestCase):
         html = self._page()
         self.assertIn("Last finalized position", html)
         self.assertIn("is not reopened, reversed or re-collected", html)
-        self.assertIn(F.B, html)
+        self.assertIn("position 1", html)
+        self.assertEqual(self.exchange.rollback_report("rcpt-8415-0001")["returnBoundaryAccount"], F.B)
 
-    def test_the_page_says_the_return_does_not_walk_the_intermediates(self):
-        self.assertIn("without walking the intermediate", self._page())
+    def test_the_page_names_each_original_reverse_hop(self):
+        html = self._page()
+        self.assertIn("original reverse hops", html)
+        self.assertIn("3 → 2", html)
+        self.assertIn("2 → 1", html)
+        self.assertNotIn("in one control operation", html)
+        self.assertNotIn("without walking the intermediate", html)
 
     def test_the_page_lists_the_withdrawn_mechanisms_as_unused(self):
         html = self._page()
