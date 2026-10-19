@@ -138,7 +138,7 @@ class RollbackIsolation(unittest.TestCase):
                 self.assertEqual(ex.deferred_legs(R), (2,))
                 self.assertEqual(len(ex.rollback_report(R)["conflicts"]), 1)
 
-    def test_equal_return_address_still_walks_original_reverse_occurrences(self):
+    def test_equal_return_address_needs_no_intermediate_return(self):
         ex, _ = F.rollback_exchange()
         F.funded_hop(ex, F.A, F.B, 1, "transfer-ab", "session-a", "session-b")
         F.funded_hop(ex, F.B, F.A, 2, "transfer-ba", "session-b", "session-a")
@@ -150,7 +150,7 @@ class RollbackIsolation(unittest.TestCase):
         self.assertEqual((ex.owner_index(R), ex.owner_of(R), ex.recorded_legs(R)), (0, F.A, 2))
         self.assertEqual([leg.rollback_status for leg in ex.legs(R)], ["returned", "returned"])
         self.assertEqual(ex.asset_control.returns, 0)
-        self.assertEqual(ex.asset_control.hops_walked, 2)
+        self.assertEqual(ex.asset_control.hops_walked, 0)
         self.assertEqual(len(ex.asset_control._records), 2)
         with self.assertRaises(DomainError) as caught:
             pending_match(ex, suffix="again", nonce=3)

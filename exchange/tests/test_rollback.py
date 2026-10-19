@@ -245,9 +245,9 @@ class InterruptionAndLateResults(unittest.TestCase):
         exchange.asset_control.resolve_unknown(first_key, "returned")
         report = exchange.advance_rollback("rcpt-8415-0001")
         self.assertTrue(report["complete"])
-        self.assertEqual(exchange.asset_control.returns, 2,
-                         "the first hop was reconciled; only the next two hops were sent")
-        self.assertEqual(len(exchange.asset_control._records), 3)
+        self.assertEqual(exchange.asset_control.returns, 0,
+                         "the original direct return was reconciled without resending")
+        self.assertEqual(len(exchange.asset_control._records), 1)
 
     def test_an_enquiry_about_a_refund_never_becomes_a_release(self):
         """Regression: a resumed enquiry must apply the outcome the payment was

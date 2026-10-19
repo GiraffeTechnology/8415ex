@@ -43,8 +43,8 @@ class CrossRouteAcceptance(unittest.TestCase):
                 self.assertEqual(ex.asset_control.returns, 0)
                 ex.asset_control.resolve_unknown(key, "returned")
                 self.assertTrue(ex.advance_rollback(RECEIPT)["complete"])
-                self.assertEqual(ex.asset_control.returns, 2)
-                self.assertEqual(ex.asset_control.hops_walked, 2)
+                self.assertEqual(ex.asset_control.returns, 0)
+                self.assertEqual(ex.asset_control.hops_walked, 0)
                 self.assertEqual(len(ex.asset_control._records), 3)
 
     def test_partial_refund_failure_resumes_once_for_each_original_buyer(self):

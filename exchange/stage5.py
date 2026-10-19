@@ -92,7 +92,7 @@ def _execute(scenario, path):
         expected_owner = expected_holder = F.B if refused else F.A
         released = (0,) if refused else ()
         refunded = (1, 2) if refused else (0, 1, 2)
-        check(ex.asset_control.returns == len(refunded), "one evidenced return per original reverse hop")
+        check(ex.asset_control.returns == 1, "one direct return to the effective holder")
         check(ex.payments.movements == 3, "one payment per independently settled/refunded segment")
         before = ex.payments.movements
         ex.advance_rollback(RECEIPT)

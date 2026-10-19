@@ -149,7 +149,8 @@ class MintSpecification:
             'registrationAuthority': 'existing Oracle record only',
             'scope': 'bill-of-lading-transfer-only',
             'legalOrInstitutionalEndorsementClaimed': False}
-        for kind, evidence in (('existing-asset-template-schema', candidate),
+        for kind, evidence in (('existing-nft0-currency-schema', candidate),
+                ('existing-asset-template-schema', candidate),
                 ('controlled-encrypted-access-mapping', {
                     'receiptId': self.receipt.receipt_id,
                     'asset': asdict(self.receipt.asset),

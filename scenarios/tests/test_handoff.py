@@ -31,7 +31,7 @@ class Handoff(unittest.TestCase):
                 self.assertEqual(status, "NOT_RUN")
 
     def test_requirement_metadata_is_not_current_runtime_acceptance(self):
-        self.assertFalse(self.built["completeCurrentContractLoaded"])
+        self.assertTrue(self.built["completeCurrentContractLoaded"])
         self.assertFalse(self.built["baselinePassIsCurrentPass"])
         self.assertEqual(self.built["acceptedCases"], [])
 

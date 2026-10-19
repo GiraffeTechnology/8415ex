@@ -154,7 +154,7 @@ class ScenarioContent(unittest.TestCase):
     def test_demo_05_covers_the_shortfall_without_disposal(self):
         names = self._names("DEMO-05")
         self.assertIn("no custody, forced sale or liquidation", names)
-        self.assertIn("needs no intermediate gas", names)
+        self.assertIn("needs no intermediate wallet gas", names)
         self.assertIn("nothing was repeated", names)
 
     def test_demo_06_covers_cutoff_suffix_recovery_without_burn(self):

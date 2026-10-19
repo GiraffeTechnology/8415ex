@@ -99,11 +99,16 @@ jobs:
           "$FORGE_BIN" test --offline --use "$SOLC_BIN" -vvv 2>&1 | tee "$EVIDENCE/tests.log"
           python - <<'PY'
           import os, pathlib, re
-          source = pathlib.Path("test/EXSepoliaTestNFT.t.sol").read_text()
-          expected = set(re.findall(r"function\s+(test\w+)\s*\(", source))
+          sources = sorted(pathlib.Path("test").glob("*.t.sol"))
+          assert {"EXSepoliaTestNFT.t.sol", "EXNFT0Remint.t.sol"} <= {path.name for path in sources}
+          expected = set()
+          for source in sources:
+              declared = set(re.findall(r"function\s+(test\w+)\s*\(", source.read_text()))
+              assert not expected.intersection(declared), "test names must identify one source"
+              expected.update(declared)
           log = (pathlib.Path(os.environ["EVIDENCE"]) / "tests.log").read_text()
           passed = set(re.findall(r"\[PASS\]\s+(test\w+)\(", log))
-          assert len(expected) >= 12, expected
+          assert len(expected) >= 25, expected
           assert passed == expected, {"expected": sorted(expected), "passed": sorted(passed)}
           assert "[FAIL" not in log and "[SKIP" not in log
           PY
