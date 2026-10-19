@@ -73,9 +73,9 @@ class IntegratedWorkbenchHandler(WorkbenchHandler):
         languages = '<nav aria-label="' + escape(words["language"]) + '">' + ' '.join(
             '<a lang="' + key + '" href="' + language_path + '?'
             + escape(urlencode({"lang": key, **context}), quote=True) + '">' + label + '</a>'
-            for key, label in (("en", "English"), ("zh-Hans", "简体中文"),
-                               ("zh-Hant", "繁體中文"), ("fr", "Français"),
-                               ("es", "Español"), ("ja", "日本語"))) + '</nav>'
+            for key, label in (("en", "English"), ("zh-Hans", "\u7b80\u4f53\u4e2d\u6587"),
+                               ("zh-Hant", "\u7e41\u9ad4\u4e2d\u6587"), ("fr", "Français"),
+                               ("es", "Español"), ("ja", "\u65e5\u672c\u8a9e"))) + '</nav>'
         return ('<!doctype html><html lang="' + locale + '"><meta charset="utf-8">'
                 '<meta name="viewport" content="width=device-width,initial-scale=1">'
                 '<title>' + escape(title) + '</title><body><main>'

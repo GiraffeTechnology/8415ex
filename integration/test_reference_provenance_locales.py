@@ -40,11 +40,11 @@ class ReferenceProvenanceLocalesTests(unittest.TestCase):
     def test_market_provenance_has_six_locales_and_preserves_original_values(self):
         expected = {
             "en": ("Data provider", "Source time zone", "Source age range"),
-            "zh-Hans": ("数据提供方", "来源时区", "来源延迟范围"),
-            "zh-Hant": ("資料提供方", "來源時區", "來源延遲範圍"),
+            "zh-Hans": ("\u6570\u636e\u63d0\u4f9b\u65b9", "\u6765\u6e90\u65f6\u533a", "\u6765\u6e90\u5ef6\u8fdf\u8303\u56f4"),
+            "zh-Hant": ("\u8cc7\u6599\u63d0\u4f9b\u65b9", "\u4f86\u6e90\u6642\u5340", "\u4f86\u6e90\u5ef6\u9072\u7bc4\u570d"),
             "fr": ("Fournisseur de données", "Fuseau horaire de la source", "Plage d’âge de la source"),
             "es": ("Proveedor de datos", "Zona horaria de origen", "Intervalo de antigüedad"),
-            "ja": ("データ提供元", "出典のタイムゾーン", "出典の経過時間範囲"),
+            "ja": ("\u30c7\u30fc\u30bf\u63d0\u4f9b\u5143", "\u51fa\u5178\u306e\u30bf\u30a4\u30e0\u30be\u30fc\u30f3", "\u51fa\u5178\u306e\u7d4c\u904e\u6642\u9593\u7bc4\u56f2"),
         }
         observation = reference()
         before = deepcopy(observation)
@@ -69,7 +69,7 @@ class ReferenceProvenanceLocalesTests(unittest.TestCase):
                       {"minimumSeconds": "private-diagnostic", "maximumSeconds": 100}):
             with self.subTest(delay=delay):
                 fields = render_reference_fields(dict(reference(), sourceDelay=delay), "zh-Hans")
-                self.assertIn('<dt>来源延迟范围</dt><dd>未提供</dd>', fields)
+                self.assertIn('<dt>\u6765\u6e90\u5ef6\u8fdf\u8303\u56f4</dt><dd>\u672a\u63d0\u4f9b</dd>', fields)
                 self.assertNotIn("private-diagnostic", fields)
                 self.assertNotIn("0 – 0", fields)
 

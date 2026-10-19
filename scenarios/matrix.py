@@ -9,7 +9,7 @@ from exchange.model import REGISTRATION_PATHS
 
 from .demos import MAIN_PATHS
 
-#: Case to requirement identifiers, from the private requirements test matrix.
+#: Case to requirement identifiers, from the product requirements test matrix.
 #: Identifiers only; no requirement text is reproduced here.
 CASE_REQUIREMENTS = {
     "T-01": ("EX-SCOPE-02", "EX-INV-02"), "T-02": ("EX-SCOPE-03",),
@@ -37,7 +37,7 @@ CASE_REQUIREMENTS = {
 
 #: Every approved requirement identifier, so a requirement that no case claims
 #: is found by a test rather than noticed by eye. Identifiers only: no
-#: requirement text, private locator or document identity appears here.
+#: requirement prose is carried by PRD.md rather than this identifier table.
 DECLARED_REQUIREMENTS = (
     "EX-AUTH-01", "EX-AUTH-02", "EX-AUTH-03", "EX-AUTH-04", "EX-AUTH-05",
     "EX-DEMO-01", "EX-DEMO-02", "EX-DEMO-03",
@@ -62,13 +62,13 @@ NOT_LOCALLY_TESTABLE = {
     "EX-SCOPE-01": {
         "reason": "a positioning statement about what the product is and is not; "
                   "nothing in a local model run can confirm or refute it",
-        "owner": "the product owner",
+        "owner": 'product specification',
     },
     "EX-SCOPE-04": {
         "reason": "wallet compatibility across conforming wallets; this package "
                   "has no wallet adapter and uses simulated authorization, so "
                   "compatibility can only be shown against real wallets",
-        "owner": "the party that owns wallet integration acceptance",
+        "owner": 'wallet integration evidence',
     },
 }
 
@@ -158,9 +158,9 @@ CASE_IMPLEMENTATION = {
 
 #: What real evidence each case still owes after a local run.
 REMAINING_EVIDENCE = {
-    "T-35": "Sepolia execution with the verified designated test token address, by Codex",
+    "T-35": "Sepolia execution with the verified designated test token address",
     "T-36": "six scenarios executed on the public test network with real transactions, "
-            "receipts and a real UI journey, by Codex",
+            "receipts and a real UI journey",
     "T-37": "demonstration, deck and video built from verified execution evidence",
     "T-38": "exact deployed head aligned with required CI and artifact hash read-back",
 }

@@ -140,7 +140,7 @@ class Unlocated(unittest.TestCase):
         cls.map = reuse.build(None, ROOT)
 
     def test_each_unlocated_interface_names_a_real_open_decision(self):
-        known = {entry["id"] for entry in decisions.OPEN_DECISIONS}
+        known = {entry["id"] for entry in decisions.register()["decisions"]}
         for entry in self.map["unlocatedInterfaces"]:
             with self.subTest(interface=entry["interface"]):
                 self.assertIn(entry["trackedBy"], known)

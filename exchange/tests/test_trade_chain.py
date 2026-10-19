@@ -48,8 +48,8 @@ class OneValidHead(unittest.TestCase):
         exchange.register_authorization(F.authorization(F.B, "auth-replay", "session-b", counterparties=(F.C,)))
         exchange.connect_wallet(F.C, "session-c")
         exchange.register_authorization(F.authorization(F.C, "auth-replay-c", "session-c", counterparties=(F.B,)))
-        sell = exchange.submit_intent(F.intent("sell-replay", "sell", F.B, "auth-replay", F.C, 1))
-        buy = exchange.submit_intent(F.intent("buy-replay", "buy", F.C, "auth-replay-c", F.B, 9))
+        sell = exchange.submit_intent(F.intent("sell-replay", "sell", F.B, "auth-replay", None, 1))
+        buy = exchange.submit_intent(F.intent("buy-replay", "buy", F.C, "auth-replay-c", None, 9))
         report = exchange.validate_intent(sell.intent_id)
         self.assertFalse(report["executable"])
         self.assertIn("EX_INTENT_NONCE_REPLAYED", report["reasons"])
@@ -59,24 +59,32 @@ class OneValidHead(unittest.TestCase):
 
     def test_selling_the_same_head_to_two_buyers_advances_only_one(self):
         exchange, _ = F.minted()
-        for buyer, session, nonce in ((F.B, "session-b", 1), (F.C, "session-c", 2)):
+        exchange.register_authorization(F.authorization(
+            F.A, "auth-sell-head", "session-a", counterparties=(F.B, F.C),
+            max_amount=F.PRICE + 1))
+        exchange.submit_intent(F.intent(
+            "sell-head", "sell", F.A, "auth-sell-head", None, 1))
+        for buyer, session in ((F.B, "session-b"), (F.C, "session-c")):
             exchange.connect_wallet(buyer, session)
-            exchange.register_authorization(F.authorization(buyer, f"auth-buy-{buyer[-1]}", session,
-                                                            counterparties=(F.A,)))
-            exchange.register_authorization(F.authorization(F.A, f"auth-sell-{buyer[-1]}", "session-a",
-                                                            counterparties=(buyer,)))
-            exchange.submit_intent(F.intent(f"sell-to-{buyer[-1]}", "sell", F.A,
-                                            f"auth-sell-{buyer[-1]}", buyer, nonce))
-            exchange.submit_intent(F.intent(f"buy-by-{buyer[-1]}", "buy", buyer,
-                                            f"auth-buy-{buyer[-1]}", F.A, nonce))
-        first = exchange.match_intents("sell-to-b", "buy-by-b")
-        second = exchange.match_intents("sell-to-c", "buy-by-c")
-        exchange.execute_transfer(first, "transfer-ab")
+            exchange.register_authorization(F.authorization(
+                buyer, f"auth-buy-{buyer[-1]}", session,
+                counterparties=(F.A,), max_amount=F.PRICE + 1))
+        exchange.submit_intent(F.intent(
+            "buy-by-b", "buy", F.B, "auth-buy-b", None, 1))
+        first = exchange.match_intents("sell-head", "buy-by-b")
+        # The later higher bid changes the current best pair. Both proposals
+        # came from the real matcher while A still held the same head.
+        exchange.submit_intent(F.intent(
+            "buy-by-c", "buy", F.C, "auth-buy-c", None, 1,
+            limit_price=F.PRICE + 1))
+        second = exchange.match_intents("sell-head", "buy-by-c")
+        exchange.execute_transfer(second, "transfer-ac")
         with self.assertRaises(DomainError) as caught:
-            exchange.execute_transfer(second, "transfer-ac")
+            exchange.execute_transfer(first, "transfer-ab")
         self.assertEqual(caught.exception.code, "EX_TRADE_HEAD_MOVED")
         self.assertEqual(exchange.owner_index("rcpt-8415-0001"), 1)
-        self.assertEqual(exchange.owner_of("rcpt-8415-0001"), F.B)
+        self.assertEqual(exchange.owner_of("rcpt-8415-0001"), F.C)
+        self.assertEqual(len(exchange.legs("rcpt-8415-0001")), 1)
 
     def test_a_duplicate_transfer_id_is_refused(self):
         exchange, _ = F.minted()
@@ -84,8 +92,8 @@ class OneValidHead(unittest.TestCase):
         exchange.register_authorization(F.authorization(F.B, "auth-dup-b", "session-b", counterparties=(F.C,)))
         exchange.connect_wallet(F.C, "session-c")
         exchange.register_authorization(F.authorization(F.C, "auth-dup-c", "session-c", counterparties=(F.B,)))
-        exchange.submit_intent(F.intent("sell-dup", "sell", F.B, "auth-dup-b", F.C, 7))
-        exchange.submit_intent(F.intent("buy-dup", "buy", F.C, "auth-dup-c", F.B, 7))
+        exchange.submit_intent(F.intent("sell-dup", "sell", F.B, "auth-dup-b", None, 7))
+        exchange.submit_intent(F.intent("buy-dup", "buy", F.C, "auth-dup-c", None, 7))
         match = exchange.match_intents("sell-dup", "buy-dup")
         with self.assertRaises(DomainError) as caught:
             exchange.execute_transfer(match, "transfer-ab")
@@ -94,10 +102,27 @@ class OneValidHead(unittest.TestCase):
     def test_a_new_trade_is_refused_at_the_stop_trading_instant(self):
         clock = F.ManualClock()
         exchange, _ = F.minted(clock=clock)
+        exchange.connect_wallet(F.B, "session-b")
+        exchange.register_authorization(F.authorization(
+            F.A, "auth-late-a", "session-a", counterparties=(F.B,)))
+        exchange.register_authorization(F.authorization(
+            F.B, "auth-late-b", "session-b", counterparties=(F.A,)))
+        exchange.submit_intent(F.intent(
+            "sell-late", "sell", F.A, "auth-late-a", None, 1))
+        exchange.submit_intent(F.intent(
+            "buy-late", "buy", F.B, "auth-late-b", None, 1))
+        match = exchange.match_intents("sell-late", "buy-late")
         clock.now = exchange.receipt("rcpt-8415-0001").trade_stop_at
+        for intent_id in ("sell-late", "buy-late"):
+            report = exchange.validate_intent(intent_id)
+            self.assertFalse(report["executable"])
+            self.assertIn("EX_TRADE_WINDOW_CLOSED", report["reasons"])
         with self.assertRaises(DomainError) as caught:
-            F.hop(exchange, F.A, F.B, 1, "transfer-late", "session-a", "session-b")
-        self.assertIn(caught.exception.code, ("EX_MATCH_UNEXECUTABLE", "EX_TRADE_WINDOW_CLOSED"))
+            exchange.execute_transfer(match, "transfer-late")
+        self.assertEqual(caught.exception.code, "EX_TRADE_WINDOW_CLOSED")
+        self.assertEqual(exchange.owner_of("rcpt-8415-0001"), F.A)
+        self.assertEqual(exchange.owner_index("rcpt-8415-0001"), 0)
+        self.assertEqual(exchange.legs("rcpt-8415-0001"), ())
 
 
 if __name__ == "__main__":

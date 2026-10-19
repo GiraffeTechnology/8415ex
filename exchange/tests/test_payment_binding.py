@@ -224,11 +224,22 @@ class EscrowPreconditions(unittest.TestCase):
                 elif reason == "revoked":
                     ex.revoke_authorization("auth-sell-stale")
                 else:
-                    F.funded_hop(ex, F.A, F.C, 2, "transfer-ac", "session-a", "session-c")
+                    ex.connect_wallet(F.C, "session-c")
+                    ex.register_authorization(F.authorization(
+                        F.C, "auth-buy-ac", "session-c", max_amount=F.PRICE + 1))
+                    ex.submit_intent(F.intent("buy-ac", "buy", F.C, "auth-buy-ac", None, 2,
+                                              limit_price=F.PRICE + 1))
+                    current = ex.match_intents("sell-stale", "buy-ac")
+                    escrow = ex.lock_escrow(current, "escrow-ac")
+                    ex.execute_transfer(current, "transfer-ac", escrow_id=escrow.escrow_id)
                 before = copy.deepcopy((ex._escrows, ex._escrow_by_leg))
                 with self.assertRaises(DomainError):
                     ex.lock_escrow(stale, "escrow-stale")
                 self.assertEqual((ex._escrows, ex._escrow_by_leg), before)
+                # A resting bid remains eligible after the seller's grant is
+                # revoked. Retire that original bid through its own grant,
+                # rather than asking the matcher to skip its FIFO priority.
+                ex.revoke_authorization("auth-buy-stale")
                 seller = F.C if reason == "head-moved" else F.A
                 fresh, _ = F.funded_hop(ex, seller, F.B, 3, "transfer-fresh", "session-c" if seller == F.C else "session-a",
                                        "session-b", lock=False)

@@ -1,44 +1,32 @@
-# EX execution instructions
+# Repository instructions
 
-Before starting, resuming, receiving a task or handing off, read the current complete private PRD through the existing private recovery entry and README.md. Keep private source text, locators and execution indexes outside public commits. Read PRD.md and config/prd-lock.json only as the historical v1.3 repository snapshot, then use its retained inspection command when that historical layer is relevant:
+## Current authority
+Read [PRD.md](PRD.md) v1.4 in full before implementation: 111 EX requirements, T-01..84, six stages and six demonstrations. Earlier v1.3 loaders/locks/plans, source reports and subdirectory guides are historical wherever they conflict and cannot certify revised requirements. Read this file, README and applicable directory instructions before changes. Preserve concurrent valid changes and exact base/head identity; reuse existing infrastructure and configured storage.
 
-```sh
-python3 -B -m scenarios.current_prd plan
-```
+## Execution
+CI is allowed in GitHub Actions, including applicable automated tests, syntax/type checks and builds. Runtime and integration acceptance use the project-supported Linux configuration. Document editing and document-byte/hash review are not product tests.
 
-This retained loader inspects the historical public version 1.3 snapshot and execution plan by byte size and SHA-256, checks 21 sections, all requirement/case/decision/stage IDs and rejects a stale pin or reactivated retired requirement. Resolve a local pin error for that checklist without turning it into a global stop of unrelated authorized work.
+GitHub CI results do not establish deployment or live-chain acceptance. EX remains Ethereum Sepolia 11155111 with test ETH gas and verified designated test PYUSD explicitly permitted by fixture NFT0 and selected by each order; do not substitute Wallet Hoodi.
 
-The current complete private contract is v1.4 with 111 requirements, T-01..84 and Stage 0..5. The existing private recovery entry pins its full bytes and private index; the public v1.3 loader does not read or validate that version. Use config/execution-plan.json only for historical v1.3 traceability, never as the current requirement authority or a blocker on independent successor implementation. Never derive live duties from old HANDOFF, guide prose or historical scenario output. Physical collection, transport, warehouse exit, collection-driven burn, EX raw-voucher intake, second registration receipt, late-receipt grace, second buyer payment, issuer reset, permanent post-rollback closure, paired-counterparty matching substitution and gas policy marked wholly undecided are superseded.
+## Required semantics
+- One NFT is one whole receipt. EX is a commodity spot-intermediary infrastructure DEMO; physical collection, transport and warehouse exit are excluded.
+- ownerOf returns the actual owner address, not a timeline position. currentEntry/latest admission and holderAsOf/effective-time history differ. Preserve effectiveAt/query/block, registration version, transfer count and positions independently. holderOf is not the fixed Draft's standard getter.
+- Oracle alone ingests/verifies the one voucher and writes authority; EX consumes chain records bound to source/profile/asset/segment/journal. No second receipt or independent holder writer. Relay caller identity is not cryptographic proof authority.
+- Ordinary A-B-C-D trading does not require holder equality, gap closure or current finality. Release each original frozen segment once ordered owner and holder reach its buyer or beyond; remove that segment's rollback without waiting for the suffix or a second buyer payment.
+- Return only eligible unregistered suffix funds in their original selected currencies and return owner directly to current effective holder in one asset-control operation without ordinary intermediate-wallet traversal. Preserve registration and settled prefix. Wallet returnHop currently moves one cursor leg per call; a loop or separately green models does not prove this EX requirement. Actual adapter/control-path evidence is still required.
+- Valid unexpired NFTs may trade again after rollback; preserve failed history and do not use a global historic trade count as the new-chain participant position.
+- NFT0 fixes one/multiple allowed principal currencies at mint. Each order explicitly chooses one and matches price/FIFO within it. Refuse insufficient chosen-currency principal; no conversion, auto-selection, balance aggregation or currency substitution.
+- ETH-only gas: before a new trade show real cap/P50 ETH and informative USD with source/method/sample/time/scope, obtain buyer confirmation and freeze the maximum separately from principal. Refuse zero/insufficient ETH before signing/sending. Debit actual gas, unfreeze unused ETH, retain consumed failed-tx gas and query unknown results before retry. Existing sufficient freezes cover the same approved recovery without new prepayment. Shared-operation allocation is locally open.
+- Holder possession plus holder=owner is the confirmed remint business predicate with existing authority and atomic old burn/new mint. New terms cannot rewrite old history; add no cleanup/migration approval. Equality is not protocol proof of no gap/escrow/task.
+- Keep gap/admission/historical finality/Oracle refusal/funds/execution separate. cancelSettlement is not business rollback and retains recorded-initiator/strict-deadline rules. Do not invent protocol REJECTED or ordinary-transfer gates.
+- Implement the market, both crypto/receipt collateral choices, ordinary market makers, real public references separated from simulated orders, complete terms and responsive six-language UI. Do not invent financing/LTV/liquidation/returns.
+- Individual NFT status uses exact openGapOF=YES red and openGapOF=NO green. Actual openGapOf returns bytes32; map only supported successful queries. Unknown/loading/error/unsupported is never NO/green.
+- current/owner/holder positions are independent real-record markers. Per-position signatures require original role/payload/scheme evidence, never alignment inference. No wallet names/full/truncated addresses in frontend, metadata, hover, accessibility, download or copy paths.
+- Show all business conditions as a complete identity-excluding projection without summaries/altered obligations. Keep unchanged originals private for hash/signature verification. Six candidate locales are en, zh-Hans, zh-Hant, fr, es, ja; preserve protocol identifiers and original terms. Exclude wallet-management pages while retaining EX authority/balance/fee checks.
 
-Do not count old expectations or CI as revised-case PASS. Existing legacy demo entrypoints refuse unported scenarios before their callbacks; only a reviewed actual migration with exact-source evidence can remove that refusal. The new loader/checklist can succeed while product delivery remains OPEN.
+## Delivery
+Preserve dependencies and exact base/head. Use the existing CI workflow. Record actual runner, head/base and tested commit; synthetic merge tree is not head tree. Absent checks are not green. GitHub Actions results are valid CI evidence for the exact checks actually run, but are not deployment or live-chain acceptance. Historical results do not certify revised assertions.
 
-After a stage implementation PR immediately continue the next independent authorized stage; do not wait for CI/merge. Exact-head required checks and relevant acceptance still control merge. A local dependency blocks only the affected action. Do not repeat completed unchanged tests without a new relevant concern or invent synonym wrappers to report motion.
+Map applicable requirements to exact source/config/run/artifacts and actual evidence. Separate design/models/simulations/implementation/browser/deployment/chain verdicts; missing evidence remains NOT_RUN/NOT_VERIFIED. Undefined feed/locale/interface/commercial matters block only dependent paths. Product documentation is in English.
 
-Retain the original single writer. The existing controller organizes QA, requirement consistency, CI repair and eligible exact-head merge; the independent receiver coordinates and verifies acceptance. This does not delegate duplicate file repair or merge. This repository document does not assign another project's identity, network, runtime or credentials to EX. Product/unit/integration/API/EVM/browser/syntax/type/build/package validation must run only on an existing approved remote Linux server with verified CTYun or Aliyun provider evidence and the existing per-action execution boundary check. This local machine, Windows, WSL, local containers and local VMs are not test fallbacks. Existing approved remote Linux virtualization is not excluded. Local instruction recovery and source/hash editing remain allowed. Existing valid authorizations persist until explicitly revoked, replaced, expired or exceeded; do not request the same permission solely because a session or version changed.
-
-Before external actions verify actual approved RPC, chain 11155111, test asset, actor/control, original signer/grant, fee/nonce/balance and unknown-outcome lookup. No guessed parameters, new identity, resource, credential, security/payment setting, mainnet or real-value transaction. Do not disclose secrets or perform human-only authentication actions.
-
-Oracle alone verifies off-chain vouchers and writes their authoritative chain record. Holder follows that same record; owner may advance earlier. Freeze principal before trade and release the original frozen amount; gas is separate, bounded by buyer confirmation and settled from actual consumption. Preserve registered/settled prefix on suffix rollback.
-
-NFT0 fixes one or more allowed currencies at mint and has no setters afterward.
-An order selects exactly one allowed member; no exchange, substitution or mixed
-balances. Gas uses ETH only. Insufficient selected principal or ETH gas must warn
-and refuse before signing/execution/broadcast. ETH-priced principal and ETH gas
-must not count the same funds twice. Original approved gas prepayment recovery
-does not require a second prepayment when its remaining bound amount suffices.
-
-Holder possession plus holder=owner permits atomic old-NFT burn/new-NFT mint with
-new terms and permanent history/identity links. Do not add cleanup, migration or
-separate approval prerequisites. This is not physical collection destruction.
-Do not apply holder equality, gap or current-finality gates to ordinary transfer.
-Keep owner-stopped capabilities probes stopped across reconnects and new callers.
-
-Keep exact source/config/run/log/artifact references and distinguish NOT_RUN, NOT_VERIFIED, failed and passed. Full delivery also needs actual runtime, chain/Oracle/funds, source-specific UI, demo/PPT/playable film and artifact readback. No local checklist, package, CI or HTTP status alone closes the product.
-
-Protect dirty files, keys, databases, journals, locks, evidence, shared services, production and active inputs. Respect existing at-most-two usable rollback retention; do not blindly delete or move live state. Public GitHub text is English and sanitized; keep private PRD locators and operational parameters private. No cancelled Drive polling, workflow or old migration is restored.
-
-## Protocol observations and application state
-
-Use the approved ERC-8415 Draft and the actual deployed ABI. Display openGapOF=YES in red or openGapOF=NO in green only after the original verifier binds the NFT and source, both projection and optional settlement interface support are established, and openGapOf(uint256) successfully returns a valid bytes32 settlementId. Nonzero maps to YES and zero to NO. Unknown, unsupported, loading and failed reads stay explicit and neutral across all six locales. The UI spelling does not rename the ABI or stored application gap. NO is not evidence of registration, finality, equal owner/holder, legal title or settled funds; optional-interface support is not an ordinary-transfer gate.
-
-ownerOf returns an address, not an EX timeline position. currentEntry describes the latest admitted entry; holderAsOf describes a specified time. Preserve query time, effectiveAt and observed block; do not make future-effective entries current early. Registration versions and transfer positions remain separate. Historical signatures bind their original role, position/transfer, payload and verified signing scheme, never the current owner's inferred role. Historical finality and EX finalized business prefix remain separate. Oracle relay identity is not registry authority. These semantics require original runtime evidence; source projections and synthetic definitions do not establish chain acceptance.
+Published product baseline file integrity: PRD.md SHA-256 `b3989a91f1d3f7a1de6812fa05777d0dfdf84a4eee4a7909bdda77d1196032ce`. This identifies document bytes, not a runtime acceptance result.

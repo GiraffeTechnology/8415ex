@@ -1,7 +1,7 @@
 {
   "schema": "ex-test-contract-dependencies/1",
   "solidity": "0.8.24",
-  "compilerPolicy": "Existing approved Linux compiler only; no automatic download or install",
+  "compilerPolicy": "GitHub Actions Ubuntu CI uses checksum-pinned ephemeral tools for offline synthetic EVM validation. Other execution retains its original approval boundaries.",
   "openzeppelin": {
     "repository": "https://github.com/OpenZeppelin/openzeppelin-contracts",
     "tag": "v5.0.2",
@@ -12,10 +12,18 @@
       "contracts/utils/Base64.sol",
       "contracts/utils/Strings.sol"
     ],
-    "policy": "Verify existing approved dependency input against exact commit. This file does not download, install or attest availability."
+    "policy": "CI checks out and verifies this exact official commit; compilation and tests run offline after dependency preparation."
   },
   "forgeStd": false,
-  "workflowChanges": false,
+  "workflowChanges": true,
   "artifact": "out/EXSepoliaTestNFT.sol/EXSepoliaTestNFT.json",
-  "compiled": false
+  "compiled": false,
+  "ciToolchain": {
+    "workflow": ".github/workflows/contracts.yml",
+    "forgeVersion": "v1.3.1",
+    "forgeArchiveSHA256": "baad3e1b06d6f310d210c93e95258a03d923fe610f8d0742138f2245f94abd7c",
+    "solcLongVersion": "0.8.24+commit.e11b9ed9",
+    "solcSHA256": "fb03a29a517452b9f12bcf459ef37d0a543765bb3bbc911e70a87d6a37c30d5f",
+    "deploymentExecuted": false
+  }
 }

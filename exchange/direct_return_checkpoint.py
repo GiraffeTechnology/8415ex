@@ -24,7 +24,7 @@ class DirectReturnCheckpoint:
 
     def __init__(self, access, checkpoint, scope):
         if (type(access) is not SerializedExchangeAccess
-                or type(checkpoint) is not ExchangeSnapshotCheckpoint):
+                or not isinstance(checkpoint, ExchangeSnapshotCheckpoint)):
             raise ValueError("original serialized access and snapshot checkpoint required")
         checkpoint.store._scope(scope)
         self.access = access

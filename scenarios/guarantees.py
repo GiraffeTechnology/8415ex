@@ -59,9 +59,9 @@ def _paired(exchange, seller, buyer, seller_session, buyer_session, suffix, nonc
     exchange.register_authorization(F.authorization(buyer, buy_auth, buyer_session,
                                                     counterparties=(seller,)))
     sell = exchange.submit_intent(F.intent("sell-%s" % suffix, "sell", seller, sell_auth,
-                                           buyer, nonce, **intent_changes))
+                                           None, nonce, **intent_changes))
     buy = exchange.submit_intent(F.intent("buy-%s" % suffix, "buy", buyer, buy_auth,
-                                          seller, nonce))
+                                          None, nonce))
     return sell, buy
 
 
@@ -111,14 +111,17 @@ def _whole_receipt(recorder):
         receipt_id="rcpt-second-local", asset=F.asset(), commodity_name="Second claim",
         commodity_quantity=1, commodity_unit="piece", receipt_number="WR-8415-SECOND",
         registration_path=CONTRACT_PATH, trade_stop_at=1_700_900_000, origin_account=F.B,
-        minted_at=1_699_000_000)
+        minted_at=1_699_000_000, allowed_price_currencies=(F.QUOTE_ASSET,),
+        nft0_currency_reference=F.NFT0_CURRENCY_SET_REF)
     recorder.expect("a second receipt over the same token is refused", ("T-01",),
                     "EX_ASSET_DUPLICATE_REFUSED",
-                    _refusal(lambda: exchange.mint(second_claim)),
+                    _refusal(lambda: exchange.mint(second_claim, specification=F.mint_specification(second_claim))),
                     detail="one NFT stands for one receipt, so two claims on it are refused")
+    repeated = F.receipt(registration_path=CONTRACT_PATH)
     recorder.expect("the same receipt cannot be minted twice", ("T-01",),
                     "EX_RECEIPT_DUPLICATE_REFUSED",
-                    _refusal(lambda: exchange.mint(F.receipt(registration_path=CONTRACT_PATH))))
+                    _refusal(lambda: exchange.mint(repeated,
+                        specification=F.mint_specification(repeated))))
     recorder.expect("no refusal created a position", ("T-01",), {"owner": 0, "holder": 0},
                     {"owner": exchange.owner_index(RECEIPT),
                      "holder": exchange.holder_index(RECEIPT)})
@@ -134,8 +137,8 @@ def _authorization(recorder):
                                                     counterparties=(F.B,)))
     exchange.register_authorization(F.authorization(F.B, "auth-b", "session-b",
                                                     counterparties=(F.A,)))
-    sell = exchange.submit_intent(F.intent("sell-1", "sell", F.A, "auth-a", F.B, 1))
-    exchange.submit_intent(F.intent("buy-1", "buy", F.B, "auth-b", F.A, 1))
+    sell = exchange.submit_intent(F.intent("sell-1", "sell", F.A, "auth-a", None, 1))
+    exchange.submit_intent(F.intent("buy-1", "buy", F.B, "auth-b", None, 1))
     recorder.describe_setup(
         path=CONTRACT_PATH, accounts={"A": F.A, "B": F.B, "C": F.C},
         grant={"account": F.A, "authorizationId": "auth-a", "session": "session-a",
@@ -230,15 +233,15 @@ def _authorization(recorder):
     sessions.connect_wallet(F.B, "session-b")
     sessions.register_authorization(F.authorization(F.B, "auth-b", "session-b",
                                                     counterparties=(F.A,)))
-    sessions.submit_intent(F.intent("sell-1", "sell", F.A, "auth-a", F.B, 1))
-    sessions.submit_intent(F.intent("buy-1", "buy", F.B, "auth-b", F.A, 1))
+    sessions.submit_intent(F.intent("sell-1", "sell", F.A, "auth-a", None, 1))
+    sessions.submit_intent(F.intent("buy-1", "buy", F.B, "auth-b", None, 1))
     recorder.step("a second exchange, to vary the session rather than the grant",
                   activeAccounts=[F.A, F.B])
 
     lost = F.minted(registration_path=CONTRACT_PATH)[0]
     lost.register_authorization(F.authorization(F.A, "auth-a", "session-a",
                                                 counterparties=(F.B,)))
-    lost.submit_intent(F.intent("sell-1", "sell", F.A, "auth-a", F.B, 1))
+    lost.submit_intent(F.intent("sell-1", "sell", F.A, "auth-a", None, 1))
     lost.disconnect_wallet(F.A)
     state = lost.authorization_state("auth-a")
     recorder.expect("a lost session withdraws the grant", ("T-08",),
@@ -263,8 +266,8 @@ def _authorization(recorder):
     switched.connect_wallet(F.B, "session-b")
     switched.register_authorization(F.authorization(F.B, "auth-b", "session-b",
                                                     counterparties=(F.A,)))
-    switched.submit_intent(F.intent("sell-1", "sell", F.A, "auth-a", F.B, 1))
-    switched.submit_intent(F.intent("buy-1", "buy", F.B, "auth-b", F.A, 1))
+    switched.submit_intent(F.intent("sell-1", "sell", F.A, "auth-a", None, 1))
+    switched.submit_intent(F.intent("buy-1", "buy", F.B, "auth-b", None, 1))
     switched.switch_account(F.C, "session-c")
     recorder.expect("selecting another account leaves this account's grant alone", ("T-08",),
                     True, switched.validate_intent("sell-1")["executable"],
@@ -329,171 +332,106 @@ def _authorization(recorder):
 
 def _matching(recorder):
     exchange, _ = F.minted(registration_path=CONTRACT_PATH)
-    exchange.connect_wallet(F.B, "session-b")
-    exchange.register_authorization(F.authorization(F.A, "auth-a", "session-a",
-                                                    counterparties=(F.B,)))
-    # B's bound deliberately exceeds the fixture price, so a higher buy limit
-    # tests the pairing rule rather than the signed bound.
-    exchange.register_authorization(F.authorization(F.B, "auth-b", "session-b",
-                                                    counterparties=(F.A,),
-                                                    max_amount=F.PRICE + 500))
-    recorder.describe_setup(
-        path=CONTRACT_PATH, accounts={"A": F.A, "B": F.B, "C": F.C},
-        prices={"sellLimit": F.PRICE, "buyLimit": F.PRICE + 500},
-        quoteAsset=F.QUOTE_ASSET,
-        simulatedAdapters={"matching": "simulated explicit pairing over a limit fixture, no order book"})
-
-    sell = exchange.submit_intent(F.intent("sell-1", "sell", F.A, "auth-a", F.B, 1))
-    buy = exchange.submit_intent(F.intent("buy-1", "buy", F.B, "auth-b", F.A, 1,
-                                          limit_price=F.PRICE + 500))
-    recorder.step("each side submitted its own order",
-                  sell={"id": sell.intent_id, "signer": sell.signer, "side": sell.side},
-                  buy={"id": buy.intent_id, "signer": buy.signer, "side": buy.side})
-    recorder.expect("each order is recorded under its own signer and side", ("T-09",),
-                    {"sellSigner": F.A, "sellSide": "sell",
-                     "buySigner": F.B, "buySide": "buy"},
-                    {"sellSigner": exchange.intent("sell-1").signer,
-                     "sellSide": exchange.intent("sell-1").side,
-                     "buySigner": exchange.intent("buy-1").signer,
-                     "buySide": exchange.intent("buy-1").side})
-
+    sell, buy = _paired(exchange, F.A, F.B, "session-a", "session-b", "cross", 1,
+                        limit_price=F.PRICE - 1)
+    recorder.describe_setup(path=CONTRACT_PATH, accounts={"A": F.A, "B": F.B, "C": F.C},
+        prices={"sellLimit": F.PRICE - 1, "buyLimit": F.PRICE},
+        quoteAsset=F.QUOTE_ASSET, simulatedAdapters={"matching": "simulated server price-time priority fixture"})
     before = (sell.digest, buy.digest)
-    match = exchange.match_intents("sell-1", "buy-1")
-    recorder.step("the two orders are paired", basis=dict(match.basis))
-    recorder.expect("the pairing states its own basis", ("T-09",),
-                    {"sellLimit": str(F.PRICE), "buyLimit": str(F.PRICE + 500),
-                     "executionPrice": str(F.PRICE),
-                     "rule": "explicit-pairing-limit-fixture"},
-                    {"sellLimit": match.basis["sellLimit"],
-                     "buyLimit": match.basis["buyLimit"],
-                     "executionPrice": match.basis["executionPrice"],
-                     "rule": match.basis["rule"]})
-    recorder.expect("pairing rewrote neither signed term", ("T-09",), list(before),
-                    [exchange.intent("sell-1").digest, exchange.intent("buy-1").digest])
-    recorder.expect("the buyer's own limit is still the buyer's limit", ("T-09",),
-                    F.PRICE + 500, exchange.intent("buy-1").limit_price)
-    recorder.expect("the pairing is neither a registration nor a settlement", ("T-09",),
-                    {"says": "not-performed-by-matching", "owner": 0, "holder": 0},
-                    {"says": match.basis["registrationAndSettlement"],
-                     "owner": exchange.owner_index(RECEIPT),
-                     "holder": exchange.holder_index(RECEIPT)})
-    repeated = exchange.match_intents("sell-1", "buy-1", now=1_700_000_000)
-    again = exchange.match_intents("sell-1", "buy-1", now=1_700_000_000)
-    recorder.expect("pairing the same two orders twice gives the same answer", ("T-09",),
-                    True, repeated == again,
-                    detail="same fixtures, same fixed instant, same result")
+    match = exchange.match_intents(sell.intent_id, buy.intent_id)
+    recorder.step("independent orders admitted and matched", basis=dict(match.basis))
+    recorder.expect("resting ask limit is used without changing either signature", ("T-09",),
+                    {"rule": "price-time-resting-order-limit", "price": F.PRICE - 1,
+                     "digests": before},
+                    {"rule": match.basis["rule"], "price": match.price,
+                     "digests": (sell.digest, buy.digest)})
+    recorder.expect("the matcher names both original server sequences", ("T-09",),
+                    True, match.basis["askSequence"] < match.basis["bidSequence"])
+    recorder.expect("matching performs no transfer or funding", ("T-09",),
+                    {"owner": 0, "escrows": 0},
+                    {"owner": exchange.owner_index(RECEIPT), "escrows": len(exchange._escrows)})
+    exchange.connect_wallet(F.C, "session-c")
+    exchange.register_authorization(F.authorization(F.C, "auth-c", "session-c",
+                                                    max_amount=F.PRICE + 1))
+    other = exchange.submit_intent(F.intent("buy-c", "buy", F.C, "auth-c", None, 2,
+                                             limit_price=F.PRICE + 1))
+    recorder.expect("a better bid outside the seller grant cannot displace its allowed buyer", ("T-09",),
+                    F.B, exchange.match_intents(sell.intent_id, buy.intent_id).buyer)
+    recorder.expect("the caller cannot choose a pair outside current priority and grants", ("T-09",),
+                    "EX_MATCH_PRIORITY_REFUSED",
+                    _refusal(lambda: exchange.match_intents(sell.intent_id, other.intent_id)))
+    recorder.expect("two buys are refused before any matching", ("T-09",),
+                    "EX_MATCH_SIDE_REFUSED",
+                    _refusal(lambda: exchange.match_intents(buy.intent_id, other.intent_id)))
+    uncrossed, _ = F.minted(registration_path=CONTRACT_PATH)
+    low_sell, low_buy = _paired(uncrossed, F.A, F.B, "session-a", "session-b", "low", 1)
+    # The original higher resting ask remains valid, while a lower bid cannot cross.
+    uncrossed.revoke_authorization(low_buy.authorization_id)
+    uncrossed.register_authorization(F.authorization(F.B, "auth-low-bid", "session-b"))
+    uncrossed.submit_intent(F.intent("buy-lower", "buy", F.B, "auth-low-bid", None, 2,
+                                     limit_price=F.PRICE - 1))
+    recorder.expect("uncrossed price limits never form a trade", ("T-09",),
+                    "EX_MATCH_UNEXECUTABLE",
+                    _refusal(lambda: uncrossed.match_intents(low_sell.intent_id, "buy-lower")))
+    recorder.expect("refusals preserve owner and holder positions", ("T-09",),
+                    (0, 0), (uncrossed.owner_index(RECEIPT), uncrossed.holder_index(RECEIPT)))
+    recorder.not_run("real market order and signature acceptance", ("T-38",),
+                     "Synthetic signed intent references and deterministic server clock only")
 
-    refusals, _ = F.minted(registration_path=CONTRACT_PATH)
-    refusals.connect_wallet(F.B, "session-b")
-    refusals.register_authorization(F.authorization(F.A, "auth-a", "session-a",
-                                                    counterparties=(F.B,)))
-    refusals.register_authorization(F.authorization(F.B, "auth-b", "session-b",
-                                                    counterparties=(F.A,),
-                                                    max_amount=F.PRICE + 500))
-    refusals.submit_intent(F.intent("sell-1", "sell", F.A, "auth-a", F.B, 1))
-    refusals.submit_intent(F.intent("buy-low", "buy", F.B, "auth-b", F.A, 1,
-                                    limit_price=F.PRICE - 1))
-    refusals.submit_intent(F.intent("sell-open", "sell", F.A, "auth-a", None, 2))
-    refusals.submit_intent(F.intent("sell-to-c", "sell", F.A, "auth-a", F.C, 3))
-    refusals.submit_intent(F.intent("buy-2", "buy", F.B, "auth-b", F.A, 2))
-    refusals.submit_intent(F.intent("buy-3", "buy", F.B, "auth-b", F.A, 3))
-    refusals.submit_intent(F.intent("sell-4", "sell", F.B, "auth-b", F.A, 4))
-    refusals.submit_intent(TradeIntent(
-        intent_id="buy-other-quote", side="buy", signer=F.B, asset=F.asset(),
-        limit_price=F.PRICE, quote_asset="another-local-quote", units=1, nonce=5,
-        expires_at=1_700_800_000, authorization_id="auth-b", counterparty=F.A))
-    for name, cases, expected, left, right in (
-        ("a buy limit below the sell limit does not match", ("T-09",),
-         "EX_MATCH_PRICE_REFUSED", "sell-1", "buy-low"),
-        ("an unpaired order is refused rather than matched loosely", ("T-09",),
-         "EX_MATCH_PAIRING_REFUSED", "sell-open", "buy-2"),
-        ("a pairing naming a third party is refused", ("T-09",),
-         "EX_MATCH_PAIRING_REFUSED", "sell-to-c", "buy-3"),
-        ("two sells do not match", ("T-09",), "EX_MATCH_SIDE_REFUSED", "sell-1", "sell-4"),
-        ("a different quote asset is refused", ("T-09",),
-         "EX_MATCH_QUOTE_ASSET_REFUSED", "sell-1", "buy-other-quote"),
-    ):
-        recorder.expect(name, cases, expected,
-                        _refusal(lambda left=left, right=right:
-                                 refusals.match_intents(left, right)))
-    recorder.expect("no refused pairing moved a position", ("T-09",),
-                    {"owner": 0, "holder": 0},
-                    {"owner": refusals.owner_index(RECEIPT),
-                     "holder": refusals.holder_index(RECEIPT)})
-    recorder.note("there is no order book and no discretionary matching: two named orders "
-                  "face each other or nothing happens")
-
-
-# ------------------------------------------------------ T-07: one valid head
 
 def _one_head(recorder):
     exchange, _ = F.minted(registration_path=CONTRACT_PATH)
     F.hop(exchange, F.A, F.B, 1, "transfer-ab", "session-a", "session-b")
-    recorder.describe_setup(
-        path=CONTRACT_PATH, accounts={"A": F.A, "B": F.B, "C": F.C},
-        head={"ownerIndex": exchange.owner_index(RECEIPT), "owner": exchange.owner_of(RECEIPT)},
-        simulatedAdapters={"registrar": exchange.registrars[CONTRACT_PATH].label})
-
+    recorder.describe_setup(path=CONTRACT_PATH, accounts={"A": F.A, "B": F.B, "C": F.C},
+                            initialOwner=F.B, consumedBuyerNonce=1)
     sell, buy = _paired(exchange, F.B, F.C, "session-b", "session-c", "replay", 1)
     report = exchange.validate_intent(sell.intent_id)
-    recorder.step("B reuses the nonce its own earlier hop consumed",
-                  nonce=1, reasons=sorted(report["reasons"]))
-    recorder.expect("a replayed nonce does not execute", ("T-07",),
+    recorder.step("reused signer nonce observed", reasons=report["reasons"])
+    recorder.expect("a replayed nonce never executes", ("T-07",),
                     {"executable": False, "replayed": True},
                     {"executable": report["executable"],
                      "replayed": "EX_INTENT_NONCE_REPLAYED" in report["reasons"]})
-    recorder.expect("the replay cannot be matched either", ("T-07",),
+    recorder.expect("the replay cannot become a current server proposal", ("T-07",),
                     "EX_MATCH_UNEXECUTABLE",
                     _refusal(lambda: exchange.match_intents(sell.intent_id, buy.intent_id)))
-
-    two_buyers, _ = F.minted(registration_path=CONTRACT_PATH)
-    for buyer, session, nonce in ((F.B, "session-b", 1), (F.C, "session-c", 2)):
-        two_buyers.connect_wallet(buyer, session)
-        two_buyers.register_authorization(F.authorization(buyer, "auth-buy-%s" % buyer[-1],
-                                                          session, counterparties=(F.A,)))
-        two_buyers.register_authorization(F.authorization(F.A, "auth-sell-%s" % buyer[-1],
-                                                          "session-a", counterparties=(buyer,)))
-        two_buyers.submit_intent(F.intent("sell-to-%s" % buyer[-1], "sell", F.A,
-                                          "auth-sell-%s" % buyer[-1], buyer, nonce))
-        two_buyers.submit_intent(F.intent("buy-by-%s" % buyer[-1], "buy", buyer,
-                                          "auth-buy-%s" % buyer[-1], F.A, nonce))
-    first = two_buyers.match_intents("sell-to-b", "buy-by-b")
-    second = two_buyers.match_intents("sell-to-c", "buy-by-c")
-    two_buyers.execute_transfer(first, "transfer-ab")
-    recorder.step("the same head is sold to two buyers and both pairings exist",
-                  executed="transfer-ab", pending="transfer-ac")
-    recorder.expect("the second sale of the same head is refused", ("T-07",),
-                    "EX_TRADE_HEAD_MOVED",
-                    _refusal(lambda: two_buyers.execute_transfer(second, "transfer-ac")))
-    recorder.expect("exactly one of the two advanced the chain", ("T-07",),
-                    {"ownerIndex": 1, "owner": F.B},
-                    {"ownerIndex": two_buyers.owner_index(RECEIPT),
-                     "owner": two_buyers.owner_of(RECEIPT)})
-
+    book, _ = F.minted(registration_path=CONTRACT_PATH)
+    book.register_authorization(F.authorization(F.A, "auth-ask", "session-a"))
+    book.submit_intent(F.intent("ask", "sell", F.A, "auth-ask", None, 1))
+    for buyer, session, price in ((F.B, "session-b", F.PRICE), (F.C, "session-c", F.PRICE + 1)):
+        book.connect_wallet(buyer, session)
+        book.register_authorization(F.authorization(buyer, "bid-" + session, session,
+                                                      max_amount=price, counterparties=(F.A,)))
+        book.submit_intent(F.intent("order-" + session, "buy", buyer, "bid-" + session,
+                                     None, 2, limit_price=price))
+        if buyer == F.B:
+            first = book.match_intents("ask", "order-session-b")
+    second = book.match_intents("ask", "order-session-c")
+    book.execute_transfer(second, "transfer-ac")
+    recorder.step("the current best proposal executes", buyer=book.owner_of(RECEIPT))
+    recorder.expect("the stale proposal cannot sell the same head again", ("T-07",),
+                    "EX_TRADE_HEAD_MOVED", _refusal(lambda: book.execute_transfer(first, "transfer-ab")))
+    recorder.expect("exactly one proposal advances the head", ("T-07",),
+                    {"owner": F.C, "index": 1, "legs": 1},
+                    {"owner": book.owner_of(RECEIPT), "index": book.owner_index(RECEIPT),
+                     "legs": book.recorded_legs(RECEIPT)})
     duplicate, _ = F.minted(registration_path=CONTRACT_PATH)
     F.hop(duplicate, F.A, F.B, 1, "transfer-ab", "session-a", "session-b")
-    dup_sell, dup_buy = _paired(duplicate, F.B, F.C, "session-b", "session-c", "dup", 7)
-    dup_match = duplicate.match_intents(dup_sell.intent_id, dup_buy.intent_id)
-    recorder.expect("reusing a transfer identifier is refused", ("T-07",),
+    ds, db = _paired(duplicate, F.B, F.C, "session-b", "session-c", "dup", 7)
+    dm = duplicate.match_intents(ds.intent_id, db.intent_id)
+    recorder.expect("a consumed transfer identifier cannot append another leg", ("T-07",),
                     "EX_TRANSFER_DUPLICATE_REFUSED",
-                    _refusal(lambda: duplicate.execute_transfer(dup_match, "transfer-ab")))
-    recorder.expect("the duplicate added no leg", ("T-07",), 1,
-                    duplicate.owner_index(RECEIPT))
+                    _refusal(lambda: duplicate.execute_transfer(dm, "transfer-ab")))
+    recorder.expect("the duplicate leaves the original one-leg history", ("T-07",),
+                    1, duplicate.recorded_legs(RECEIPT))
+    late, clock = F.minted(registration_path=CONTRACT_PATH)
+    ls, lb = _paired(late, F.A, F.B, "session-a", "session-b", "cutoff", 1)
+    pending = late.match_intents(ls.intent_id, lb.intent_id)
+    clock.now = late.receipt(RECEIPT).trade_stop_at
+    recorder.expect("an actual pending proposal is refused at the exact cutoff", ("T-07",),
+                    "EX_TRADE_WINDOW_CLOSED", _refusal(lambda: late.execute_transfer(pending, "late")))
+    recorder.expect("cutoff refusal changes neither owner nor history", ("T-07",),
+                    (F.A, 0), (late.owner_of(RECEIPT), late.recorded_legs(RECEIPT)))
 
-    late_clock = F.ManualClock()
-    late, _ = F.minted(registration_path=CONTRACT_PATH, clock=late_clock)
-    late_clock.now = late.receipt(RECEIPT).trade_stop_at
-    recorder.expect("a new trade at the stop-trading instant is refused", ("T-07",),
-                    True,
-                    _refusal(lambda: F.hop(late, F.A, F.B, 1, "transfer-late",
-                                           "session-a", "session-b"))
-                    in ("EX_MATCH_UNEXECUTABLE", "EX_TRADE_WINDOW_CLOSED"),
-                    detail="the stop instant is inclusive: at it, not after it")
-    recorder.note("the chain has one head; a second claim on it is refused rather than "
-                  "queued, reconciled or resolved by timing")
-
-
-# --------------------------------------- T-15, T-16: each segment's own evidence
 
 def _segment_evidence(recorder):
     exchange, _ = F.funded_chain_to_d(registration_path=CONTRACT_PATH)
@@ -673,8 +611,8 @@ def _idempotence(recorder):
                     {"complete": report["complete"],
                      "movements": exchange.payments.movements,
                      "assetReturns": exchange.asset_control.returns},
-                    detail="one release for AB and two refunds, and one return to the "
-                           "boundary, however many times it is asked")
+                    detail="three original buyer refunds and one direct boundary return, "
+                           "however many times the same recovery is asked")
     state = exchange.segment_release_state(RECEIPT, 1)
     recorder.expect("a release replayed after a refund is refused", ("T-30",),
                     {"eligible": False, "refunded": True},
@@ -823,6 +761,20 @@ def _recovery_and_exit(recorder):
                     detail="discarded evidence is the one thing an investigation "
                            "cannot recover")
 
+    original_movements = late.payments.movements
+    original_verifier = late._mint_book.verify
+    expected_validity = {"receiptId": RECEIPT, "asset": list(late.receipt(RECEIPT).asset.key),
+        "mintDeclarationDigest": late._mint_declarations[RECEIPT]["declarationDigest"],
+        "owner": F.A, "holder": F.A, "boundaryIndex": 0, "observedAt": late._now(None)}
+    # Exact synthetic validity evidence only; never a production authority result.
+    late._mint_book.verify = lambda kind, payload: (payload == expected_validity
+        if kind == "current-asset-validity" else original_verifier(kind, payload))
+    recovered = late.resume_trading(RECEIPT)
+    recorder.expect("completed unexpired recovery starts a fresh generation without replay", ("T-23", "T-30"),
+                    {"generation": 1, "active": (), "history": 1, "payments": original_movements},
+                    {"generation": recovered["generation"], "active": late.active_leg_indices(RECEIPT),
+                     "history": len(late.historical_rollbacks(RECEIPT)), "payments": late.payments.movements})
+
     deadline, deadline_clock = F.rollback_chain_to_d(registration_path=CONTRACT_PATH)
     deadline_requests = F.submit_all(deadline)
     F.confirm(deadline, deadline_requests[0], "res-ab")
@@ -851,26 +803,20 @@ def _recovery_and_exit(recorder):
 
     ready, _ = F.minted(registration_path=CONTRACT_PATH)
     agreed = ready.redemption_readiness(RECEIPT, F.A)
-    recorder.expect("owner equal to holder is necessary and never sufficient", ("T-02",),
-                    {"ownerEqualsHolder": True, "necessary": True, "redeemable": False,
-                     "namesAFurtherCheck": True},
-                    {"ownerEqualsHolder": agreed["ownerEqualsHolder"],
-                     "necessary": agreed["necessaryConditionMet"],
-                     "redeemable": agreed["redeemable"],
-                     "namesAFurtherCheck": "rights-holder-verification"
-                                           in agreed["furtherChecksNotPerformedHere"]},
-                    detail="this package never reports a receipt as redeemable")
+    recorder.expect("physical redemption is retired even when owner equals holder", ("T-02",),
+                    {"eligible": False, "reasons": ("EX_PHYSICAL_FULFILLMENT_RETIRED",)},
+                    {key: agreed[key] for key in ("eligible", "reasons")})
     diverged, _ = F.chain_to_d(registration_path=CONTRACT_PATH)
     split = diverged.redemption_readiness(RECEIPT, F.D)
-    recorder.expect("a diverged owner and holder blocks the necessary condition", ("T-02",),
-                    {"ownerEqualsHolder": False, "diverged": True},
-                    {"ownerEqualsHolder": split["ownerEqualsHolder"],
-                     "diverged": "EX_OWNER_HOLDER_DIVERGED" in split["blockingReasons"]})
-    recorder.note("every recovery path here answers with what already happened rather "
-                  "than with a second movement")
-    recorder.not_run("real redemption and real deadline enforcement", ("T-37", "T-38"),
-                     "redemption needs rights-holder verification and the deadline needs a "
-                     "real clock and a real registrar; neither exists in a local model run")
+    recorder.expect("retirement is independent of owner holder equality", ("T-02",),
+                    agreed["reasons"], split["reasons"])
+    F.hop(diverged, F.D, F.A, 4, "transfer-da", "session-d", "session-a")
+    recorder.expect("retired physical operations add no ordinary transfer gate", ("T-02", "T-34"),
+                    {"owner": F.A, "holder": F.A, "position": 4},
+                    {"owner": diverged.owner_of(RECEIPT), "holder": diverged.holder_of(RECEIPT),
+                     "position": diverged.owner_index(RECEIPT)})
+    recorder.not_run("real deadline and native recovery enforcement", ("T-37", "T-38"),
+                     "Synthetic boundary and registrar only; real Oracle timing and native results remain separate")
 
 
 # --------------------- what the simulated adapters themselves were asked
@@ -928,12 +874,12 @@ def _adapter_enquiry(recorder):
                     detail="an enquiry is a read: two reads give the same answer and "
                            "neither is an instruction")
 
-    return_key = "return:%s:rb-1" % RECEIPT
-    control, _ = F.rollback_chain_to_d(registration_path=CONTRACT_PATH,
-                                       return_outcomes={return_key: "unknown"})
+    control, _ = F.rollback_chain_to_d(registration_path=CONTRACT_PATH)
     control_requests = F.submit_all(control)
     F.refuse(control, control_requests[0], "res-ab-refused")
-    control.begin_rollback(RECEIPT, 0, F.rollback_authority(control, 0, "rb-1"))
+    state = control.begin_rollback(RECEIPT, 0, F.rollback_authority(control, 0, "rb-1"))
+    return_key = "return:" + RECEIPT + ":" + state["authorityId"]
+    control.asset_control._outcomes[return_key] = "unknown"
     control.advance_rollback(RECEIPT)
     control.advance_rollback(RECEIPT)
     recorder.step("the asset return comes back unknown and is asked about again",
@@ -963,54 +909,29 @@ def _adapter_enquiry(recorder):
                         "return:%s:never-asked" % RECEIPT, "returned")))
 
     burn_key = exit_step_key("burn", RECEIPT, "rdm-1")
-    desk, desk_clock = F.settled_at_b(registration_path=CONTRACT_PATH,
-                                      voucher_outcomes={burn_key: "unknown"})
-    F.redeem_authorization(desk)
-    desk.request_redemption(RECEIPT, F.B, "auth-redeem", "rdm-1", F.ALL_CHECKS)
-    blocked = desk.advance_exit(RECEIPT)
-    recorder.step("the burn comes back unknown and the exit stops there",
-                  state=blocked["state"],
-                  history=[entry["status"] for entry in desk.voucher_desk.history(burn_key)])
-    recorder.expect("an unknown exit act blocks rather than being retried", ("T-33",),
-                    {"state": "blocked", "history": ["unknown"], "attempts": [1]},
-                    {"state": blocked["state"],
-                     "history": [entry["status"]
-                                 for entry in desk.voucher_desk.history(burn_key)],
-                     "attempts": [entry["attempt"]
-                                  for entry in desk.voucher_desk.history(burn_key)]})
-    again = desk.advance_exit(RECEIPT)
-    recorder.expect("asking again while it stays unknown acts no further", ("T-33",),
-                    {"state": "blocked", "historyLength": 1},
-                    {"state": again["state"],
-                     "historyLength": len(desk.voucher_desk.history(burn_key))})
-    desk_clock.advance(1)
-    desk.voucher_desk.resolve_unknown(burn_key, "failed")
-    recovered = desk.advance_exit(RECEIPT)
-    desk_history = desk.voucher_desk.history(burn_key)
-    recorder.step("the enquiry establishes a confirmed no-effect failure",
-                  complete=recovered["complete"],
-                  history=[entry["status"] for entry in desk_history])
-    recorder.expect("the retry happens only once the uncertainty is resolved",
-                    ("T-33",),
-                    {"complete": True, "statuses": ["unknown", "failed", "done"],
-                     "attempts": [1, 1, 2]},
-                    {"complete": recovered["complete"],
-                     "statuses": [entry["status"] for entry in desk_history],
-                     "attempts": [entry["attempt"] for entry in desk_history]},
-                    detail="the resolution is its own record between the two attempts, "
-                           "so the retry is visibly a retry")
-    recorder.expect("the desk's record of the resolution says what it established",
-                    ("T-33",), {"effect": "not-applied", "retryable": True,
-                                "resolved": True},
-                    {"effect": desk_history[1]["effect"],
-                     "retryable": desk_history[1]["retryable"],
-                     "resolved": "resolvedAt" in desk_history[1]})
-    settled_length = len(desk.voucher_desk.history(burn_key))
-    repeated = desk.advance_exit(RECEIPT)
-    recorder.expect("a completed exit is not acted on again", ("T-33",),
-                    {"complete": True, "historyLength": settled_length},
-                    {"complete": repeated["complete"],
-                     "historyLength": len(desk.voucher_desk.history(burn_key))})
+    legacy, _ = F.exit_exchange(registration_path=CONTRACT_PATH)
+    desk = legacy.voucher_desk
+    original = {"key": burn_key, "step": "burn", "receiptId": RECEIPT,
+                "account": F.A, "status": "unknown", "attempt": 1,
+                "effect": "unknown", "retryable": False}
+    desk._records[burn_key] = dict(original)
+    desk._history[burn_key] = [dict(original)]
+    recorder.step("retained historical unknown outcome", observation=desk.lookup(burn_key))
+    for _ in range(2):
+        recorder.expect("a retired unknown act cannot be replayed", ("T-33",),
+                        "EX_PHYSICAL_FULFILLMENT_RETIRED",
+                        _refusal(lambda: desk.act(burn_key, "burn", RECEIPT, F.A)))
+    recorder.expect("reading and refusal preserve original evidence", ("T-33",),
+                    (original,), desk.history(burn_key))
+    resolved = desk.resolve_unknown(burn_key, "failed")
+    recorder.expect("original unknown can still be reconciled without execution", ("T-33",),
+                    {"status": "failed", "attempt": 1},
+                    {key: resolved[key] for key in ("status", "attempt")})
+    recorder.expect("reconciliation never reactivates a retired act", ("T-33",),
+                    "EX_PHYSICAL_FULFILLMENT_RETIRED",
+                    _refusal(lambda: desk.act(burn_key, "burn", RECEIPT, F.A)))
+    recorder.expect("history retains unknown and its resolution only", ("T-33",),
+                    ["unknown", "failed"], [row["status"] for row in desk.history(burn_key)])
     recorder.note("every adapter here can be asked what happened, and asking is never "
                   "an instruction: no enquiry moved value, returned an asset or "
                   "performed an exit act")

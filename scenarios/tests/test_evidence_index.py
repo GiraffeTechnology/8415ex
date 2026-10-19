@@ -95,12 +95,11 @@ class Index(unittest.TestCase):
     def test_the_existing_owner_dependencies_are_named(self):
         dependencies = self.index["existingOwnerDependencies"]
         self.assertTrue(dependencies)
-        ledger = next(entry for entry in dependencies
-                      if "ledger" in entry["where"])
-        self.assertIn("netToOriginalBuyer", ledger["where"])
-        self.assertIn("no single unit", ledger["detail"])
-        self.assertIn("changes no domain code", ledger["thisPackageDoes"])
-        self.assertTrue(ledger["owner"])
+        for dependency in dependencies:
+            self.assertTrue(dependency["dependency"])
+            self.assertTrue(dependency["thisPackageDoes"])
+            self.assertTrue(dependency["status"])
+        self.assertTrue(any(entry["dependency"] == "actual native interfaces" for entry in dependencies))
 
     def test_it_records_failed_and_blocked_cases_on_the_same_terms(self):
         broken = {"scenarios": [{

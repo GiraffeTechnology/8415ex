@@ -28,20 +28,19 @@ The nine groups:
    per-segment funds, gas, owner and holder positions, registration prefix and
    recovery outcome
 9. blockers: the exact action blocked, the missing evidence or decision, the
-   affected scope, its owner, and the independent work that continued
+   affected scope, its evidence category, and the independent work that continued
 
-The private requirements identity belongs in group 2 and is never embedded in
-this source. It is supplied at call time through the same mechanism the scan
-uses for private markers. Only its presence at receipt construction is
-reported; its value is never emitted. This does not prove it was supplied to
-the original run.
+The requirements identity input belongs in group 2. It is supplied as an
+argument or environment variable; only its presence at receipt construction
+is reported. The value is not emitted, and presence here does not establish
+that it was supplied to the original run.
 """
 import os
 from copy import deepcopy
 
 from . import manifest
 
-#: The environment variable through which the private requirements identity may
+#: The environment variable through which a requirements identity input may
 #: be supplied at call time. Its value is never written into this source, and
 #: never into a record.
 REQUIREMENTS_IDENTITY_ENV = "EX_REQUIREMENTS_IDENTITY"
@@ -58,16 +57,15 @@ DEPLOYMENT_FIELDS = ("target", "deployedCommit", "deployedTree", "url",
 
 
 def _requirements_identity(supplied=None):
-    """Whether a private requirements identity was supplied, without echoing it."""
+    'Whether a requirements identity input was supplied, without echoing it.'
     value = supplied if supplied is not None else os.environ.get(
         REQUIREMENTS_IDENTITY_ENV, "")
     present = bool(str(value).strip())
     return {
         "supplied": present,
-        "where": ("supplied at call time through the approved private mechanism"
+        "where": ('supplied at call time through the input argument or environment variable'
                   if present else
-                  "not supplied to this receipt; the identity is held privately and is "
-                  "never embedded in this source"),
+                  'not supplied to this receipt; no identity value is emitted'),
         "publishedHere": False,
     }
 
@@ -245,9 +243,9 @@ def build(bundle, root=".", requirements_identity=None, artifacts=(),
             "7-chain": dict(
                 {field: NOT_RUN for field in CHAIN_FIELDS},
                 **(chain or {}),
-                statement=("no transaction was sent, signed or broadcast by this "
-                           "run; every field above stays NOT_RUN until its "
-                           "authorized owner supplies genuine evidence"),
+                statement=("no transaction was sent, signed or broadcast by this run; every "
+                           "field above stays NOT_RUN until genuine execution evidence is "
+                           "supplied"),
                 evidenceSlots=checklist.get("evidenceSlots", [])),
             "8-reconciliation": {
                 "scenarios": reconciliation,
@@ -260,8 +258,8 @@ def build(bundle, root=".", requirements_identity=None, artifacts=(),
                 "blockingFromThisRun": bundle.get("blocking", []),
                 "independentWorkContinued": deepcopy(bundle.get("independentWorkContinued",
                                                                  "NOT_RECORDED")),
-                "note": ("a blocker names the exact action, its target, the error or "
-                         "missing input, the affected scope, the owner and the next "
+                "note": ("a blocker names the exact action, its target, the error or missing "
+                         "input, the affected scope, the evidence category and the next "
                          "step; only the dependent work pauses"),
             },
         },

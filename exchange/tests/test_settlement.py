@@ -413,7 +413,8 @@ class FundedConsole(unittest.TestCase):
                           authorization_ids=("auth-sell-ab",), run={"runId": "funded"})
 
     def test_the_banner_says_payments_are_simulated(self):
-        self.assertIn("Payments are simulated", self._page("receipt"))
+        self.assertIn("Payments are simulated", self._page("timeline"))
+        self.assertIn("Not provided", self._page("receipt"))
 
     def test_the_timeline_distinguishes_released_from_unknown(self):
         html = self._page("timeline")
@@ -437,7 +438,7 @@ class FundedConsole(unittest.TestCase):
         self.assertFalse(report["segments"][1]["released"])
 
     def test_the_receipt_page_states_that_each_leg_funds_itself(self):
-        self.assertIn("each leg funds its own escrow", self._page("receipt"))
+        self.assertIn("this leg&#x27;s buyer funded its own escrow", self._page("timeline"))
 
 
 if __name__ == "__main__":

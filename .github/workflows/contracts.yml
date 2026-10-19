@@ -1,0 +1,132 @@
+name: TESTONLY contract CI
+on:
+  pull_request: {}
+  push:
+    branches: [main, feat/sepolia-testonly-nft-20261017]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  contracts:
+    name: Solidity 0.8.24 offline tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Record and merge exact source inputs
+        shell: bash
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/contract-evidence"
+          mkdir -p "$evidence"
+          echo "EVIDENCE=$evidence" >> "$GITHUB_ENV"
+          head="$(git rev-parse HEAD)"
+          printf '%s\n' "$head" > "$evidence/head.txt"
+          if [ -n "$PR_HEAD" ]; then
+            test "$head" = "$PR_HEAD"
+            git fetch --no-tags origin "$BASE_REF"
+            base="$(git rev-parse FETCH_HEAD)"
+            printf '%s\n' "$base" > "$evidence/base.txt"
+            git checkout --detach "$base"
+            git config user.name "Contract CI"
+            git config user.email "contract-ci@users.noreply.github.com"
+            git merge --no-ff --no-commit "$head" 2>&1 | tee "$evidence/merge.log"
+            tree="$(git write-tree)"
+            merged="$(printf '%s\n' 'ci: synthesize exact PR merge for validation' | git commit-tree "$tree" -p "$base" -p "$head")"
+            git reset --hard "$merged"
+          else
+            printf '%s\n' "$head" > "$evidence/base.txt"
+          fi
+          git rev-parse HEAD > "$evidence/source-commit.txt"
+          git rev-parse HEAD^{tree} > "$evidence/source-tree.txt"
+          git show -s --format=raw HEAD > "$evidence/source-metadata.txt"
+      - name: Fetch exact official OpenZeppelin source
+        uses: actions/checkout@v4
+        with:
+          repository: OpenZeppelin/openzeppelin-contracts
+          ref: dbb6104ce834628e473d2173bbc9d47f81a9eec3
+          path: test-contracts/lib/openzeppelin-contracts
+          persist-credentials: false
+      - name: Prepare checksum-pinned ephemeral compiler and Forge
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools="$RUNNER_TEMP/contract-tools"
+          mkdir -p "$tools"
+          curl --fail --location --retry 2 https://github.com/foundry-rs/foundry/releases/download/v1.3.1/foundry_v1.3.1_linux_amd64.tar.gz -o "$tools/foundry.tar.gz"
+          printf '%s  %s\n' baad3e1b06d6f310d210c93e95258a03d923fe610f8d0742138f2245f94abd7c "$tools/foundry.tar.gz" | sha256sum --check
+          tar -xzf "$tools/foundry.tar.gz" -C "$tools" forge
+          curl --fail --location --retry 2 'https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.8.24+commit.e11b9ed9' -o "$tools/solc"
+          printf '%s  %s\n' fb03a29a517452b9f12bcf459ef37d0a543765bb3bbc911e70a87d6a37c30d5f "$tools/solc" | sha256sum --check
+          chmod 700 "$tools/forge" "$tools/solc"
+          echo "FORGE_BIN=$tools/forge" >> "$GITHUB_ENV"
+          echo "SOLC_BIN=$tools/solc" >> "$GITHUB_ENV"
+          "$tools/forge" --version | tee "$EVIDENCE/forge-version.txt"
+          "$tools/solc" --version | tee "$EVIDENCE/solc-version.txt"
+          sha256sum "$tools/foundry.tar.gz" "$tools/solc" > "$EVIDENCE/toolchain-sha256.txt"
+          actual="$(git -C test-contracts/lib/openzeppelin-contracts rev-parse HEAD)"
+          test "$actual" = dbb6104ce834628e473d2173bbc9d47f81a9eec3
+          printf '%s\n' "$actual" > "$EVIDENCE/openzeppelin-commit.txt"
+          python - <<'PY'
+          import json, pathlib, tomllib
+          root = pathlib.Path("test-contracts")
+          lock = json.loads((root / "dependencies.lock.json").read_text())
+          config = tomllib.loads((root / "foundry.toml").read_text())["profile"]["default"]
+          assert lock["solidity"] == config["solc_version"] == "0.8.24"
+          assert lock["openzeppelin"]["commit"] == "dbb6104ce834628e473d2173bbc9d47f81a9eec3"
+          assert config["offline"] is True and config["auto_detect_solc"] is False
+          assert config["evm_version"] == "shanghai"
+          assert config["optimizer"] is True and config["optimizer_runs"] == 200
+          PY
+      - name: Compile all contract sources offline
+        working-directory: test-contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$FORGE_BIN" build --offline --use "$SOLC_BIN" 2>&1 | tee "$EVIDENCE/build.log"
+      - name: Run complete synthetic EVM test suite offline
+        working-directory: test-contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$FORGE_BIN" test --offline --use "$SOLC_BIN" -vvv 2>&1 | tee "$EVIDENCE/tests.log"
+          python - <<'PY'
+          import os, pathlib, re
+          sources = sorted(pathlib.Path("test").glob("*.t.sol"))
+          assert {"EXSepoliaTestNFT.t.sol", "EXNFT0Remint.t.sol"} <= {path.name for path in sources}
+          expected = set()
+          for source in sources:
+              declared = set(re.findall(r"function\s+(test\w+)\s*\(", source.read_text()))
+              assert not expected.intersection(declared), "test names must identify one source"
+              expected.update(declared)
+          log = (pathlib.Path(os.environ["EVIDENCE"]) / "tests.log").read_text()
+          passed = set(re.findall(r"\[PASS\]\s+(test\w+)\(", log))
+          assert len(expected) >= 25, expected
+          assert passed == expected, {"expected": sorted(expected), "passed": sorted(passed)}
+          assert "[FAIL" not in log and "[SKIP" not in log
+          PY
+      - name: Record compiled artifact identity
+        working-directory: test-contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact=out/EXSepoliaTestNFT.sol/EXSepoliaTestNFT.json
+          test -s "$artifact"
+          cp "$artifact" "$EVIDENCE/EXSepoliaTestNFT.json"
+          sha256sum "$artifact" > "$EVIDENCE/artifact-sha256.txt"
+          wc -c "$artifact" > "$EVIDENCE/artifact-size.txt"
+          printf '%s\n' 'Synthetic local EVM only. Deployment, signing and broadcast NOT_RUN.' > "$EVIDENCE/execution-scope.txt"
+      - name: Retain exact source, compiler and raw test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-ci-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/contract-evidence
+          if-no-files-found: error

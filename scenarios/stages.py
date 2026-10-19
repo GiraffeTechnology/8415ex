@@ -1,10 +1,10 @@
-"""The stage map: what is developed here, what is owned elsewhere.
+"""The stage map: what is developed here, additional integration evidence.
 
 The acceptance matrix already says which case belongs to which stage. What it
-does not say is who does the remaining work, and that is the question a stage
+does not say is which evidence remains outstanding, and that is the question a stage
 map has to answer: for each stage, what this surface develops, what is then
-tested and accepted by whoever owns that, and what genuine real-world input
-stays with its existing owner.
+tested with independent evidence, and what real-world integration input
+remains outstanding.
 
 Three things keep this honest rather than decorative.
 
@@ -16,9 +16,9 @@ Every stage's case list is cross-checked against the acceptance matrix. If the
 two disagree, the disagreement is reported: a stage map that drifts from the
 matrix is worse than no stage map, because it reads as authoritative.
 
-A dependency is named with its owner, the scope it genuinely blocks and the next
+A dependency is named with its evidence category, the scope it genuinely blocks and the next
 step. A stage is never marked complete because its local half is done, and never
-dropped because its real-world half belongs to someone else.
+dropped because its real-world evidence is outstanding.
 
 The path check was one-directional and that was not enough. It caught a
 deliverable claiming a module that is not there, and said nothing about a module
@@ -46,6 +46,8 @@ NOT_A_DELIVERABLE = {
 #: is checked, so a deliverable cannot claim a module that does not exist.
 DEVELOPED_HERE = {
     0: (
+        {"deliverable": "verify immutable published requirements pins and distinguish current semantic acceptance",
+         "where": "scenarios/current_prd.py"},
         {"deliverable": "the baseline source and run identity a reviewer can re-derive",
          "where": "scenarios/manifest.py"},
         {"deliverable": "the reuse and interface map, with the interfaces still unlocated",
@@ -127,9 +129,9 @@ DEVELOPED_HERE = {
          "where": "scenarios/handoff.py"},
         {"deliverable": "the check that keeps the usage instructions true",
          "where": "scenarios/docs.py"},
-        {"deliverable": "the definition of done, clause by clause, with its owner",
+        {"deliverable": 'the definition of done, clause by clause, with its evidence dependency',
          "where": "scenarios/completion.py"},
-        {"deliverable": "per requirement section, what addresses it or whose it is",
+        {"deliverable": 'per requirement section, implementation and evidence dependencies',
          "where": "scenarios/prd.py"},
         {"deliverable": "per scenario, the nine items a demonstration must carry",
          "where": "scenarios/dossier.py"},
@@ -140,8 +142,8 @@ DEVELOPED_HERE = {
     ),
 }
 
-#: What is tested, corrected and accepted by whoever owns that, per stage. This
-#: surface develops and records; it does not accept its own work.
+#: Independent technical acceptance evidence, per stage.
+#: Model evidence does not establish integration acceptance.
 ACCEPTED_ELSEWHERE = {
     0: ("independent re-derivation of the baseline identity",
         "review of the traceability denominator against the approved requirements"),
@@ -153,19 +155,19 @@ ACCEPTED_ELSEWHERE = {
         "actual fee accounting against real gas spent"),
     4: ("the voucher hand-over and burn sequence as a real process",
         "the conflict priority and hand-over order where they are still undecided"),
-    5: ("deployment to an approved environment and the run on a real test chain",
+    5: ('deployment to a supported environment and the run on a real test chain',
         "independent security review of the exact head",
         "verification and packaging of the presentation materials"),
 }
 
-#: Genuine real-world input that stays with its existing owner. Each names the
+#: Real-world integration evidence. Each entry names the
 #: scope it blocks, so a stage is neither marked complete without it nor
 #: abandoned because of it.
 REAL_WORLD_DEPENDENCIES = (
     {
         "stage": 1,
         "needs": "an operable UI journey in a real browser",
-        "owner": "the party that owns UI acceptance",
+        "owner": 'browser acceptance evidence',
         "blocks": "only the UI half of this stage's acceptance",
         "doesNotBlock": "the scenarios, the route contracts or their local results",
         "nextStep": "run the journeys against a deployed build and record what was "
@@ -175,7 +177,7 @@ REAL_WORLD_DEPENDENCIES = (
     {
         "stage": 2,
         "needs": "the authoritative settlement binding for a real release",
-        "owner": "the domain owner, by checking the existing components",
+        "owner": 'domain integration evidence',
         "blocks": "only real per-segment settlement acceptance",
         "doesNotBlock": "the segmented-funding model or its local reconciliation",
         "nextStep": "name the real binding, then bind a release to it instead of to "
@@ -185,7 +187,7 @@ REAL_WORLD_DEPENDENCIES = (
     {
         "stage": 3,
         "needs": "real asset-return control and its wallet authorization",
-        "owner": "the domain owner, by checking the existing contracts and permissions",
+        "owner": 'asset-control interface and permission evidence',
         "blocks": "only a real on-chain rollback",
         "doesNotBlock": "the rollback model, the fee separation or the recovery paths",
         "nextStep": "name the control interface and the permissions it needs",
@@ -195,7 +197,7 @@ REAL_WORLD_DEPENDENCIES = (
         "stage": 3,
         "needs": "whether a real fee is deducted from a refunded principal, in which "
                  "asset and by whom",
-        "owner": "the party that owns the commercial decision",
+        "owner": 'fee specification',
         "blocks": "only the fee figure in a real refund",
         "doesNotBlock": "the refund model, which deducts nothing and says so",
         "nextStep": "decide it; until then the obligation stays NOT_RUN",
@@ -205,7 +207,7 @@ REAL_WORLD_DEPENDENCIES = (
         "stage": 4,
         "needs": "the confirmation and recovery order for voucher hand-over, stopping "
                  "resale and the burn",
-        "owner": "the product owner",
+        "owner": 'product specification',
         "blocks": "only the branches whose order is undecided",
         "doesNotBlock": "the deadline, the eligibility checks or the recorded steps",
         "nextStep": "decide the order; the gap is listed rather than guessed",
@@ -213,9 +215,9 @@ REAL_WORLD_DEPENDENCIES = (
     },
     {
         "stage": 5,
-        "needs": "an approved deployment target, its configuration and the connected "
-                 "chain identity",
-        "owner": "the party that owns approved-environment deployment",
+        "needs": "a supported deployment target, its configuration and the connected chain "
+                 "identity",
+        "owner": 'deployment evidence',
         "blocks": "every real-chain and deployment obligation",
         "doesNotBlock": "the local delivery, its records or the prepared package",
         "nextStep": "supply the verified target and configuration; nothing here may "
@@ -225,7 +227,7 @@ REAL_WORLD_DEPENDENCIES = (
     {
         "stage": 5,
         "needs": "independent security review of the exact head",
-        "owner": "the party that owns security certification",
+        "owner": 'security review evidence',
         "blocks": "general release",
         "doesNotBlock": "functional local development or a functional-testing candidate",
         "nextStep": "review the exact head; local suites are preparation, never an audit",
@@ -352,7 +354,7 @@ def build(root="."):
             "being developed here says nothing about it being accepted",
             "not a completion claim: every stage's local half is all this surface "
             "delivers, and each dependency names the scope it still blocks",
-            "not a reassignment: a dependency names the owner it already has",
+            'dependency labels identify technical evidence categories',
             "not a claim about other surfaces: only this package's own modules are "
             "checked for being claimed, because a stage map here cannot speak for "
             "the domain or the CI surface",

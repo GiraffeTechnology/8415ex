@@ -97,7 +97,7 @@ class RemintDraftWorkbenchTests(unittest.TestCase):
         status, _, body = self.request("POST", "/remint-draft", self.form(csrf="wrong"))
         self.assertEqual(status, 403)
         self.assertNotIn(self.server.csrf, body)
-        self.assertEqual(self.request("POST", "/remint-draft", self.form(csrf="非ASCII"))[0], 403)
+        self.assertEqual(self.request("POST", "/remint-draft", self.form(csrf="\u975eASCII"))[0], 403)
         self.assertEqual(len(self.read_calls), before)
 
     def test_extra_identity_authorization_fields_or_address_text_do_not_reach_editor(self):

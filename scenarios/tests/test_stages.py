@@ -208,7 +208,7 @@ class Ownership(unittest.TestCase):
         self.assertTrue(set(self.map["slotsDependedOn"]) <= slots)
 
     def test_a_dependency_does_not_reassign_the_work(self):
-        self.assertIn("not a reassignment", " ".join(self.map["isNot"]))
+        self.assertIn("dependency labels identify technical evidence categories", " ".join(self.map["isNot"]))
         owners = {entry["owner"] for entry in stages.REAL_WORLD_DEPENDENCIES}
         self.assertTrue(owners)
         for owner in sorted(owners):

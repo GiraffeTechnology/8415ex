@@ -133,7 +133,7 @@ def timeline_page(exchange, receipt_id, now=None):
 
 
 def rollback_page(exchange, receipt_id, now=None):
-    """Stage 1 states plainly that rollback is not implemented yet."""
+    """Show evidenced reverse hops and the protected registered prefix."""
     view = exchange.receipt_view(receipt_id, now)
     rows = [
         _row("Finalized prefix", f"{view['registeredPrefixLegs']} legs confirmed and shown, "
@@ -153,8 +153,7 @@ def rollback_page(exchange, receipt_id, now=None):
             _row("Last finalized position", f"leg {state['lastFinalizedPosition']} - this prefix "
                                             f"is not reopened, reversed or re-collected"),
             _row("Return boundary", f"position {state['lastFinalizedPosition']} - the asset returns here, "
-                                    f"in one control operation, without walking the intermediate "
-                                    f"wallets or needing their gas"),
+                                    f"in one control operation, preserving the finalized prefix"),
             _row("Asset returned", "yes" if state["assetControl"]["returned"] else "not yet"),
             _row("Outstanding steps", ", ".join(
                 f"{step['stepId']} ({step['status']})" for step in state["outstandingSteps"])

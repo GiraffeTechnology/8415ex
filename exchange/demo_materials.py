@@ -23,8 +23,11 @@ def validate(records):
     for record in records:
         if not isinstance(record, dict):
             raise ValueError("captured record mapping required")
-        if record.get("evidenceKind") != "LOCAL_SIMULATION":
-            raise ValueError("only labelled local records accepted")
+        kind = record.get("evidenceKind")
+        if kind != "LOCAL_SIMULATION" and not (
+                kind == "SIMULATION_PUBLIC_PROJECTION"
+                and record.get("schema") == "8415ex-public-demo/2"):
+            raise ValueError("only labelled local or typed public simulation records accepted")
         current = record.get("source", {})
         if not isinstance(current, dict):
             raise ValueError("captured source mapping required")
@@ -137,13 +140,14 @@ def build(records):
                             'No institutional cooperation implied. This file does not execute actions.</p>'
                             + ''.join(html_sections) + '</body></html>').encode()
     files["README.md"] = (
-        "# Captured local demonstration inputs\n\n"
+        "# Captured local demonstration inputs\n"
+        "\n"
         "Use replay.html to read the draft scenes; slides.md supplies editable presentation text.\n"
         "captions.vtt and scenes.json are film inputs, not a rendered film.\n"
         "Each evidence JSON preserves setup, prices, gas conditions, steps, expectations and failures.\n"
         "The manifest hashes actual member bytes; it does not independently certify execution.\n"
-        "No raw private requirements, internal configuration or credentials are included.\n"
-        "A reviewed rendering on existing approved Linux is still required for final PPT/video.\n"
+        "No credentials are included.\n"
+        "A reviewed rendering on the supported Linux configuration is still required for final PPT/video.\n"
     ).encode()
     manifest = {"schema": "8415ex-demo-materials/1", "source": source,
                 "kind": "LOCAL_SIMULATION_CONTENT_DRAFT",

@@ -1736,6 +1736,8 @@ class Exchange:
         state = self._exits[self.receipt(receipt_id).receipt_id]
         if state is None:
             return {"receiptId": receipt_id, "open": False, "state": None, "complete": False,
+                    "burned": False, "steps": (), "historyPreserved": True,
+                    "distinctCompletionInstants": (), "physicalAndOnChainAreAtomic": False,
                     "retiredOperation": True, "executable": False, "prdVersion": "1.3",
                     "observedAt": now}
         steps = tuple({"step": step.name, "status": step.status,

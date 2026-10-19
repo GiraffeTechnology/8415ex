@@ -143,17 +143,19 @@ class RefundsAndGas(unittest.TestCase):
         self.assertEqual(report["segments"][0]["gasTotal"], "0")
 
 
-class ReturnDoesNotWalkIntermediates(unittest.TestCase):
+class DirectReturnPreservesSuffix(unittest.TestCase):
     """T-20: a zero-balance intermediate wallet changes no obligation."""
 
-    def test_the_return_is_one_operation_to_the_boundary(self):
+    def test_the_return_uses_one_direct_control_operation(self):
         exchange, _, _ = refused_at_ab()
-        exchange.begin_rollback("rcpt-8415-0001", 0, F.rollback_authority(exchange, 0, "rb-1"))
+        state = exchange.begin_rollback("rcpt-8415-0001", 0, F.rollback_authority(exchange, 0, "rb-1"))
+        key = "return:rcpt-8415-0001:" + state["authorityId"]
         exchange.advance_rollback("rcpt-8415-0001")
-        record = exchange.asset_control.lookup("return:rcpt-8415-0001:rb-1")
+        record = exchange.asset_control.lookup(key)
+        self.assertEqual((record["fromAccount"], record["toAccount"]), (F.D, F.A))
         self.assertEqual(record["operations"], 1)
-        self.assertFalse(record["walkedIntermediateWallets"])
         self.assertFalse(record["requiredIntermediateGas"])
+        self.assertFalse(record["walkedIntermediateWallets"])
         self.assertEqual(exchange.asset_control.hops_walked, 0)
 
     def test_zero_balances_at_b_and_c_do_not_block_the_return(self):
@@ -233,16 +235,19 @@ class InterruptionAndLateResults(unittest.TestCase):
         self.assertIn("unknown", [entry["paymentStatus"] for entry in resumed])
 
     def test_an_unknown_asset_return_is_not_sent_twice(self):
-        exchange, _, _ = refused_at_ab(return_outcomes={"return:rcpt-8415-0001:rb-1": "unknown"})
-        exchange.begin_rollback("rcpt-8415-0001", 0, F.rollback_authority(exchange, 0, "rb-1"))
+        exchange, _, _ = refused_at_ab()
+        state = exchange.begin_rollback("rcpt-8415-0001", 0, F.rollback_authority(exchange, 0, "rb-1"))
+        first_key = "return:rcpt-8415-0001:" + state["authorityId"]
+        exchange.asset_control._outcomes[first_key] = "unknown"
         exchange.advance_rollback("rcpt-8415-0001")
         exchange.advance_rollback("rcpt-8415-0001")
         self.assertEqual(exchange.asset_control.returns, 0)
-        exchange.asset_control.resolve_unknown("return:rcpt-8415-0001:rb-1", "returned")
+        exchange.asset_control.resolve_unknown(first_key, "returned")
         report = exchange.advance_rollback("rcpt-8415-0001")
         self.assertTrue(report["complete"])
         self.assertEqual(exchange.asset_control.returns, 0,
-                         "the enquiry recorded the return; nothing was resent")
+                         "the original direct return was reconciled without resending")
+        self.assertEqual(len(exchange.asset_control._records), 1)
 
     def test_an_enquiry_about_a_refund_never_becomes_a_release(self):
         """Regression: a resumed enquiry must apply the outcome the payment was
@@ -284,9 +289,17 @@ class InterruptionAndLateResults(unittest.TestCase):
         self.assertEqual(report["conflicts"][0]["resultId"], "res-cd-late")
 
     def test_a_returned_chain_is_not_re_traded_on_a_guess(self):
-        exchange, _, _ = refused_at_ab()
-        match, _ = F.funded_hop(exchange, F.A, F.B, 9, "transfer-prepared",
+        exchange, _ = F.rollback_exchange()
+        match, _ = F.funded_hop(exchange, F.A, F.B, 1, "transfer-ab",
                                "session-a", "session-b", lock=False)
+        escrow = exchange.lock_escrow(match, "escrow-ab")
+        exchange.execute_transfer(match, "transfer-ab", escrow_id=escrow.escrow_id)
+        F.funded_hop(exchange, F.B, F.C, 2, "transfer-bc", "session-b", "session-c",
+                     price=F.PRICE_BC)
+        F.funded_hop(exchange, F.C, F.D, 3, "transfer-cd", "session-c", "session-d",
+                     price=F.PRICE_CD)
+        requests = F.submit_all(exchange)
+        F.refuse(exchange, requests[0], "res-ab-refused")
         exchange.begin_rollback("rcpt-8415-0001", 0, F.rollback_authority(exchange, 0, "rb-1"))
         exchange.advance_rollback("rcpt-8415-0001")
         with self.assertRaises(DomainError) as caught:
@@ -295,7 +308,10 @@ class InterruptionAndLateResults(unittest.TestCase):
         with self.assertRaises(DomainError) as caught:
             F.funded_hop(exchange, F.A, F.B, 10, "transfer-again", "session-a", "session-b")
         self.assertEqual(caught.exception.code, "EX_MATCH_UNEXECUTABLE")
-        self.assertIn("EX_TRADE_RETURNED_CHAIN_CLOSED", caught.exception.detail)
+        self.assertIn("EX_TRADE_RETURNED_CHAIN_CLOSED",
+                      exchange.validate_intent("sell-again")["reasons"])
+        self.assertEqual(exchange.recorded_legs("rcpt-8415-0001"), 3)
+        self.assertEqual(exchange.owner_of("rcpt-8415-0001"), F.A)
 
 
 class RollbackPermission(unittest.TestCase):
@@ -374,6 +390,7 @@ class DuplicateAndReorderedEvents(unittest.TestCase):
         self.assertTrue(report["complete"])
         self.assertEqual(exchange.payments.movements, 3)
         self.assertEqual(exchange.asset_control.returns, 1)
+        self.assertEqual(exchange.asset_control.hops_walked, 0)
 
     def test_a_replayed_release_after_a_refund_is_refused(self):
         exchange, _, _ = refused_at_ab()
@@ -423,10 +440,14 @@ class RollbackConsole(unittest.TestCase):
         html = self._page()
         self.assertIn("Last finalized position", html)
         self.assertIn("is not reopened, reversed or re-collected", html)
-        self.assertIn(F.B, html)
+        self.assertIn("position 1", html)
+        self.assertEqual(self.exchange.rollback_report("rcpt-8415-0001")["returnBoundaryAccount"], F.B)
 
-    def test_the_page_says_the_return_does_not_walk_the_intermediates(self):
-        self.assertIn("without walking the intermediate", self._page())
+    def test_the_page_names_the_direct_return_boundary(self):
+        html = self._page()
+        self.assertIn("in one control operation", html)
+        self.assertNotIn("original reverse hops", html)
+        self.assertNotIn("without walking the intermediate", html)
 
     def test_the_page_lists_the_withdrawn_mechanisms_as_unused(self):
         html = self._page()

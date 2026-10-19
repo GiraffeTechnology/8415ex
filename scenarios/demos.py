@@ -15,7 +15,7 @@ covered across the six scenarios and separately by the path contract tests in
 ``scenarios.paths``; success on one path never stands in for another.
 """
 from exchange import fixtures as F
-from exchange.exit import exit_step_key
+from exchange.errors import DomainError
 
 from .harness import Scenario
 
@@ -109,9 +109,9 @@ def _not_run_chain(recorder):
 # ---------------------------------------------------------------- DEMO-01
 
 def demo_01(recorder):
-    """A to B succeeds, the segment releases, then an eligible B exits."""
+    """A to B registers and releases; bill history remains and physical exit is refused."""
     path = MAIN_PATHS["DEMO-01"]
-    exchange, clock = F.exit_exchange(registration_path=path)
+    exchange, clock = F.rollback_exchange(registration_path=path)
     _setup(recorder, exchange, {"AB": PRICES["AB"]}, {"trade": GAS["trade"]})
     recorder.step("initial state", **_positions(exchange))
     recorder.expect("origin is both owner and holder", ("T-02",),
@@ -151,65 +151,26 @@ def demo_01(recorder):
                     {key: _segment_funds(exchange)[0][key]
                      for key in ("escrowStatus", "released", "refunded", "netToPayee", "gasBorneBy")})
 
-    F.redeem_authorization(exchange)
-    eligibility = exchange.exit_eligibility(RECEIPT, F.B, "auth-redeem", F.ALL_CHECKS)
-    recorder.expect("an eligible rights holder may request the exit", ("T-25",),
-                    {"eligible": True, "ownerEqualsHolder": True},
-                    {"eligible": eligibility["eligible"],
-                     "ownerEqualsHolder": eligibility["ownerEqualsHolder"]},
-                    detail=",".join(eligibility["reasons"]) or None)
-    short = exchange.exit_eligibility(RECEIPT, F.B, "auth-redeem", ())
-    recorder.expect("agreement alone is not sufficient", ("T-25",),
-                    {"eligible": False, "ownerEqualsHolder": True},
-                    {"eligible": short["eligible"], "ownerEqualsHolder": short["ownerEqualsHolder"]})
-
-    exchange.request_redemption(RECEIPT, F.B, "auth-redeem", "rdm-1", F.ALL_CHECKS)
-    # One step per call with the clock advanced between them, so the record shows
-    # four distinct completion instants rather than one batched moment.
-    report = None
-    for step_name, gap in (("stop-resale", 5), ("voucher-issued", 30),
-                           ("voucher-handover-confirmed", 600), ("burn", 120)):
-        clock.advance(gap)
-        report = exchange.advance_exit(RECEIPT, through=step_name)
-        recorder.step(f"exit step {step_name}", status=next(
-            entry["status"] for entry in report["steps"] if entry["step"] == step_name),
-            completedAt=next(entry["completedAt"] for entry in report["steps"]
-                             if entry["step"] == step_name))
-    recorder.step("exit completed", state=report["state"], burned=report["burned"],
-                  instants=report["distinctCompletionInstants"])
-    recorder.expect("each exit step has its own record and instant", ("T-32",),
-                    {"stepCount": 4, "allDone": True, "distinctInstants": 4},
-                    {"stepCount": len(report["steps"]),
-                     "allDone": all(step["status"] == "done" for step in report["steps"]),
-                     "distinctInstants": len(report["distinctCompletionInstants"])})
-    recorder.expect("the voucher hand-over and the burn are not atomic", ("T-32",),
-                    {"atomic": False, "instantsDiffer": True},
-                    {"atomic": report["physicalAndOnChainAreAtomic"],
-                     "instantsDiffer": report["completionInstantsDiffer"]})
-    second = exchange.exit_eligibility(RECEIPT, F.B, "auth-redeem", F.ALL_CHECKS)
-    recorder.expect("a second redemption is refused", ("T-33",),
-                    {"eligible": False, "alreadyRequested": True},
-                    {"eligible": second["eligible"],
-                     "alreadyRequested": "EX_REDEMPTION_ALREADY_REQUESTED" in second["reasons"]})
-    kinds = [entry["kind"] for entry in exchange.receipt_timeline(RECEIPT)]
-    burned = next(e for e in exchange.receipt_timeline(RECEIPT) if e["kind"] == "receipt-burned")
-    recorder.expect("history is preserved after the burn", ("T-33",),
-                    {"minted": True, "transfer": True, "release": True, "burn": True,
-                     "assetLink": "retained", "registrationOrder": "retained",
-                     "fundsRecord": "retained", "collectionRecord": "retained"},
-                    {"minted": "receipt-minted" in kinds,
-                     "transfer": "transfer-executed" in kinds,
-                     "release": "segment-release-attempt" in kinds,
-                     "burn": "receipt-burned" in kinds,
-                     "assetLink": burned["detail"]["assetLink"],
-                     "registrationOrder": burned["detail"]["registrationOrder"],
-                     "fundsRecord": burned["detail"]["fundsRecord"],
-                     "collectionRecord": burned["detail"]["collectionRecord"]})
-    recorder.expect("the registrar and desk are labelled simulated", ("T-10", "T-26"),
-                    {"registrarSimulated": True, "deskSimulated": True},
-                    {"registrarSimulated": exchange.registrars[path].simulated,
-                     "deskSimulated": exchange.voucher_desk.simulated})
-    recorder.note("payment movements: " + str(exchange.payments.movements))
+    bill = exchange.bill_of_lading_view(RECEIPT)
+    recorder.expect("bill history is preserved after registration and release", ("T-25", "T-33"),
+                    {"historyPreserved": True, "physicalActions": ()},
+                    {key: bill[key] for key in ("historyPreserved", "physicalActions")})
+    before = exchange.receipt_timeline(RECEIPT)
+    for name, operation in (
+            ("redemption request", lambda: exchange.request_redemption(
+                RECEIPT, F.B, "unused", "retired", F.ALL_CHECKS)),
+            ("physical exit advance", lambda: exchange.advance_exit(RECEIPT))):
+        try:
+            operation()
+            refusal = "accepted"
+        except DomainError as problem:
+            refusal = problem.code
+        recorder.expect(name + " stays retired", ("T-25", "T-32", "T-33"),
+                        "EX_PHYSICAL_FULFILLMENT_RETIRED", refusal)
+    recorder.expect("retired operations do not burn or change history", ("T-33",),
+                    {"burned": False, "unchanged": True},
+                    {"burned": exchange.exit_report(RECEIPT)["burned"],
+                     "unchanged": before == exchange.receipt_timeline(RECEIPT)})
     _not_run_chain(recorder)
 
 
@@ -356,15 +317,14 @@ def demo_03(recorder):
                      "D-04 is open: whether a real fee is deducted from a refund, in which "
                      "asset, and who bears it, is not decided, so no deduction is modelled "
                      "and no net across the two units is asserted here")
-    recorder.note("the legacy rollback report also carries netToOriginalBuyer, a figure "
-                  "derived by subtracting a gas-unit count from a quote-asset principal. It "
+    recorder.note("the rollback report carries netToOriginalBuyer as the full original-currency principal. It "
                   f"is observed as {[entry['netToOriginalBuyer'] for entry in report['funds']]} "
                   "and is not read here as the amount returned to any buyer.")
     recorder.expect("the rollback is complete only with every step evidenced", ("T-17",),
                     {"state": "complete", "complete": True, "outstanding": 0},
                     {"state": report["state"], "complete": report["complete"],
                      "outstanding": len(report["outstandingSteps"])})
-    recorder.expect("one refund movement per segment and one return", ("T-19",),
+    recorder.expect("one refund per segment and one direct boundary return", ("T-19",),
                     {"payments": 3, "returns": 1},
                     {"payments": exchange.payments.movements,
                      "returns": exchange.asset_control.returns})
@@ -421,7 +381,7 @@ def demo_04(recorder):
                                                     "rollbackStatus")})
     _record_common(recorder, exchange,
                    {"owner": F.B, "ownerPosition": 1, "holder": F.B, "holderPosition": 1,
-                    "registeredPrefixLegs": 1, "outstandingLegs": 0}, ("T-18", "T-02"))
+                    "registeredPrefixLegs": 1, "outstandingLegs": 2}, ("T-18", "T-02"))
     recorder.expect("AB is not in the refund set", ("T-18",),
                     [1, 2], [entry["legIndex"] for entry in report["funds"]])
     recorder.expect("C and D receive their own unreleased funds", ("T-19",),
@@ -448,7 +408,8 @@ def demo_05(recorder):
     exchange, _ = F.rollback_chain_to_d(registration_path=path,
                                         gas_budgets={F.B: 0, F.C: 0, F.D: 0})
     _setup(recorder, exchange, dict(PRICES),
-           {"budgets": {"B": 0, "C": 0, "D": 0},
+           {"trade": GAS["trade"], "refund": GAS["refund"],
+            "shared-return": GAS["shared-return"], "budgets": {"B": 0, "C": 0, "D": 0},
             "note": "a fixture ceiling used to exercise the shortfall path; not a fee mechanism"})
     requests = F.submit_all(exchange)
     F.refuse(exchange, requests[0], "res-ab-refused")
@@ -494,13 +455,12 @@ def demo_05(recorder):
                      "returns": exchange.asset_control.returns})
     _record_common(recorder, exchange,
                    {"owner": F.A, "ownerPosition": 0, "holder": F.A, "holderPosition": 0,
-                    "registeredPrefixLegs": 0, "outstandingLegs": 0}, ("T-23", "T-02"))
-    returned = exchange.asset_control.lookup("return:rcpt-8415-0001:rb-1")
-    recorder.expect("the return is one operation and needs no intermediate gas", ("T-20",),
-                    {"operations": 1, "walkedIntermediateWallets": False,
-                     "requiredIntermediateGas": False},
-                    {key: returned[key] for key in ("operations", "walkedIntermediateWallets",
-                                                     "requiredIntermediateGas")})
+                    "registeredPrefixLegs": 0, "outstandingLegs": 3}, ("T-23", "T-02"))
+    row = exchange.asset_control.lookup("return:" + RECEIPT + ":" + second["authorityId"])
+    recorder.expect("one direct return needs no intermediate wallet gas", ("T-20",),
+                    (F.D, F.A, 1, False, False),
+                    (row["fromAccount"], row["toAccount"], row["operations"],
+                     row["requiredIntermediateGas"], row["walkedIntermediateWallets"]))
     recorder.expect("each leg's buyer still bears that leg's gas", ("T-21",),
                     {0: F.B, 1: F.C, 2: F.D},
                     {entry["legIndex"]: entry["gasBorneBy"] for entry in second["funds"]})
@@ -510,109 +470,69 @@ def demo_05(recorder):
 # ---------------------------------------------------------------- DEMO-06
 
 def demo_06(recorder):
-    """The cutoff refuses a new trade while in-flight work follows its rules."""
-    path = MAIN_PATHS["DEMO-06"]
-    exchange, clock = F.exit_exchange(registration_path=path)
+    """Cutoff returns only the unfinished suffix and never starts physical exit."""
+    exchange, clock = F.rollback_chain_to_d(registration_path=MAIN_PATHS["DEMO-06"])
+    _setup(recorder, exchange, dict(PRICES), {"trade": GAS["trade"]})
+    requests = F.submit_all(exchange)
+    F.confirm(exchange, requests[0], "confirmed-prefix")
+    exchange.release_segment(RECEIPT, 0, F.release_authority(exchange, 0, "prefix-release"))
+    prefix = exchange.reconciliation(RECEIPT)["segments"][0]
     stop = exchange.receipt(RECEIPT).trade_stop_at
-    _setup(recorder, exchange, {"AB": PRICES["AB"]}, {"trade": GAS["trade"]},
-           extra={"tradeStopAt": stop})
-
-    F.funded_hop(exchange, F.A, F.B, 1, "transfer-ab", "session-a", "session-b",
-                 price=PRICES["AB"], expires_at=stop + 1)
-    request, _ = exchange.submit_registration(RECEIPT, 0, "req-leg-0", 86_400)
-    recorder.step("a hop is filed before the cutoff", **_positions(exchange))
-
     clock.now = stop - 1
     before = exchange.evaluate_deadline(RECEIPT)
     recorder.expect("the instant before the cutoff still accepts trades", ("T-24",),
-                    {"pastDeadline": False, "newTradesAccepted": True},
-                    {"pastDeadline": before["pastDeadline"],
-                     "newTradesAccepted": before["newTradesAccepted"]})
-
+                    True, before["newTradesAccepted"])
     clock.now = stop
     after = exchange.evaluate_deadline(RECEIPT)
-    recorder.step("the cutoff instant is reached", pastDeadline=after["pastDeadline"],
-                  inFlight=after["inFlightRegistrationLegs"],
-                  undefinedOrdering=after["undefinedOrdering"])
+    recorder.step("deadline observation", deadline=after, **_positions(exchange))
     recorder.expect("the cutoff instant itself refuses new trades", ("T-24",),
-                    {"pastDeadline": True, "newTradesAccepted": False},
-                    {"pastDeadline": after["pastDeadline"],
-                     "newTradesAccepted": after["newTradesAccepted"]})
+                    False, after["newTradesAccepted"])
     try:
-        F.funded_hop(exchange, F.B, F.C, 2, "transfer-late", "session-b", "session-c",
-                     price=PRICES["BC"], now=stop, expires_at=stop + 1)
+        F.funded_hop(exchange, F.D, F.A, 4, "transfer-late", "session-d", "session-a",
+                     now=stop, expires_at=stop + 600)
         refusal = "accepted"
-    except Exception as problem:
-        refusal = getattr(problem, "code", type(problem).__name__)
-    recorder.expect("a new trade at the cutoff is refused", ("T-24",),
-                    True, refusal in ("EX_MATCH_UNEXECUTABLE", "EX_TRADE_WINDOW_CLOSED"),
-                    detail=f"refusal code {refusal}")
-    recorder.expect("the refused trade left no leg behind", ("T-24",),
-                    1, exchange.recorded_legs(RECEIPT))
-
-    F.confirm(exchange, request, "res-ab")
-    recorder.step("the in-flight registration completed after the cutoff",
+    except DomainError as problem:
+        refusal = problem.code
+    recorder.expect("no new leg forms at cutoff", ("T-24",),
+                    {"refused": True, "legs": 3},
+                    {"refused": refusal in ("EX_MATCH_UNEXECUTABLE", "EX_TRADE_WINDOW_CLOSED"),
+                     "legs": exchange.recorded_legs(RECEIPT)})
+    exchange.begin_rollback(RECEIPT, 1,
+        F.rollback_authority(exchange, 1, "deadline-rollback", now=stop), trigger="deadline")
+    recovery = exchange.advance_rollback(RECEIPT)
+    recorder.step("unfinished suffix recovered", recovery=recovery,
                   segmentFunds=_segment_funds(exchange), **_positions(exchange))
-    recorder.expect("in-flight registration continues under its own rules", ("T-24",),
-                    {"holderPosition": 1, "holder": F.B},
-                    {"holderPosition": exchange.holder_index(RECEIPT),
-                     "holder": exchange.holder_of(RECEIPT)})
-    exchange.release_segment(RECEIPT, 0, F.release_authority(exchange, 0, "auth-0"))
-    recorder.expect("the eligible segment still settles after the cutoff", ("T-24",),
-                    {"escrowStatus": "released"}, {"escrowStatus": _segment_funds(exchange)[0]["escrowStatus"]})
-
-    # The exit happens after the cutoff, so the grant must still be valid then.
-    exchange.connect_wallet(F.B, "session-b")
-    exchange.register_authorization(F.authorization(
-        F.B, "auth-redeem", "session-b", actions=("sell", "buy", "redeem"),
-        expires_at=stop + 86_400))
-    eligibility = exchange.exit_eligibility(RECEIPT, F.B, "auth-redeem", F.ALL_CHECKS)
-    recorder.expect("the eligible exit is checked after the cutoff", ("T-25",),
-                    {"eligible": True}, {"eligible": eligibility["eligible"]},
-                    detail=",".join(eligibility["reasons"]) or None)
-    wrong = exchange.exit_eligibility(RECEIPT, F.C, "auth-redeem", F.ALL_CHECKS)
-    recorder.expect("another account cannot exit", ("T-25",),
-                    {"eligible": False, "requesterRefused": True},
-                    {"eligible": wrong["eligible"],
-                     "requesterRefused": "EX_REDEMPTION_REQUESTER_REFUSED" in wrong["reasons"]})
-
-    exchange.request_redemption(RECEIPT, F.B, "auth-redeem", "rdm-1", F.ALL_CHECKS)
-    clock.advance(10)
-    report = exchange.advance_exit(RECEIPT)
-    recorder.step("exit completed after the cutoff", state=report["state"], burned=report["burned"])
-    recorder.expect("the exit records its steps and the burn", ("T-32",),
-                    {"complete": True, "burned": True},
-                    {"complete": report["complete"], "burned": report["burned"]})
+    returned = exchange.asset_control.lookup("return:" + RECEIPT + ":" + recovery["authorityId"])
+    recorder.expect("one direct operation returns to the current holder", ("T-24",),
+                    (F.D, F.B, 1, False),
+                    (returned["fromAccount"], returned["toAccount"], returned["operations"],
+                     returned["walkedIntermediateWallets"]))
+    recorder.expect("the registered prefix and released payment stay unchanged", ("T-24",),
+                    prefix, exchange.reconciliation(RECEIPT)["segments"][0])
     _record_common(recorder, exchange,
-                   {"owner": F.B, "ownerPosition": 1, "holder": F.B, "holderPosition": 1,
-                    "registeredPrefixLegs": 1, "outstandingLegs": 0}, ("T-24", "T-02"))
-    key = exit_step_key("burn", RECEIPT, "rdm-1")
-    try:
-        exchange.voucher_desk.act(key, "voucher-issued", RECEIPT, F.B)
-        replay = "accepted"
-    except Exception as refusal_problem:
-        replay = getattr(refusal_problem, "code", type(refusal_problem).__name__)
-    recorder.expect("a replayed voucher key for another step is refused", ("T-33",),
-                    "EX_VOUCHER_SUBSTITUTION_REFUSED", replay)
-    recorder.expect("the undecided orderings are reported, not invented", ("T-24", "T-32"),
-                    {"deadlineOrderingReported": True, "exitOrderingReported": True},
-                    {"deadlineOrderingReported": bool(after["undefinedOrdering"]),
-                     "exitOrderingReported": bool(report["undefinedOrdering"])},
-                    detail="; ".join(after["undefinedOrdering"] + report["undefinedOrdering"]))
+                   {"owner": F.B, "ownerPosition": 1, "holder": F.B, "holderPosition": 1}, ("T-24",))
+    recorder.expect("expiry does not burn or reopen the NFT", ("T-25", "T-33"),
+                    {"burned": False, "tradingOpen": False, "recovered": True},
+                    {"burned": exchange.exit_report(RECEIPT)["burned"],
+                     "tradingOpen": exchange.receipt_view(RECEIPT)["tradingOpen"],
+                     "recovered": recovery["complete"]})
+    recorder.not_run("actual Oracle timing and mint-rule adjudication", ("T-24",),
+                     "Synthetic authoritative fixture only; no real Oracle, chain or race acceptance")
     _not_run_chain(recorder)
 
 
+
 DEMOS = (
-    Scenario("DEMO-01", "single trade, segment release and eligible exit",
-             ("T-02", "T-11", "T-25", "T-32", "T-33"), MAIN_PATHS["DEMO-01"], demo_01),
+    Scenario("DEMO-01", "single trade, registration, independent release and bill history",
+             ("T-02", "T-11", "T-25", "T-32", "T-33"), MAIN_PATHS["DEMO-01"], demo_01, prd_version="1.4"),
     Scenario("DEMO-02", "serial registration with independent prefix release",
-             ("T-03", "T-04", "T-12", "T-13"), MAIN_PATHS["DEMO-02"], demo_02),
+             ("T-03", "T-04", "T-12", "T-13"), MAIN_PATHS["DEMO-02"], demo_02, prd_version="1.4"),
     Scenario("DEMO-03", "first-hop refusal returns the whole suffix to the origin",
-             ("T-17", "T-19", "T-21"), MAIN_PATHS["DEMO-03"], demo_03),
+             ("T-17", "T-19", "T-21"), MAIN_PATHS["DEMO-03"], demo_03, prd_version="1.4"),
     Scenario("DEMO-04", "finalized prefix survives a later refusal",
-             ("T-18", "T-19", "T-29"), MAIN_PATHS["DEMO-04"], demo_04),
+             ("T-18", "T-19", "T-29"), MAIN_PATHS["DEMO-04"], demo_04, prd_version="1.4"),
     Scenario("DEMO-05", "intermediate wallets hold no gas budget",
-             ("T-20", "T-21", "T-22", "T-23"), MAIN_PATHS["DEMO-05"], demo_05),
+             ("T-20", "T-21", "T-22", "T-23"), MAIN_PATHS["DEMO-05"], demo_05, prd_version="1.4"),
     Scenario("DEMO-06", "cutoff refuses a new trade while in-flight work continues",
-             ("T-24", "T-25", "T-32", "T-33"), MAIN_PATHS["DEMO-06"], demo_06),
+             ("T-24", "T-25", "T-32", "T-33"), MAIN_PATHS["DEMO-06"], demo_06, prd_version="1.4"),
 )

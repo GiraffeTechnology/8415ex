@@ -6,13 +6,13 @@ from scenarios import current_prd
 
 class PublishedBaselineBoundary(unittest.TestCase):
     def test_public_report_explicitly_distinguishes_historical_and_current_contract(self):
-        plan = {"version": "1.3", "retiredRequirements": [], "cases": []}
+        plan = {"version": "1.4", "retiredRequirements": [], "cases": []}
         with patch.object(current_prd, "load", return_value=plan):
             row = current_prd.report("matrix")
-        self.assertEqual(row["version"], "1.3")
-        self.assertEqual(row["publishedBaselineVersion"], "1.3")
+        self.assertEqual(row["version"], "1.4")
+        self.assertEqual(row["publishedBaselineVersion"], "1.4")
         self.assertEqual(row["currentCompletePRDVersion"], "1.4")
-        self.assertFalse(row["completeCurrentContractLoaded"])
+        self.assertTrue(row["completeCurrentContractLoaded"])
         self.assertFalse(row["baselinePassIsCurrentPass"])
         self.assertEqual(row["acceptedCases"], [])
         self.assertFalse(row["historicalPassInherited"])
@@ -28,7 +28,7 @@ class PublishedBaselineBoundary(unittest.TestCase):
         with patch.object(current_prd, "load", return_value={"retiredRequirements": []}):
             row = current_prd.blocked("demo")
         self.assertEqual(row["version"], "1.4")
-        self.assertEqual(row["publishedBaselineVersion"], "1.3")
+        self.assertEqual(row["publishedBaselineVersion"], "1.4")
         self.assertEqual(row["status"], "PRD_MIGRATION_REQUIRED")
         self.assertFalse(row["executed"])
         self.assertFalse(row["allPassed"])

@@ -30,20 +30,20 @@ class Handoff(unittest.TestCase):
             for status in scenario["evidence"].values():
                 self.assertEqual(status, "NOT_RUN")
 
-    def test_the_preconditions_stay_unresolved(self):
-        for key in ("quoteTokenAddress", "deploymentTarget", "rpcEndpoint", "walletPermissions"):
-            self.assertEqual(self.built["preconditions"][key], validation.UNRESOLVED)
+    def test_requirement_metadata_is_not_current_runtime_acceptance(self):
+        self.assertTrue(self.built["completeCurrentContractLoaded"])
+        self.assertFalse(self.built["baselinePassIsCurrentPass"])
+        self.assertEqual(self.built["acceptedCases"], [])
 
-    def test_the_rules_forbid_fabrication_and_overclaiming(self):
-        rules = " | ".join(self.built["rules"])
-        self.assertIn("never a fabricated hash", rules)
-        self.assertIn("never substitutes for real integration acceptance", rules)
-        self.assertIn("not operable UI acceptance", rules)
-        self.assertIn("no mainnet activity", rules)
+    def test_current_semantic_acceptance_and_real_evidence_stay_open(self):
+        self.assertEqual(self.built["currentSemanticAcceptance"], "OPEN")
+        self.assertEqual(self.built["productStatus"], "OPEN")
+        for scenario in self.built["scenarios"]:
+            self.assertTrue(all(value == "NOT_RUN" for value in scenario["evidence"].values()))
 
     def test_the_remaining_obligations_come_from_the_matrix(self):
         self.assertEqual(sorted(self.built["remainingObligations"]),
-                         ["T-35", "T-36", "T-37", "T-38"])
+                         ["T-%02d" % n for n in range(1, 85)])
 
     def test_an_unfilled_handoff_would_be_refused_as_evidence(self):
         """A checklist is not a result: feeding it back as evidence must fail."""

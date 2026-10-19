@@ -86,11 +86,11 @@ class ScenarioContent(unittest.TestCase):
     def _names(self, scenario_id):
         return " | ".join(e["name"] for e in self.by_id[scenario_id]["expectations"])
 
-    def test_demo_01_covers_release_and_a_non_atomic_exit(self):
+    def test_demo_01_covers_release_bill_history_and_retirement(self):
         names = self._names("DEMO-01")
         self.assertIn("released to its own seller", names)
-        self.assertIn("not atomic", names)
-        self.assertIn("second redemption is refused", names)
+        self.assertIn("redemption request stays retired", names)
+        self.assertIn("physical exit advance stays retired", names)
         self.assertIn("history is preserved", names)
 
     def test_demo_02_covers_deferral_and_independent_release(self):
@@ -154,14 +154,16 @@ class ScenarioContent(unittest.TestCase):
     def test_demo_05_covers_the_shortfall_without_disposal(self):
         names = self._names("DEMO-05")
         self.assertIn("no custody, forced sale or liquidation", names)
-        self.assertIn("needs no intermediate gas", names)
+        self.assertIn("needs no intermediate wallet gas", names)
         self.assertIn("nothing was repeated", names)
 
-    def test_demo_06_covers_the_cutoff_boundary_and_exit(self):
+    def test_demo_06_covers_cutoff_suffix_recovery_without_burn(self):
         names = self._names("DEMO-06")
         self.assertIn("instant before the cutoff", names)
         self.assertIn("cutoff instant itself refuses", names)
-        self.assertIn("undecided orderings are reported", names)
+        self.assertIn("one direct operation", names)
+        self.assertIn("registered prefix and released payment stay unchanged", names)
+        self.assertIn("does not burn or reopen", names)
 
 
 if __name__ == "__main__":

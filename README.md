@@ -1,83 +1,122 @@
 # 8415ex
 
-Continuous trading of one whole warehouse receipt, with owner tracking the trade position and holder tracking the same authoritative Oracle registration record.
+8415ex is an application-layer model for one whole warehouse receipt traded in a
+continuous chain, where registration lags behind the trade on purpose. It is
+developed in small, verifiable increments. Wallet integration will use ERC-8415,
+supporting 8415wallet and compatible wallets.
 
-## Current product and recovery contract
+## Current requirements
 
-Read [PRD.md](PRD.md), [AGENTS.md](AGENTS.md) and the exact [machine pin](config/prd-lock.json) before work. Version **1.3** is the retained historical public snapshot; the current complete private v1.4 contract is loaded by the existing private recovery entry. Do not publish its complete text or private locators. The [execution plan](config/execution-plan.json) contains all 21 sections, 91 requirement IDs, 68 acceptance cases, 13 decisions, six stages and six revised demonstrations.
+[PRD.md](PRD.md) v1.4 is the current complete product and acceptance contract: 111 EX requirements, T-01..84, six stages and six demonstrations. Read [AGENTS.md](AGENTS.md) before implementation. Earlier v1.3 loaders/locks/plans and conflicting subdirectory guides are historical, not authority or v1.4 acceptance. This publication does not claim implementation, runtime, deployment or chain completion.
 
-From the repository root on the existing approved Linux executor:
+The scope is a commodity spot-intermediary Web3 infrastructure DEMO: whole receipts, BTC/ETH and soybean/iron-ore scenes, both crypto and receipt-NFT collateral, ordinary market-maker quotes, continuous real public spot references isolated from simulated NFT orders, full terms, independent current/owner/holder markers, role-bound per-position signatures and six-language responsive UI. Undefined financing/valuation/liquidation/returns remain local open items, not invented defaults or a global stop.
 
-```sh
-python3 -B -m scenarios.current_prd plan
-python3 -B -m scenarios.current_prd stages
-python3 -B -m scenarios.current_prd matrix
-python3 -B -m scenarios.current_prd decisions
-python3 -B -m scenarios.current_prd handoff
-python3 -B -m scenarios.current_prd sections
-```
+Python 3.10 or newer and the standard library are the only requirements. There
+is no third-party dependency anywhere in the repository.
 
-These commands verify the exact PRD/plan bytes, reload repository files on every invocation, and report requirements and missing evidence. They do not sign, broadcast, deploy or grant acceptance. No original chat, credentials, network or installed third-party dependency is needed to inspect that historical checklist; it does not validate the current private contract.
+## The two positions, which are never merged
 
-The existing scenarios CLI routes its matrix, stages, decisions, handoff and sections commands to the same pinned data:
+The owner is the actual ERC-721 token owner; ownerOf returns an address mapped
+separately to an actual transfer position. Holder is the Oracle-confirmed
+registration projection. Latest admission and effective-time history are distinct. They move at different speeds, and the whole
+model exists because of that gap: a receipt can change hands several times while
+the register is still recording the first hop. Nothing here presents the two as
+one, and a deferred registration result is never shown as a refusal.
 
-```sh
-python3 -B -m scenarios.cli matrix
-python3 -B -m scenarios.cli stages
-python3 -B -m scenarios.cli decisions
-python3 -B -m scenarios.cli handoff
-python3 -B -m scenarios.cli sections
-```
+## Product invariants and current gaps
 
-A successful checklist read is not a passing product case. Every revised case starts NOT_VERIFIED and carries no inherited historical pass.
+- Oracle alone ingests/verifies the single registration voucher. Owner may lead holder; ordinary transfer requires neither equality, gap closure nor current finality.
+- Release a segment's original frozen principal when ordered owner and holder reach its buyer or beyond; remove completed-segment rollback independently, without a second buyer payment.
+- Refund only eligible unregistered suffix in original currencies and directly restore owner to effective holder without ordinary intermediate-wallet traversal. Preserve registration and settled prefix. Current Wallet returnHop transfers one previous leg per call; a production adapter and joined evidence remain needed for EX's one-control-operation requirement. Model tests do not close this gap.
+- Valid unexpired NFTs can trade again after rollback. Holder possession/equality permits authorized atomic old burn/new mint with editable new terms. Physical collection and collection-driven destruction remain outside EX.
+- NFT0 principal currencies are immutable after mint. Orders explicitly choose one, match same-currency price/FIFO and refuse shortage; no conversion, substitution or balance aggregation.
+- ETH alone pays gas: confirmed cap/real P50 ETH and informative USD, full maximum freeze separate from principal, actual debit/unused unfreeze and no zero/insufficient-ETH new trade. Existing adequate approved freezes still fund their recovery.
+- Each NFT has its own exact openGapOF=YES red / openGapOF=NO green from supported successful bytes32 openGapOf reads; unknown/loading/error/unsupported stays explicit. This display does not prove registration/payment/legal title.
+- Three positions and signing evidence stay independent. Frontend excludes wallet names/addresses everywhere and shows complete identity-free business conditions; unchanged signed originals remain private. Candidate locales are en, zh-Hans, zh-Hant, fr, es, ja. Exclude wallet-management pages, retaining EX authorization/balance/fees.
 
-Version 1.3 fixes one or more allowed currencies at NFT0 mint. Each order selects
-one member; EX does not exchange, substitute or combine currency balances. Gas
-settles only in ETH and is checked/accounted separately from principal, including
-when the selected principal is ETH. Insufficient selected principal or available
-ETH gas warns and refuses before signing, execution or broadcast.
+## What is here
 
-A holder who possesses the NFT and equals its owner may atomically burn that NFT
-and mint a new one with newly declared terms. Old/new identities and history stay
-traceable. This remint rule adds no cleanup or approval prerequisite. Ordinary
-continuous transfers do not require holder=owner, a closed gap or current finality.
-Physical collection-driven destruction remains retired; atomic remint is distinct.
-
-## Removed requirements are not executable duties
-
-EX transfers the bill of lading; physical collection, transport, warehouse exit and collection-driven NFT destruction are outside delivery. Oracle alone ingests and verifies the off-chain voucher and writes its one authoritative record; holder follows that record. Release already frozen principal without a second buyer payment. Rollback preserves registered/settled prefix and returns owner to effective holder; valid unexpired assets may trade again.
-
-Price priority/FIFO, complete mint data, cutoff and gas cap/P50 policy are confirmed. Before send disclose cap and real median ETH/contemporaneous USD, obtain bound buyer confirmation, freeze the maximum gas separately from principal, debit actual consumption and unfreeze unused balance. Only actual shared-operation allocation remains D-04.
-
-Old six-scenario implementations have not been migrated by this documentation change. The scenarios CLI, direct Scenario.run calls for DEMO-01..06, and exchange.stage5 entry explicitly refuse those old execution paths with PRD_MIGRATION_REQUIRED before old callbacks. This refuses obsolete duties rather than executing and relabelling them. History remains in Git. Migrate and verify each affected scenario with its original implementation owner before removing the targeted guard.
-
-## Development and acceptance
-
-Proceed to the next independent authorized stage after a stage PR without waiting for CI. Missing RPC, issuer, one integration or one deployment target blocks only that action. Build/QA does not need RPC or an existing issuer deployment. Preserve exact base/head and the single writer for each shared path. Existing QA, review, CI/merge and deployment responsibilities remain controlling.
-
-The existing dependency-free Python model uses Python 3.10+ and standard library. Historical model/fixture code and reports remain source-bound development evidence; a rendered page is not browser acceptance. Three sources are direct, electronic and intermediary registration into one backend, with whole-artwork alignment and real frontend acceptance still required. Sepolia 11155111 and the designated verified test PYUSD stay distinct from other projects' test networks.
-
-All product validation, including syntax, type, build, package and browser tests,
-uses an existing approved remote non-Windows Linux server with verified CTYun or
-Aliyun provider evidence and the current per-action boundary check. This machine,
-Windows, WSL, containers and VMs are not fallback test targets. Do not repeat
-capabilities probes stopped by the owner; reuse saved evidence and diagnose source.
-
-Product suites and genuine runtime/chain/browser/material acceptance remain separate from the document loader. Current source, package, required exact-head CI, actually served version, real receipts/Oracle/funds/UI evidence and artifact readback must all correspond before full delivery. This update does not make any of them PASS.
-
-## Repository areas
-
-| Area | Purpose |
+| Directory | What it holds |
 | --- | --- |
-| PRD.md / config/ | Historical public v1.3 snapshot and its machine checklist; current private requirements are recovered separately |
-| exchange/ | Existing domain, adapters, UI and stage execution code; legacy scenarios require migration |
-| scenarios/ | Pinned checklist loader and existing evidence/reporting infrastructure |
-| ci/ | Existing bootstrap and source/evidence checks |
+| [`exchange/`](exchange/README.md) | the domain: receipt state, the owner/holder dual track, serial registration with three simulated registrar adapters, segmented escrow and independent settlement, suffix rollback with buyer gas, historical deadline/exit paths requiring reconciliation with current bill-transfer/remint requirements, and a read-only status console |
+| [`scenarios/`](scenarios/README.md) | the six scenarios and three route contracts, the acceptance matrix and evidence index, and the records a reviewer needs: source identity, open decisions, the event contract, the stage map and the candidate receipt |
+| [`ci/`](ci/README.md) | a dependency-free bootstrap, its smoke command and its output manifest |
 
-Public files are English and sanitized. Private source links, internal topology, operational paths, credentials and full private handoffs stay outside GitHub. Existing approved Linux execution, wallet consent and no mainnet/real-value/new-resource boundaries remain. No Drive timer or automatic server synchronization is introduced.
+## What this is not
 
-## Protocol observations and application state
+Nothing in this repository signs, pays, broadcasts, deploys or moves value. The
+three registration routes are simulated business roles, not real registration
+institutions. A rendered status page is development and diagnostic output, not
+interface acceptance. Every obligation that needs a real chain, a real browser
+or an independent review is reported as `NOT_RUN` rather than approximated, and
+the reports below say so about themselves.
 
-Use the approved ERC-8415 Draft and the actual deployed ABI. Display openGapOF=YES in red or openGapOF=NO in green only after the original verifier binds the NFT and source, both projection and optional settlement interface support are established, and openGapOf(uint256) successfully returns a valid bytes32 settlementId. Nonzero maps to YES and zero to NO. Unknown, unsupported, loading and failed reads stay explicit and neutral across all six locales. The UI spelling does not rename the ABI or stored application gap. NO is not evidence of registration, finality, equal owner/holder, legal title or settled funds; optional-interface support is not an ordinary-transfer gate.
+## Running the checks
 
-ownerOf returns an address, not an EX timeline position. currentEntry describes the latest admitted entry; holderAsOf describes a specified time. Preserve query time, effectiveAt and observed block; do not make future-effective entries current early. Registration versions and transfer positions remain separate. Historical signatures bind their original role, position/transfer, payload and verified signing scheme, never the current owner's inferred role. Historical finality and EX finalized business prefix remain separate. Oracle relay identity is not registry authority. These semantics require original runtime evidence; source projections and synthetic definitions do not establish chain acceptance.
+GitHub Actions is permitted for CI. Runtime and integration acceptance use the project-supported Linux configuration. Deployment and live-chain acceptance require separate evidence. EX remains Sepolia 11155111, not Wallet Hoodi.
+
+Commands below are documentation, not permission to execute them here. Historical outputs do not validate current code. GitHub Actions is valid evidence for its actual CI checks, not for unexecuted deployment or live-chain acceptance. Record exact head/base and the tested commit; synthetic merge identity differs from head. Missing checks are not green.
+
+The bootstrap checks need `APPROVED_TEST_ROOT` set to
+an existing, canonical directory chosen explicitly for them.
+
+```sh
+BOOTSTRAP_TEST_ROOT="$APPROVED_TEST_ROOT" python3 -B -m unittest discover -s ci/tests -v
+PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s exchange/tests -t . -v
+PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s scenarios/tests -t . -v
+```
+
+The existing model evidence bundle in one command on the supported Linux runtime, which exits non-zero unless every
+expectation passed over a confirmed, clean source tree:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -B -m scenarios.cli run-all
+```
+
+## The reports, and what each one answers
+
+Each is a subcommand of `python3 -B -m scenarios.cli`.
+
+| Command | The question it answers |
+| --- | --- |
+| `run-all` | did every model expectation pass, over which exact source |
+| `scenarios`, `paths` | what did the six scenarios and the three route contracts record |
+| `matrix` | which requirement does each case serve, and what is its local outcome |
+| `evidence-index` | from a requirement, through the assertion and the run, to the artifact it lands in |
+| `receipt` | the nine-group candidate receipt, with the chain and deployment groups `NOT_RUN` |
+| `manifest` | the exact source, the file inventory and the diff under review |
+| `handoff` | which real-evidence slots are unfilled, and who owns them |
+| `stages` | per stage, what is developed here, what is accepted elsewhere, what is owed |
+| `dossier` | per scenario, the nine items a demonstration must carry |
+| `storyboard` | does the presentation outline still describe the code |
+| `operations` | do the logical operations land on real methods, and do reads move nothing |
+| `events` | which audit groups are recorded, derived, or waiting on a chain |
+| `reuse` | what this package consumes, what is simulated, what is not located yet |
+| `decisions` | which decisions are open, and what each one does **not** block |
+| `observations` | the bounded secret scan, and the recorded load, backlog and rates |
+| `validate-config` | would this configuration be accepted, and why a bad one is refused |
+| `usage` | do these instructions still match the commands that exist |
+| `completion` | per clause of the definition of done: its evidence here, or the owner who owes the rest |
+| `sections` | per requirement section: what addresses it here, or the owner it belongs to |
+
+The domain has its own diagnostic command line, which supplements the console
+and does not replace it:
+
+```sh
+python3 -B -m exchange.cli view
+python3 -B -m exchange.cli timeline
+python3 -B -m exchange.cli queue
+```
+
+## Keeping these instructions true
+
+The commands above are checked against the commands that actually exist, in both
+directions: a documented command that does not exist is a broken instruction,
+and a command no guide mentions is a report nobody will find. Both are findings,
+and the suite fails on either.
+
+## Evidence and continued work
+
+Reuse existing CI and check exact-source outcomes, without historical PASS inheritance. Missing implementation/evidence remains NOT_RUN/NOT_VERIFIED.
+
+Published product baseline file integrity: PRD.md SHA-256 `b3989a91f1d3f7a1de6812fa05777d0dfdf84a4eee4a7909bdda77d1196032ce`. This identifies document bytes, not a runtime acceptance result.
