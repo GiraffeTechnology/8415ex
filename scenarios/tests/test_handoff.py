@@ -39,7 +39,8 @@ class Handoff(unittest.TestCase):
         self.assertIn("never a fabricated hash", rules)
         self.assertIn("never substitutes for real integration acceptance", rules)
         self.assertIn("not operable UI acceptance", rules)
-        self.assertIn("no mainnet activity", rules)
+        self.assertIn("model execution supplies no mainnet, value-transfer or "
+                      "permission-change evidence", rules)
 
     def test_the_remaining_obligations_come_from_the_matrix(self):
         self.assertEqual(sorted(self.built["remainingObligations"]),
