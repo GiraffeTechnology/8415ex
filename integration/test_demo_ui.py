@@ -184,7 +184,11 @@ class InteractiveDemoJourney(unittest.TestCase):
                         response.begin()
                         response_body = response.read().decode()
                         self.assertEqual(response.status, 400)
-                        self.assertIn("incomplete request body", response_body)
+                        self.assertEqual(response_body,
+                            "simulation request refused; original diagnostic remains private")
+                        self.assertNotIn("incomplete request body", response_body)
+                        self.assertNotIn(server.csrf, response_body)
+                        self.assertEqual(response.getheader("Cache-Control"), "no-store")
                         parse.assert_not_called()
                         execute.assert_not_called()
                         self.assertEqual(len(server.runs), 0)
