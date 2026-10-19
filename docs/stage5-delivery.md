@@ -69,7 +69,7 @@ A verifier proves internal consistency and source bytes, not that a producer's
 command claim is true. Independent reviewers must compare raw execution logs,
 the original host record and the exact published commit/tree.
 
-## Codex execution and real acceptance handoff
+## Execution evidence and acceptance
 
 Every item below starts NOT_RUN unless independent, version-bound evidence is
 attached. A local model pass cannot close it.
@@ -88,8 +88,8 @@ attached. A local model pass cannot close it.
 6. Verify owner/holder order, immutable prefix, original-buyer refund and
    owner=holder plus all other exit checks. Physical handover and burn need
    separate evidence; do not collapse them into an atomic operation.
-7. Independently review required hosted CI and findings. The coordinator owns
-   merging; no merge is implied by local passing tests or package publication.
+7. Independently verify required hosted CI and findings against the exact source;
+   local passing tests or package publication do not establish final acceptance.
 8. Reconcile final real evidence before replacing local-model labels in the
    demonstration, deck and video. Clearly label animation and unresolved items.
 

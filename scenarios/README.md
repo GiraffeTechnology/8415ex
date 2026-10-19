@@ -208,10 +208,9 @@ Groups 6 and 7 cover work this package does not perform, so every field in them
 reads `NOT_RUN`. They are still emitted, because in a hand-written receipt an
 omitted group and an unperformed one look identical, and here they cannot.
 
-The private requirements identity belongs to group 2 and is never embedded in
-this source. Supply it at call time through `EX_REQUIREMENTS_IDENTITY`, the same
-way the scan takes private markers; the receipt reports only whether it was
-supplied, so a published artifact never carries it.
+The requirements identity belongs to group 2. The existing
+`EX_REQUIREMENTS_IDENTITY` input is supplied at call time; the receipt reports
+whether it was supplied. Current product requirements are in [PRD.md](../PRD.md).
 
 Group 1's diff range is the range a reviewer can pass straight to `git diff`.
 It is captured with the run against an immutable head and base commit. By
@@ -322,8 +321,7 @@ neither the matrix nor the stage map could have shown, because every one of its
 requirements already had a passing case.
 
 Sections are identified by number and by a short engineering label describing
-what this repository does about them. The requirements document is private and
-none of its text is reproduced.
+what this repository does about them. See [PRD.md](../PRD.md) for current requirements.
 
 ## The definition of done, and the half of it that is easiest to lose
 
@@ -792,10 +790,8 @@ rather than reading as complete.
 
 ## The stage map
 
-The acceptance matrix says which case belongs to which stage. It does not say
-who does the rest, and that is what `scenarios.cli stages` answers: per stage,
-what this surface develops, what is tested and accepted by whoever owns that,
-and what genuine real-world input stays with its existing owner.
+The acceptance matrix maps cases to stages. `scenarios.cli stages` reports each
+stage's implementation coverage, acceptance evidence and unresolved integration inputs.
 
 Three things keep it checkable rather than decorative. Every deliverable names a
 path and the path is checked against the disk, so a deliverable claiming a module
@@ -973,8 +969,8 @@ only value the configuration validator accepts for them, and a concrete value
 is refused as unverified. The validator checks shape and non-invention only; it
 never means a configuration is approved or an address verified.
 
-Real deployment and authorized test-network execution belong to the party that
-owns them. Their evidence slots in `handoff.py` start at `NOT_RUN`, and a
+Deployment and test-network execution evidence slots in `handoff.py` start at
+`NOT_RUN`, and a
 fabricated hash or a placeholder success is refused by `validation.py`.
 
 T-35 to T-38 stay real acceptance obligations. A local model result never

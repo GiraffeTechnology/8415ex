@@ -53,7 +53,7 @@ the reports below say so about themselves.
 
 ## Running the checks
 
-GitHub Actions is permitted for CI. Run other product checks through the existing approved non-Windows Linux entry points under AGENTS and the private operational rules, not locally, on Windows/WSL, in the assistant workspace or an unapproved runner. The private restricted-host prohibitions on chain activity remain effective. CI permission does not authorize deployment or chain broadcasts. EX remains Sepolia 11155111, not Wallet Hoodi.
+GitHub Actions is permitted for CI. Runtime and integration acceptance use the project-supported Linux configuration. Deployment and live-chain acceptance require separate evidence. EX remains Sepolia 11155111, not Wallet Hoodi.
 
 Commands below are documentation, not permission to execute them here. Historical outputs do not validate current code. GitHub Actions is valid evidence for its actual CI checks, not for unexecuted deployment or live-chain acceptance. Record exact head/base and the tested commit; synthetic merge identity differs from head. Missing checks are not green.
 
@@ -66,7 +66,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s exchange/tests -t .
 PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s scenarios/tests -t . -v
 ```
 
-The existing model evidence bundle in one command on the approved server, which exits non-zero unless every
+The existing model evidence bundle in one command on the supported Linux runtime, which exits non-zero unless every
 expectation passed over a confirmed, clean source tree:
 
 ```sh
@@ -117,8 +117,6 @@ and the suite fails on either.
 
 ## Evidence and continued work
 
-After a stage PR, continue the next independent authorized stage while review/CI proceeds. Reuse existing CI and check exact-source outcomes, without historical PASS inheritance. Missing implementation/evidence remains NOT_RUN/NOT_VERIFIED. Publication grants no new credentials, permissions, deployment, chain-execution or real-value authority. Private documents/source locators, internal assignments, topology, paths, operational logs and secrets remain private.
+Reuse existing CI and check exact-source outcomes, without historical PASS inheritance. Missing implementation/evidence remains NOT_RUN/NOT_VERIFIED.
 
-Published product baseline file integrity: PRD.md SHA-256 `ea535c29ac5184d6eafcf8411b532428bc1800c2f8f37274bda92e444514f81d`. This identifies document bytes, not a runtime acceptance result.
-
-Public-repository privacy: do not publish real usernames, wallet addresses, server names, IP addresses, credentials or other private information in documents, source, commit messages, comments, logs or artifacts. Necessary actual values stay in the existing authorized private channel.
+Published product baseline file integrity: PRD.md SHA-256 `b3989a91f1d3f7a1de6812fa05777d0dfdf84a4eee4a7909bdda77d1196032ce`. This identifies document bytes, not a runtime acceptance result.
