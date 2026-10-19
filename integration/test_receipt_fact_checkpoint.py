@@ -121,3 +121,50 @@ class ReceiptFactCheckpointTests(unittest.TestCase):
             with self.subTest(position=position), self.assertRaises(ReceiptFactCheckpointRefused):
                 self.adapter().save(self.original, dict(self.facts, escrows=(position,), rollbackSteps=(step,)),
                                     expected_generation=0)
+
+    def test_correct_generation_cannot_replace_the_receipts_original_asset(self):
+        adapter = self.adapter()
+        adapter.save(self.original, self.facts, expected_generation=0)
+        before = self.db.execute("SELECT * FROM ex_aggregate_checkpoint").fetchall()
+        other_asset = Asset(self.original.asset.chain_id, self.original.asset.contract, 99)
+        other_receipt = replace(self.original, asset=other_asset)
+        other_facts = dict(self.facts,
+            registrationRequests=(replace(self.request, asset=other_asset),),
+            registrationEvidence=(replace(self.evidence, asset=other_asset),))
+        with self.assertRaises(ReceiptFactCheckpointRefused):
+            adapter.save(other_receipt, other_facts, expected_generation=1)
+        self.assertEqual(self.db.execute("SELECT * FROM ex_aggregate_checkpoint").fetchall(), before)
+        recovered = adapter.read(self.original.receipt_id, expected_asset=self.original.asset)
+        self.assertEqual(recovered["generation"], 1)
+        self.assertEqual(recovered["receipt"], self.original)
+        self.assertEqual(recovered["facts"], self.facts)
+
+    def test_correct_generation_cannot_rewrite_minted_terms_or_currency_declaration(self):
+        adapter = self.adapter()
+        adapter.save(self.original, self.facts, expected_generation=0)
+        before = self.db.execute("SELECT * FROM ex_aggregate_checkpoint").fetchall()
+        for changed in (
+                replace(self.original, commodity_name="Different minted terms"),
+                replace(self.original, allowed_price_currencies=("USD",)),
+                replace(self.original, nft0_currency_reference="different-original-reference")):
+            with self.subTest(receipt=changed), self.assertRaises(ReceiptFactCheckpointRefused):
+                adapter.save(changed, self.facts, expected_generation=1)
+            self.assertEqual(self.db.execute("SELECT * FROM ex_aggregate_checkpoint").fetchall(), before)
+        recovered = adapter.read(self.original.receipt_id, expected_asset=self.original.asset)
+        self.assertEqual(recovered["generation"], 1)
+        self.assertEqual(recovered["receipt"], self.original)
+
+    def test_same_declaration_can_advance_operational_facts_without_resolving_unknown(self):
+        adapter = self.adapter()
+        adapter.save(self.original, self.facts, expected_generation=0)
+        changed = dict(self.facts, escrows=(replace(self.escrow,
+            gas_record=({"amount": 9, "asset": "ETH"},)),))
+        saved = adapter.save(self.original, changed, expected_generation=1)
+        self.assertEqual(saved["generation"], 2)
+        recovered = self.adapter(self.connection()).read(self.original.receipt_id,
+                                                        expected_asset=self.original.asset)
+        self.assertEqual(recovered["receipt"], self.original)
+        self.assertEqual(recovered["facts"], changed)
+        self.assertEqual(recovered["facts"]["escrows"][0].payment_status, "unknown")
+        self.assertFalse(recovered["executionAuthorized"])
+        self.assertFalse(recovered["completeExchangeRecovery"])
