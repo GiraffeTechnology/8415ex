@@ -35,15 +35,17 @@ class CrossRouteAcceptance(unittest.TestCase):
     def test_unknown_boundary_return_is_enquired_without_resending(self):
         for path in PATHS:
             with self.subTest(path=path):
-                key = "return:" + RECEIPT + ":route-rollback"
-                ex, _ = self.refused(path, return_outcomes={key: "unknown"})
+                ex, _ = self.refused(path)
+                key = ex.rollback_report(RECEIPT)["assetHops"][0]["key"]
+                ex.asset_control._outcomes[key] = "unknown"
                 self.assertFalse(ex.advance_rollback(RECEIPT)["complete"])
                 ex.advance_rollback(RECEIPT)
                 self.assertEqual(ex.asset_control.returns, 0)
                 ex.asset_control.resolve_unknown(key, "returned")
                 self.assertTrue(ex.advance_rollback(RECEIPT)["complete"])
-                self.assertEqual(ex.asset_control.returns, 0)
-                self.assertEqual(ex.asset_control.hops_walked, 0)
+                self.assertEqual(ex.asset_control.returns, 2)
+                self.assertEqual(ex.asset_control.hops_walked, 2)
+                self.assertEqual(len(ex.asset_control._records), 3)
 
     def test_partial_refund_failure_resumes_once_for_each_original_buyer(self):
         for path in PATHS:

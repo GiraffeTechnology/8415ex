@@ -15,12 +15,14 @@ class ScenarioContracts(unittest.TestCase):
         self.assertTrue(result["observed"]["receipt"]["simulatedRegistration"])
         return result
 
-    def test_single_sale_and_separate_exit_records(self):
+    def test_single_sale_and_bill_history_without_physical_exit(self):
         result = self.scenario("DEMO-01")
         observed = result["observed"]
         self.assertEqual(observed["receipt"]["owner"]["account"], F.B)
         self.assertEqual(observed["receipt"]["holder"]["account"], F.B)
-        self.assertEqual(len(observed["exit"]["distinctCompletionInstants"]), 4)
+        self.assertTrue(observed["exit"]["retiredOperation"])
+        self.assertFalse(observed["exit"]["executable"])
+        self.assertFalse(observed["exit"]["burned"])
         self.assertEqual(observed["funds"]["segments"][0]["netToPayee"], str(F.PRICE_AB))
         self.assertTrue(observed["exit"]["historyPreserved"])
 
@@ -54,12 +56,14 @@ class ScenarioContracts(unittest.TestCase):
         self.assertTrue(result["observed"]["rollback"]["complete"])
         self.assertIn("not queried", result["fixtureConditions"]["ordinaryWalletETH"])
 
-    def test_cutoff_inflight_and_eligible_exit_are_distinct(self):
+    def test_cutoff_recovers_only_suffix_without_burn(self):
         result = self.scenario("DEMO-06")
         before = result["checkpoints"][0]["beforeCutoffRefusal"]["receipt"]
-        self.assertEqual(before["recordedLegs"], 1)
+        self.assertEqual(before["recordedLegs"], 3)
         self.assertFalse(before["tradingOpen"])
-        self.assertTrue(result["observed"]["exit"]["burned"])
+        self.assertFalse(result["observed"]["exit"]["burned"])
+        self.assertEqual(result["observed"]["receipt"]["owner"]["account"], F.B)
+        self.assertEqual([s["refunded"] for s in result["observed"]["funds"]["segments"]], [False, True, True])
 
     def test_repeated_run_is_canonical_and_deterministic(self):
         for scenario in S.SCENARIOS:

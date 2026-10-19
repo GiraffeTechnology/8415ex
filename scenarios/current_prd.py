@@ -10,7 +10,7 @@ import pathlib
 import sys
 
 VERSION = "1.3"
-CURRENT_COMPLETE_VERSION = "1.4"
+CURRENT_COMPLETE_VERSION = "1.4.1"
 PINNED = {
     "prd": (73558, "1ce035ef10eb4e09c976dc4a070299afab36fef213b775efee922da19e9479cf"),
     "executionPlan": (77644, "1f995c74355281c0d06e59a2f0ca3569299910742f59c75e7f661687e83efcc3"),
@@ -40,7 +40,7 @@ def load(root=None):
     root = pathlib.Path(root) if root is not None else pathlib.Path(__file__).resolve().parents[1]
     lock = _json((root / "config/prd-lock.json").read_bytes())
     if lock.get("schema") != "8415ex-prd-lock/1" or lock.get("version") != VERSION:
-        raise ValueError("historical published PRD baseline pin is missing or stale")
+        raise ValueError("historical published PRD baseline version pin is missing or stale")
     payloads = {}
     for key, expected_path in (("prd", "PRD.md"), ("executionPlan", "config/execution-plan.json")):
         item = lock[key]
@@ -113,7 +113,7 @@ def require_current_scenario(scenario_id, revision=None):
     load()
     if scenario_id in LEGACY_DEMOS and revision != CURRENT_COMPLETE_VERSION:
         raise ValueError("PRD_MIGRATION_REQUIRED: " + scenario_id
-                         + " requires migration against the complete current v1.4 contract; "
+                         + " requires migration against the complete current v1.4.1 contract; "
                          "the pinned public v1.3 plan is historical only. "
                          "No legacy collection/burn/payment/grace step was executed.")
 

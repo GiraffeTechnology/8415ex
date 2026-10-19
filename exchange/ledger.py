@@ -1786,6 +1786,8 @@ class Exchange:
         if state is None:
             return {"receiptId": receipt_id, "open": False, "state": None, "complete": False,
                     "retiredOperation": True, "executable": False, "prdVersion": "1.3",
+                    "burned": False, "steps": (), "historyPreserved": True,
+                    "distinctCompletionInstants": (), "physicalAndOnChainAreAtomic": False,
                     "observedAt": now}
         steps = tuple({"step": step.name, "status": step.status,
                        "completedAt": step.completed_at, "detail": dict(step.detail)}

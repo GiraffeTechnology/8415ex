@@ -29,25 +29,8 @@ def snapshot(ex):
 def release(ex, index):
     return ex.release_segment(RECEIPT, index, F.release_authority(ex, index, "scenario-release-" + str(index)))
 
-def exit_at(ex, clock, account):
-    ex.connect_wallet(account, "scenario-redeem-session")
-    ex.register_authorization(F.authorization(
-        account, "scenario-redeem", "scenario-redeem-session", actions=("redeem",),
-        expires_at=clock() + 600))
-    ex.request_redemption(RECEIPT, account, "scenario-redeem", "scenario-exit", F.ALL_CHECKS)
-    for step in ("stop-resale", "voucher-issued", "voucher-handover-confirmed", "burn"):
-        clock.advance(5)
-        ex.advance_exit(RECEIPT, through=step)
-    report = ex.exit_report(RECEIPT)
-    check(report["complete"] and report["burned"], "separate exit steps complete")
-    check(len(report["distinctCompletionInstants"]) == 4, "four completion instants")
-    before = dict(ex.voucher_desk._records)
-    ex.advance_exit(RECEIPT)
-    check(before == ex.voucher_desk._records, "completed exit idempotent")
-    check(report["historyPreserved"] and not report["physicalAndOnChainAreAtomic"], "history and non-atomicity")
-
 def make_chain(path, **kwargs):
-    ex, clock = F.exit_exchange(registration_path=path, **kwargs)
+    ex, clock = F.rollback_exchange(registration_path=path, **kwargs)
     for seller, buyer, nonce, suffix, price in (
         (F.A, F.B, 1, "ab", F.PRICE_AB),
         (F.B, F.C, 2, "bc", F.PRICE_BC),
@@ -59,10 +42,13 @@ def make_chain(path, **kwargs):
 def _execute(scenario, path):
     checkpoints = []
     if scenario == "DEMO-01":
-        ex, clock = F.settled_at_b(registration_path=path)
+        ex, clock = F.rollback_exchange(registration_path=path)
+        F.funded_hop(ex, F.A, F.B, 1, "transfer-ab", "session-a", "session-b", price=F.PRICE_AB)
+        request = F.submit_all(ex)[0]
+        F.confirm(ex, request, "result-ab")
+        release(ex, 0)
         check(ex.owner_of(RECEIPT) == ex.holder_of(RECEIPT) == F.B, "owner/holder B")
         checkpoints.append(snapshot(ex))
-        exit_at(ex, clock, F.B)
         expected_owner, expected_holder, released, refunded = F.B, F.B, (0,), ()
     elif scenario == "DEMO-02":
         ex, clock = make_chain(path)
@@ -106,7 +92,7 @@ def _execute(scenario, path):
         expected_owner = expected_holder = F.B if refused else F.A
         released = (0,) if refused else ()
         refunded = (1, 2) if refused else (0, 1, 2)
-        check(ex.asset_control.returns == 1, "one boundary return, not intermediate transfers")
+        check(ex.asset_control.returns == len(refunded), "one evidenced return per original reverse hop")
         check(ex.payments.movements == 3, "one payment per independently settled/refunded segment")
         before = ex.payments.movements
         ex.advance_rollback(RECEIPT)
@@ -118,24 +104,30 @@ def _execute(scenario, path):
             check(blocked and all(not e["detail"]["custodyTaken"] and not e["detail"]["forcedSale"]
                                   and not e["detail"]["liquidation"] for e in blocked), "withdrawn mechanisms absent")
     elif scenario == "DEMO-06":
-        ex, clock = F.exit_exchange(registration_path=path)
-        F.funded_hop(ex, F.A, F.B, 1, "transfer-ab", "session-a", "session-b", price=F.PRICE_AB)
-        request = F.submit_all(ex)[0]
+        ex, clock = make_chain(path)
+        requests = F.submit_all(ex)
+        F.confirm(ex, requests[0], "confirmed-prefix")
+        release(ex, 0)
+        prefix = ex.reconciliation(RECEIPT)["segments"][0]
         clock.now = ex.receipt(RECEIPT).trade_stop_at
         before = snapshot(ex)
         try:
-            F.funded_hop(ex, F.B, F.C, 2, "transfer-late", "session-b", "session-c",
-                         price=F.PRICE_BC, now=clock(), expires_at=clock() + 600)
+            F.funded_hop(ex, F.D, F.A, 4, "transfer-late", "session-d", "session-a",
+                         now=clock(), expires_at=clock() + 600)
         except DomainError as error:
             check(error.code in ("EX_MATCH_UNEXECUTABLE", "EX_TRADE_WINDOW_CLOSED"), "named cutoff refusal")
         else:
             raise AssertionError("trade at cutoff must fail")
-        check(ex.recorded_legs(RECEIPT) == 1, "cutoff forms no new leg")
-        F.confirm(ex, request, "inflight-result")
-        release(ex, 0)
-        checkpoints.append({"beforeCutoffRefusal": before, "afterInflight": snapshot(ex)})
-        exit_at(ex, clock, F.B)
-        expected_owner, expected_holder, released, refunded = F.B, F.B, (0,), ()
+        check(ex.recorded_legs(RECEIPT) == 3, "cutoff forms no new leg")
+        authority = F.rollback_authority(ex, 1, "deadline-rollback", now=clock())
+        ex.begin_rollback(RECEIPT, 1, authority, trigger="deadline")
+        report = ex.advance_rollback(RECEIPT)
+        check(report["complete"], "unfinished suffix returned to current holder")
+        check(ex.reconciliation(RECEIPT)["segments"][0] == prefix, "registered prefix retained")
+        check(not ex.exit_report(RECEIPT)["burned"], "deadline does not burn the NFT")
+        checkpoints.append({"beforeCutoffRefusal": before, "afterRecovery": snapshot(ex)})
+        expected_owner, expected_holder, released, refunded = F.B, F.B, (0,), (1, 2)
+
     else:
         raise ValueError("unknown scenario")
     check(ex.owner_of(RECEIPT) == expected_owner, "final owner")
@@ -158,14 +150,13 @@ def _execute(scenario, path):
             "realEvidence": dict.fromkeys(("deployment", "providerUI", "signatures", "chain", "realFees"), "NOT_RUN")}
 
 def run_scenario(scenario, path=None):
-    from scenarios.current_prd import blocked
-    return dict(blocked(scenario), scenario=scenario, path=path, simulated=True,
-                cases=CASES.get(scenario, ()))
     if scenario not in SCENARIOS:
         raise ValueError("unknown scenario")
     path = path or DEFAULT_PATH[scenario]
     if path not in PATHS:
         raise ValueError("unknown registration path")
+    from scenarios.current_prd import require_current_scenario
+    require_current_scenario(scenario, revision="1.4.1")
     try:
         result = _execute(scenario, path)
         return dict(result, scenario=scenario, path=path, simulated=True, status="passed", cases=CASES[scenario])
