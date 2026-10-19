@@ -22,7 +22,7 @@ class Ledger(unittest.TestCase):
 
     def test_completion_is_never_established_from_here(self):
         self.assertFalse(self.ledger["completionEstablished"])
-        self.assertIn("another owner", self.ledger["whyNot"])
+        self.assertIn('additional integration evidence', self.ledger["whyNot"])
         for clause in self.ledger["clauses"]:
             with self.subTest(clause=clause["clause"]):
                 self.assertFalse(clause["completeHere"])

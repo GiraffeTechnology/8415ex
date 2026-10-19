@@ -1,12 +1,8 @@
-"""The execution handoff for the party that owns real deployment and chain work.
+"""Execution evidence checklist for deployment and test-network integration.
 
-Every real-evidence slot starts as ``NOT_RUN``. A slot is never pre-filled with
-a plausible-looking value: an empty slot says NOT_RUN, and a fabricated hash or
-a placeholder success is refused by :mod:`scenarios.validation`.
-
-This package does not deploy, does not send a transaction and holds no
-credential. The checklist describes what the owning party must record.
-"""
+Every real-evidence slot starts as NOT_RUN. The validator rejects fabricated
+hashes and placeholder success. This model sends no transactions and holds
+no credential. The checklist describes the evidence a real run must record."""
 from .demos import MAIN_PATHS
 from .validation import UNRESOLVED
 
@@ -52,27 +48,27 @@ SCENARIO_STEPS = {
 }
 
 
-#: Things this package depends on but does not own, and must not change. Each
-#: one names where it lives, who owns it and what this package does instead.
+#: Technical dependencies and their current model representation.
+#: The legacy owner field identifies the relevant contract or evidence category.
 EXISTING_OWNER_DEPENDENCIES = (
     {
         "dependency": "mixed-unit projection in the rollback report",
         "where": "exchange/ledger.py, the netToOriginalBuyer field",
         "detail": "the field subtracts a gas-unit count from a quote-asset "
                   "principal, so its result is a number in no single unit",
-        "owner": "the domain owner of exchange/ledger.py",
+        "owner": 'exchange/ledger.py contract',
         "thisPackageDoes": "records the whole principal in the quote asset and the "
                            "gas amount, unit and bearer separately, observes the "
                            "legacy field without reading it as net proceeds, and "
                            "changes no domain code",
-        "status": "open, reported to its owner",
+        "status": 'open integration gap',
     },
     {
         "dependency": "actual fee deduction from a refunded principal",
         "where": "open decision D-04",
         "detail": "whether a real fee is deducted from a refund, in which asset "
                   "and by whom, is undecided",
-        "owner": "the party that owns the commercial decision",
+        "owner": 'fee specification',
         "thisPackageDoes": "models no deduction and records the obligation NOT_RUN",
         "status": "open decision",
     },
@@ -93,8 +89,7 @@ def build(matrix=None):
     return {
         "schema": "8415ex-execution-handoff/2",
         "existingOwnerDependencies": list(EXISTING_OWNER_DEPENDENCIES),
-        "owner": "the party that owns approved-environment deployment and authorized "
-                 "test-network execution",
+        "owner": 'deployment and test-network evidence',
         "preconditions": {
             "quoteTokenAddress": UNRESOLVED,
             "deploymentTarget": UNRESOLVED,
@@ -112,7 +107,7 @@ def build(matrix=None):
             "an empty slot says NOT_RUN; never a fabricated hash or a placeholder success",
             "a local model result never substitutes for real integration acceptance",
             "a rendered status page is not operable UI acceptance",
-            "no mainnet activity, no real value movement, no new permission",
+            'model execution supplies no mainnet, value-transfer or permission-change evidence',
             "the presentation claims follow verified execution evidence, not expectations",
         ],
     }

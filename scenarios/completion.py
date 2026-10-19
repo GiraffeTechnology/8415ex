@@ -1,26 +1,9 @@
-"""The definition of done, clause by clause, with its evidence or its owner.
+"""Completion evidence, clause by clause.
 
-The requirements state what this round's completion means and, just as
-explicitly, what it does not. Both halves are easy to lose: the first becomes a
-vague sense that things are going well, and the second quietly erodes until a
-local model run is being described as a product.
-
-So each clause is resolved against a real run. A clause whose signals are all
-present is evidenced locally. A clause that also needs evidence from another
-owner says so and names the owner, and the scope it is waiting on. Nothing is
-reported as done because its local half is done.
-
-The second half is handled the same way, in the one respect that matters: the
-non-claims are not just restated. Four of them are checked against the run -
-that the chain is a test chain, that every adapter is simulated, that the quote
-asset is a local test label, and that the prices and gas figures are declared
-fixtures - because those are the ones a reader could otherwise mistake for the
-real thing. The rest are declared, and declared is said to be what they are.
-
-Completion itself is never asserted here. It cannot be: every clause that needs
-a deployment, a real chain, a browser or an independent review is owed by
-someone else, and this module's job is to say exactly which and to whom.
-"""
+Local signals and additional integration evidence are tracked separately.
+Model results do not establish deployment, chain, browser or security
+acceptance. Non-claims checked against a run are distinguished from declarations.
+The legacy owner fields carry technical evidence categories."""
 from . import matrix, stages
 
 #: What the clauses need, as paths into a run's bundle. ``stages`` resolves
@@ -29,7 +12,7 @@ from . import matrix, stages
 LOCAL_OUTCOMES_THAT_STAND = ("passed", "unit-suite-only")
 
 #: The clauses of the definition of done, each with the signals that evidence
-#: it here and the evidence still owed by another owner.
+#: it here and the additional integration evidence still required.
 CLAUSES = (
     {
         "clause": "the six confirmed scenarios have reproducible evidence inside "
@@ -38,7 +21,7 @@ CLAUSES = (
                     ("dossier", "allItemsCarried")),
         "stages": (),
         "awaits": ({"needs": "the same six scenarios on a real test chain",
-                    "owner": "the party that owns approved-environment deployment",
+                    "owner": 'deployment evidence',
                     "slot": "transactionHashes"},),
     },
     {
@@ -48,7 +31,7 @@ CLAUSES = (
                     ("reuse", "allAdaptersSimulated")),
         "stages": (),
         "awaits": ({"needs": "a real registrar interface behind any route",
-                    "owner": "the domain owner, by checking the existing components",
+                    "owner": 'domain integration evidence',
                     "slot": "events"},),
     },
     {
@@ -57,8 +40,7 @@ CLAUSES = (
         "stages": (2, 3),
         "awaits": ({"needs": "the authoritative settlement binding, and real "
                              "asset-return control for an on-chain rollback",
-                    "owner": "the domain owner, by checking the existing "
-                             "contracts and permissions",
+                    "owner": 'asset-control interface and permission evidence',
                     "slot": "perSegmentReconciliation"},),
     },
     {
@@ -67,7 +49,7 @@ CLAUSES = (
         "stages": (4,),
         "awaits": ({"needs": "the voucher hand-over and burn sequence as a real "
                              "process, in a decided order",
-                    "owner": "the product owner",
+                    "owner": 'product specification',
                     "slot": "events"},),
     },
     {
@@ -77,24 +59,22 @@ CLAUSES = (
         "stages": (),
         "awaits": ({"needs": "a demonstration, deck and video actually produced "
                              "from verified execution evidence",
-                    "owner": "the party that owns evidence verification and "
-                             "packaging",
+                    "owner": 'presentation evidence',
                     "slot": "uiAssertions"},),
     },
     {
-        "clause": "the code, configuration, deployment, chain results and private "
-                  "receipts cross-check against one another",
+        "clause": "the code, configuration, deployment, chain results and artifact receipts "
+                  "cross-check against one another",
         "signals": (("manifest", "consistent"),
                     ("sourceReconciliation", "consistent"),
                     ("usage", "consistent")),
         "stages": (),
         "awaits": ({"needs": "a deployment receipt and a chain result to "
                              "cross-check the source against",
-                    "owner": "the party that owns approved-environment deployment",
+                    "owner": 'deployment evidence',
                     "slot": "deployedHead"},
-                   {"needs": "the private file receipt, which is held outside this "
-                             "repository and never published to it",
-                    "owner": "the party that owns the private handover",
+                   {"needs": 'artifact byte counts and digests verified by readback',
+                    "owner": 'artifact provenance',
                     "slot": "artifactHashes"}),
     },
 )
@@ -261,12 +241,12 @@ def build(bundle=None):
             entry["confirmedByThisRun"] is True for entry in non_claims
             if not entry["declaredOnly"])),
         "completionEstablished": False,
-        "whyNot": ("every clause also needs evidence another owner holds, so no "
-                   "run of this surface can establish completion; the outstanding "
-                   "list names what is owed and by whom"),
+        "whyNot": ("every clause also needs additional integration evidence, so no run of "
+                   "this surface can establish completion; the outstanding list names the "
+                   "required evidence"),
         "isNot": [
-            "not an acceptance decision: this resolves the clauses against one "
-            "local run, and acceptance belongs to whoever owns it",
+            "not an acceptance decision: this resolves the clauses against one local run; "
+            "independent acceptance evidence remains required",
             "not a percentage: a clause evidenced locally is one clause, not a "
             "fraction of a product",
             "not a claim that every non-claim was verified: three are confirmed "

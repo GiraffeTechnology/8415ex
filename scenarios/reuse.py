@@ -177,19 +177,19 @@ ADAPTER_ROLES = (
 UNLOCATED_INTERFACES = (
     {"interface": "the authoritative settlement binding for a real release",
      "neededFor": "real per-segment settlement", "trackedBy": "D-08",
-     "owner": "engineering, by checking the existing components"},
+     "owner": 'component evidence'},
     {"interface": "real asset-return control and its wallet authorization",
      "neededFor": "a real on-chain rollback", "trackedBy": "D-05",
-     "owner": "engineering, by checking the existing contracts and permissions"},
+     "owner": 'contract and permission evidence'},
     {"interface": "the real voucher hand-over and burn sequence",
      "neededFor": "a real exit", "trackedBy": "D-07",
-     "owner": "the product owner"},
+     "owner": 'product specification'},
     {"interface": "the verified wallet capability matrix",
      "neededFor": "real execution against an unverified wallet", "trackedBy": "D-09",
-     "owner": "engineering, against the real interfaces"},
-    {"interface": "the deployment target and its approved configuration",
+     "owner": 'interface evidence'},
+    {"interface": 'the deployment target and its verified configuration',
      "neededFor": "any deployment at all", "trackedBy": "D-08",
-     "owner": "the party that owns the approved environment"},
+     "owner": 'deployment configuration'},
 )
 
 
@@ -546,8 +546,8 @@ def build(scenario_report=None, root=".", *, path_report=None, guarantee_report=
         "allAdaptersSimulated": all_simulated,
         "unlocatedInterfaces": unlocated,
         "unlocatedCount": len(unlocated),
-        "meaning": ("every adapter role is simulated: this package connects to no "
-                    "real registrar, payment provider, asset control, collection "
-                    "desk or wallet, and an unlocated interface is a dependency "
-                    "with an owner rather than a defect"),
+        "meaning": ("every adapter role is simulated: this package connects to no real "
+                    "registrar, payment provider, asset control, collection desk or wallet, "
+                    "and an unlocated interface is a dependency with an evidence category "
+                    "rather than a defect"),
     }
