@@ -1,5 +1,6 @@
 """Identity-excluding rollback observation; never an asset or financial writer."""
 from .public_workbench import integer, amount, currency, state
+from .hop_rollback_projection import project_hop_progress
 
 
 class RollbackProjectionRefused(ValueError):
@@ -42,6 +43,7 @@ def _project_report(report, view):
               'retryPolicy': 'original-operation-enquiry-no-repeat',
               'consumedGasRefunded': False, 'nativeCompletionVerified': False,
               'chainAcceptance': 'NOT_RUN'}
+    result['hopProgress'] = project_hop_progress(report)
     if not report['open']:
         if report.get('complete') is True:
             raise RollbackProjectionRefused('closed observation cannot claim an open recovery completion')
@@ -97,7 +99,8 @@ def _project_report(report, view):
         and row['netToOriginalBuyer'] == row['principal']) for row in result['funds'])
     result['domainReportConsistent'] = not result['domainReportedComplete'] or (
         result['state'] == 'complete' and result['assetReturned']
-        and not result['outstandingSteps'] and money_complete)
+        and not result['outstandingSteps'] and money_complete
+        and result['hopProgress']['available'] and result['hopProgress']['consistent'])
     return result
 
 

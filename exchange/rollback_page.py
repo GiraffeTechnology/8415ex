@@ -74,6 +74,23 @@ TEXT = {
 }
 WORDS = {locale: dict(zip(KEYS, values)) for locale, values in TEXT.items()}
 
+HOP_TEXT = {
+    'en': ('Reverse-chain asset hops', 'Sequence', 'Confirmed hops', 'From position',
+           'To position', 'Result reference recorded', 'Hop progress not recorded', 'Unknown'),
+    'zh-Hans': ('沿原链反向逐跳回退', '回退序列', '已确认跳数', '起点位置',
+                '目标位置', '已记录结果引用', '尚无逐跳进度记录', '未知'),
+    'zh-Hant': ('沿原鏈反向逐跳回退', '回退序列', '已確認跳數', '起點位置',
+                '目標位置', '已記錄結果引用', '尚無逐跳進度記錄', '未知'),
+    'fr': ('Retours successifs sur le parcours inverse', 'Séquence', 'Étapes confirmées',
+           'Position de départ', 'Position d’arrivée', 'Référence du résultat consignée',
+           'Progression des étapes non consignée', 'Inconnu'),
+    'es': ('Retornos sucesivos por la ruta inversa', 'Secuencia', 'Saltos confirmados',
+           'Posición de origen', 'Posición de destino', 'Referencia del resultado registrada',
+           'Progreso de los saltos no registrado', 'Desconocido'),
+    'ja': ('元の経路を逆順にたどる返還', '返還シーケンス', '確認済みステップ数',
+           '開始位置', '到達位置', '結果参照を記録済み', 'ステップの進捗記録なし', '不明'),
+}
+
 
 HISTORY = {
     'en': ('Archived suffix recoveries', 'No archived recovery reports.',
@@ -145,6 +162,19 @@ def _render_report(value, locale):
         body += table(('', ''), [(w['trigger'], trigger),
             (w['boundary'], number(value['returnBoundaryPosition'])), (w['returned'], yes(value['assetReturned'])),
             (w['completion'], completion), (w['consistency'], yes(value['domainReportConsistent']))])
+        h = HOP_TEXT[locale]
+        progress = value['hopProgress']
+        body += '<section data-hop-progress="1"><h3>' + escape(h[0]) + '</h3>'
+        if not progress['available']:
+            body += '<p>' + escape(h[6]) + '</p>'
+        else:
+            body += table(('', ''), [(h[1], progress['sequence']),
+                (h[2], str(progress['cursor']) + ' / ' + str(progress['count']))])
+            rows = [(str(hop['fromPosition']), str(hop['toPosition']),
+                     h[7] if hop['status'] == 'unknown' else status(hop['status']),
+                     yes(hop['hasResultReference'])) for hop in progress['hops']]
+            body += table((h[3], h[4], q['state'], h[5]), rows)
+        body += '</section>'
         steps = []
         for step in value['outstandingSteps']:
             kind = {'refund': w['refundStep'], 'asset-return': w['returnStep']}.get(step['kind'], t['unknown'])
