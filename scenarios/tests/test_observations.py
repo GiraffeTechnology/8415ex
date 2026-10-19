@@ -6,6 +6,7 @@ and is subject to the same scan as the rest of the source.
 """
 import os
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -350,6 +351,95 @@ class ScanIntegrity(unittest.TestCase):
 
     def test_it_does_not_claim_to_be_a_security_review(self):
         self.assertIn("not a substitute for an independent security review", self.scan["scope"])
+
+
+
+class LocalizedUIClassification(unittest.TestCase):
+    """UI translation data does not exempt a file from any secret check."""
+
+    @staticmethod
+    def _locale_source(value=None):
+        value = value if value is not None else chr(0x4E2D)
+        entries = [repr(locale) + ":{label:" + repr(value) + ",names:[" + repr(value) + "]}"
+                   for locale in sorted(observations.DISPLAY_LOCALES)]
+        return "'use strict';\nwindow.EX_LOCALES = {\n" + ",\n".join(entries) + "\n};\n"
+
+    def _scan(self, files, markers=None):
+        with tempfile.TemporaryDirectory(prefix="ex-localized-ui-scan-") as root:
+            subprocess.run(("git", "init", "--quiet", root), check=True)
+            for name, text in files.items():
+                target = Path(root) / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(text, encoding="utf-8")
+            subprocess.run(("git", "-C", root, "add", "--", "."), check=True)
+            return observations.secret_scan(root, private_markers=markers)
+
+    def test_localized_values_are_fully_scanned_product_data(self):
+        scan = self._scan({"ui/commodity-market/locales.js": self._locale_source()})
+        self.assertTrue(scan["clean"], scan["findings"])
+        self.assertEqual(scan["coverage"]["scanned"], 1)
+        self.assertEqual(scan["coverage"]["skipped"], [])
+
+    def test_native_language_option_labels_are_product_data(self):
+        html = '<select id="language"><option value="ja">' + chr(0x65E5) + '</option></select>'
+        scan = self._scan({"ui/commodity-market/index.html": html})
+        self.assertTrue(scan["clean"], scan["findings"])
+        self.assertEqual(scan["coverage"]["scanned"], 1)
+
+    def test_non_english_outside_the_language_selector_remains_a_finding(self):
+        html = ('<select id="language"><option value="ja">' + chr(0x65E5)
+                + '</option></select><p>' + chr(0x4E2D) + '</p>')
+        scan = self._scan({"ui/commodity-market/index.html": html})
+        self.assertEqual([finding["kind"] for finding in scan["findings"]], ["non-english"])
+
+    def test_unrecognized_language_options_are_not_exempt(self):
+        html = '<select id="language"><option value="other">' + chr(0x4E2D) + '</option></select>'
+        scan = self._scan({"ui/commodity-market/index.html": html})
+        self.assertFalse(scan["clean"])
+        self.assertEqual(scan["findings"][0]["kind"], "non-english")
+
+    def test_a_locale_filename_elsewhere_does_not_exempt_technical_prose(self):
+        scan = self._scan({"docs/locales.js": self._locale_source()})
+        self.assertFalse(scan["clean"])
+        self.assertTrue(all(finding["kind"] == "non-english" for finding in scan["findings"]))
+
+    def test_comments_and_executable_suffixes_are_not_translation_values(self):
+        for suffix in ("// " + chr(0x4E2D), "run(" + repr(chr(0x4E2D)) + ");"):
+            with self.subTest(suffix=suffix):
+                scan = self._scan({"ui/commodity-market/locales.js": self._locale_source() + suffix})
+                self.assertFalse(scan["clean"])
+                self.assertTrue(any(finding["kind"] == "non-english" for finding in scan["findings"]))
+
+    def test_unknown_locales_duplicate_keys_and_nested_objects_are_not_whitelisted(self):
+        source = self._locale_source()
+        variants = (
+            source.replace("'ja':", "'other':"),
+            source.replace("'ja':", "'en':"),
+            source.replace("label:", "nested:{label:", 1).replace(",names:", "},names:", 1),
+        )
+        for value in variants:
+            with self.subTest(value=value):
+                scan = self._scan({"ui/commodity-market/locales.js": value})
+                self.assertFalse(scan["clean"])
+                self.assertTrue(any(finding["kind"] == "non-english" for finding in scan["findings"]))
+
+    def test_every_credential_and_private_pattern_still_scans_translation_literals(self):
+        for label, _ in observations.SECRET_PATTERNS + observations.PRIVATE_CONTENT_PATTERNS:
+            with self.subTest(pattern=label):
+                value = chr(0x4E2D) + " " + _sample(label)
+                scan = self._scan({"ui/commodity-market/locales.js": self._locale_source(value)})
+                self.assertFalse(scan["clean"])
+                self.assertIn(label, {finding["pattern"] for finding in scan["findings"]})
+
+    def test_configured_private_fingerprints_remain_private_inside_translations(self):
+        marker = "fingerprint-" + "q" * 10
+        scan = self._scan(
+            {"ui/commodity-market/locales.js": self._locale_source(chr(0x4E2D) + marker)},
+            markers=(marker,))
+        self.assertFalse(scan["clean"])
+        self.assertIn("configured private fingerprint",
+                      {finding["pattern"] for finding in scan["findings"]})
+        self.assertNotIn(marker, str(scan))
 
 
 class ResourceObservation(unittest.TestCase):

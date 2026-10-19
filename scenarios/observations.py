@@ -14,6 +14,8 @@ scanned on the same terms as everything else.
 The resource observations are measured, not promised. No throughput or latency
 target is set or implied.
 """
+import ast
+import json
 import os
 import re
 import resource
@@ -187,6 +189,89 @@ def coverage_statement(coverage, marker_count, enumeration_state):
     }
 
 
+
+# Translation values are product data. The file is still fully read and all
+# credential/private-content checks use its original bytes. This language view
+# changes only proven data literals in the two display-resource entry points.
+DISPLAY_LOCALES = frozenset(("en", "zh-Hans", "zh-Hant", "fr", "es", "ja"))
+_LOCALE_TOKEN = re.compile(
+    r"(?P<space>\s+)|(?P<string>'(?:\\.|[^'\\\r\n])*'|\"(?:\\.|[^\"\\\r\n])*\")"
+    r"|(?P<word>[A-Za-z_$][A-Za-z0-9_$]*)|(?P<symbol>[{}\[\]:,])")
+
+
+def _localized_language_view(name, text):
+    spans = []
+    if name == "ui/commodity-market/locales.js":
+        wrapper = re.fullmatch(
+            r"\s*'use strict';\s*window\.EX_LOCALES\s*=\s*(\{[\s\S]*\});\s*",
+            text)
+        if wrapper is None:
+            return text
+        body, offset = wrapper.group(1), wrapper.start(1)
+        tokens, cursor = [], 0
+        while cursor < len(body):
+            token = _LOCALE_TOKEN.match(body, cursor)
+            if token is None:
+                return text
+            if token.lastgroup != "space":
+                tokens.append(token)
+            cursor = token.end()
+        encoded = []
+        try:
+            for index, token in enumerate(tokens):
+                following = tokens[index + 1].group() if index + 1 < len(tokens) else ""
+                if token.lastgroup == "word":
+                    if following != ":":
+                        return text
+                    encoded.append(json.dumps(token.group()))
+                elif token.lastgroup == "string":
+                    value = ast.literal_eval(token.group())
+                    encoded.append(json.dumps(value))
+                    if following != ":":
+                        spans.append((offset + token.start() + 1,
+                                      offset + token.end() - 1))
+                else:
+                    encoded.append(token.group())
+            def unique_object(pairs):
+                result = {}
+                for key, value in pairs:
+                    if key in result:
+                        raise ValueError("duplicate translation key")
+                    result[key] = value
+                return result
+            locales = json.loads("".join(encoded), object_pairs_hook=unique_object)
+        except (SyntaxError, ValueError, TypeError):
+            return text
+        if not isinstance(locales, dict) or set(locales) != DISPLAY_LOCALES:
+            return text
+        for values in locales.values():
+            if not isinstance(values, dict) or not values:
+                return text
+            for key, value in values.items():
+                if not key.isascii() or not re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$]*", key):
+                    return text
+                if not (isinstance(value, str) or
+                        isinstance(value, list) and all(isinstance(item, str) for item in value)):
+                    return text
+    elif name == "ui/commodity-market/index.html":
+        for select in re.finditer(
+                r"<select\b(?=[^>]*\bid=(['\"])language\1)[^>]*>([\s\S]*?)</select>",
+                text):
+            for option in re.finditer(
+                    r"<option\s+value=(['\"])([^'\"]+)\1\s*>([^<>]*)</option>",
+                    select.group(2)):
+                if option.group(2) in DISPLAY_LOCALES:
+                    spans.append((select.start(2) + option.start(3),
+                                  select.start(2) + option.end(3)))
+    else:
+        return text
+    view = list(text)
+    for start, end in spans:
+        view[start:end] = ["\n" if character == "\n" else " "
+                           for character in view[start:end]]
+    return "".join(view)
+
+
 def secret_scan(root=".", private_markers=None):
     """T-39: credential-shaped content and private material in the source.
 
@@ -236,11 +321,11 @@ def secret_scan(root=".", private_markers=None):
                 findings.append({"path": name, "kind": "private-content",
                                  "pattern": "configured private fingerprint",
                                  "line": text[:index].count("\n") + 1})
-        # Every file read is checked, not three suffixes of them. The rule is
-        # that no non-English prose reaches the public source, and a rule that
-        # only covered .py, .md and .yml left a .json, a .txt, a shell script
-        # and every extensionless file outside it.
-        for number, line in enumerate(text.splitlines(), start=1):
+        # Technical prose is checked in every file read. Only recognized
+        # display-translation values and native language-selector labels are
+        # classified as localized UI data; secret checks above keep the full text.
+        language_view = _localized_language_view(name, text)
+        for number, line in enumerate(language_view.splitlines(), start=1):
             if NON_ENGLISH_PROSE.search(line):
                 findings.append({"path": name, "kind": "non-english",
                                  "pattern": "non-english prose in public source",
