@@ -84,7 +84,7 @@ def validate_evidence(evidence, logs):
     return True
 
 def build_bundle(files, evidence, logs):
-    """Return zip bytes. Callers choose an approved destination; no disk writes."""
+    'Return zip bytes. Callers choose the destination; no disk writes.'
     validate_evidence(evidence, logs)
     require(files and git_tree(files) == evidence["tree"], "complete source tree mismatch")
     members = {"source/" + path: data for path, data in files.items()}

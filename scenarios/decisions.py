@@ -1,26 +1,14 @@
-"""The open-decision register: what is undecided, and what it actually blocks.
+"""Open product decisions and their narrowly scoped technical dependencies.
 
-An undecided question is not the same as a defect, and it is not the same as a
-blocked stage. Each entry here names one open decision, who confirms it, the
-narrowest scope that genuinely waits on it, and the work that proceeds anyway.
-Recording the last column is the point: without it an open decision tends to be
-read as blocking far more than it does, and work that is authorized stops.
+Each entry records the specification or interface evidence needed, the
+dependent branch, and independent model coverage. D-13 is reserved."""
 
-Nothing here answers a decision. Where a question could be settled by reading
-an existing interface or configuration rather than by a product choice, that is
-said, so it is investigated instead of being escalated.
-
-Identifiers and this package's own English wording only. No approved-requirement
-text, document identity, digest or private locator appears in this source.
-"""
-
-#: Who is recorded as confirming a decision. These are roles in this project's
-#: own terms, not an assertion that any outside party is involved.
-PRODUCT_OWNER = "the product owner"
-ENGINEERING = "engineering, by checking the existing interfaces and configuration"
+#: Specification and interface evidence categories.
+#: Constant names and schema fields remain stable for compatibility.
+PRODUCT_OWNER = 'product specification'
+ENGINEERING = 'interface and configuration evidence'
 PRODUCT_OWNER_AFTER_ENGINEERING = (
-    "engineering establishes what the existing components already do, and the "
-    "product owner confirms any remaining choice")
+    'existing component contracts and product specification')
 
 #: Whether this package can carry the decision's consequence locally.
 LOCAL_MODEL_PROCEEDS = "local model and fixtures proceed"
@@ -146,21 +134,19 @@ OPEN_DECISIONS = (
         "id": "D-12",
         "undecided": "commercial pricing, revenue, funding narrative, operations and "
                      "the legal path",
-        "confirmedBy": "the product owner and the professionals they designate",
+        "confirmedBy": 'commercial and legal specifications',
         "blocks": "a later commercial version or any outward commitment",
-        "doesNotBlock": "all currently authorized test development",
+        "doesNotBlock": 'all current test development',
         "localStatus": LOCAL_MODEL_PROCEEDS,
     },
     {
         "id": "D-13",
-        "undecided": "the approved absolute directory for the private requirements "
-                     "copy, and its write-back receipt",
-        "confirmedBy": "the party holding access to that environment",
-        "blocks": "synchronising that one document",
-        "doesNotBlock": "the private hand-off and every authorized development item "
-                        "that does not depend on that synchronisation",
+        "undecided": 'reserved identifier; no product decision assigned',
+        "confirmedBy": 'not applicable',
+        "blocks": 'no product dependency',
+        "doesNotBlock": 'all product development',
         "localStatus": LOCAL_MODEL_PROCEEDS,
-        "owner": "not this package: no credential or persistent access is set up here",
+        "owner": 'not applicable',
     },
 )
 
@@ -187,10 +173,9 @@ def register():
         "localWorkBlockedBy": blocked,
         "localWorkProceedingDespite": proceeding,
         "refusedDefaults": list(REFUSED_DEFAULTS),
-        "meaning": ("an open decision is not a defect and not a blocked stage; each "
-                    "entry names the narrowest scope that waits on it and the work "
-                    "that proceeds anyway, so authorized work is not stopped by a "
-                    "question it does not depend on"),
+        "meaning": ("an open decision is not a defect and not a blocked stage; each entry "
+                    "names the narrowest scope that waits on it and the work that proceeds "
+                    "anyway, so independent work is not blocked by an unrelated question"),
         "answersNothing": True,
     }
 

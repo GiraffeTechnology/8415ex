@@ -67,13 +67,12 @@ class SectionLedger(unittest.TestCase):
             with self.subTest(section=section):
                 self.assertTrue(entry["owner"])
                 self.assertTrue(entry["thisSurfaceDoes"],
-                                "handing a section to an owner is not an answer "
-                                "on its own")
+                                'naming an evidence category is not an answer on its own')
 
     def test_the_private_sources_section_publishes_nothing(self):
         entry = self.by_section[20]
         self.assertEqual(entry["delivers"], [])
-        self.assertIn("never written into this repository",
+        self.assertIn('PRD.md records the product requirements',
                       entry["thisSurfaceDoes"])
 
     def test_it_reproduces_none_of_the_document_and_claims_no_acceptance(self):
@@ -97,7 +96,7 @@ class WhenItDrifts(unittest.TestCase):
         ledger = self._rebuilt(tuple(
             dict(entry, families=(), delivers=(), owner=None, thisSurfaceDoes=None)
             if entry["section"] == 13 else entry for entry in prd.SECTIONS))
-        self.assertIn("a section is addressed by nothing and owed by nobody",
+        self.assertIn('a section has no implementation or evidence category',
                       _findings(ledger))
         self.assertFalse(ledger["consistent"])
 
@@ -135,8 +134,7 @@ class WhenItDrifts(unittest.TestCase):
         ledger = self._rebuilt(tuple(
             dict(entry, thisSurfaceDoes=None)
             if entry["section"] == 11 else entry for entry in prd.SECTIONS))
-        self.assertIn("a section is handed to an owner without saying what this "
-                      "surface does instead", _findings(ledger))
+        self.assertIn('a section names an evidence category without describing this surface', _findings(ledger))
 
 
 if __name__ == "__main__":

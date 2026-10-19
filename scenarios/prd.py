@@ -1,26 +1,9 @@
-"""Section by section: what in this repository addresses each requirement area.
+"""Requirement-section coverage and technical evidence categories.
 
-The acceptance matrix answers one axis and the stage map another. Neither
-answers the question that matters when a whole requirements document has been
-assigned at once: is any section of it addressed by nothing at all?
-
-That gap is easy to miss precisely because the other two reports look complete.
-Every declared requirement can have a case, and every stage can have
-deliverables, while a whole section of the document has quietly been skipped -
-because a section that produced no requirement identifier and no stage entry
-appears in neither report.
-
-So each section is listed with what addresses it: the requirement families whose
-identifiers it carries, the modules and reports built for it, and, where it is
-not this surface's to carry, the owner it belongs to. A section with no
-requirement family, no deliverable and no owner is a finding. Every path is
-checked against the disk and every requirement family against the declared
-requirements, so a label cannot stand in for something that is not there.
-
-Sections are identified by number and by a short engineering label describing
-what this repository does about them. The requirements document itself is
-private and none of its text is reproduced here.
-"""
+PRD.md is the product requirements document. Each section identifies its
+requirement families, implementation paths and additional evidence category.
+Paths and family membership are checked; these are coverage checks, not
+acceptance claims. The legacy owner field carries an evidence category."""
 import pathlib
 
 from . import matrix
@@ -34,7 +17,7 @@ from . import matrix
 SECTIONS = (
     {"section": 1, "label": "the executive conclusion",
      "families": (), "delivers": (),
-     "owner": "the product owner",
+     "owner": 'product specification',
      "thisSurfaceDoes": "nothing: a conclusion about the round is not an "
                         "engineering artifact and is not restated here"},
     {"section": 2, "label": "requirement status and change rules",
@@ -70,7 +53,7 @@ SECTIONS = (
      "owner": None, "thisSurfaceDoes": None},
     {"section": 11, "label": "the minimal interface and operator console",
      "families": (), "delivers": (),
-     "owner": "the party that owns UI acceptance",
+     "owner": 'browser acceptance evidence',
      "thisSurfaceDoes": "reads the rendered pages as development output and "
                         "keeps the page state NOT_RUN; the pages themselves and "
                         "their own tests belong to the domain surface"},
@@ -106,10 +89,9 @@ SECTIONS = (
      "owner": None, "thisSurfaceDoes": None},
     {"section": 20, "label": "source and decision tracking",
      "families": (), "delivers": (),
-     "owner": "the party that owns the private handover",
-     "thisSurfaceDoes": "nothing publishable: the sources are private documents, "
-                        "and their content, identity, digest and location are "
-                        "never written into this repository"},
+     "owner": 'artifact provenance',
+     "thisSurfaceDoes": "PRD.md records the product requirements; this ledger records "
+                        "coverage and evidence dependencies"},
     {"section": 21, "label": "the definition of done",
      "families": (), "delivers": ("scenarios/completion.py",),
      "owner": None, "thisSurfaceDoes": None},
@@ -149,12 +131,11 @@ def build(root="."):
                     "detail": "section %d: %s" % (entry["section"], where)})
         if not families and not delivers and entry["owner"] is None:
             findings.append({
-                "finding": "a section is addressed by nothing and owed by nobody",
+                "finding": 'a section has no implementation or evidence category',
                 "detail": "section %d: %s" % (entry["section"], entry["label"])})
         if entry["owner"] is not None and not entry["thisSurfaceDoes"]:
             findings.append({
-                "finding": "a section is handed to an owner without saying what "
-                           "this surface does instead",
+                "finding": 'a section names an evidence category without describing this surface',
                 "detail": "section %d" % entry["section"]})
         sections.append({
             "section": entry["section"],

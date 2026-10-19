@@ -267,7 +267,7 @@ class RequirementCoverage(unittest.TestCase):
         self.assertEqual(built["requirementCoverage"]["declared"], 55)
 
     def test_no_requirement_text_or_private_locator_is_reproduced(self):
-        """Identifiers only: the approved requirements stay private."""
+        'The traceability matrix carries identifiers; PRD.md carries product requirements.'
         source = Path(ROOT, "scenarios/matrix.py").read_text(encoding="utf-8")
         self.assertTrue(all(ord(character) < 128 for character in source),
                         "the public source stays ASCII")

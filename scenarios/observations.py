@@ -7,7 +7,7 @@ refused.
 
 The scan carries no private value of its own. Credential-shaped detection is
 generic, and any private fingerprint to look for is supplied through the
-already-approved private mechanism at call time, never embedded in this public
+input argument or environment variable at call time, never embedded in this public
 source. There is no exemption for this file: the scanner's own source is
 scanned on the same terms as everything else.
 
@@ -35,8 +35,8 @@ SECRET_PATTERNS = (
     ("ssh private marker", re.compile(r"\bssh-rsa\s+AAAA")),
 )
 
-#: Private material that belongs only in the authorized private locations. These
-#: are shapes, not values: no private link, digest or name appears here.
+#: Generic patterns for potentially sensitive content.
+#: These are pattern shapes rather than actual values.
 PRIVATE_CONTENT_PATTERNS = (
     ("document sharing link", re.compile(r"(?i)\b(?:drive|docs)\.google\.com/\S+")),
     # A leading slash is not a word character, so ``\b`` would never match at
@@ -68,7 +68,7 @@ NON_ENGLISH_PROSE = re.compile(
 #: with that reason.
 SCAN_BYTE_LIMIT = 8 * 1024 * 1024
 
-#: The environment variable through which the approved private mechanism may
+#: The environment variable through which callers may
 #: supply fingerprints to look for. Its contents are never written to this
 #: source, to a report, or to any public artifact.
 PRIVATE_MARKER_ENV = "EX_PRIVATE_CONTENT_MARKERS"
@@ -144,7 +144,7 @@ def _read_text(target):
 
 
 def _private_markers(supplied=None):
-    """Fingerprints to look for, from the approved private mechanism only."""
+    'Fingerprints supplied as input or through the environment variable.'
     if supplied is not None:
         return tuple(str(marker) for marker in supplied if str(marker).strip())
     raw = os.environ.get(PRIVATE_MARKER_ENV, "")

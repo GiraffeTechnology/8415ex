@@ -99,8 +99,8 @@ def _record_common(recorder, exchange, expected_positions, cases):
 
 def _not_run_chain(recorder):
     recorder.not_run("public test network execution", ("T-35", "T-36", "T-38"),
-                     "Codex owns deployment and authorized Sepolia execution; this run sends "
-                     "no transaction and has no verified token address")
+                     "Sepolia execution requires separate deployment evidence; this run "
+                     "sends no transaction and has no verified token address")
     recorder.not_run("operable UI acceptance", ("T-36",),
                      "a rendered status page is development evidence; a real browser journey "
                      "on a deployed build is required")
