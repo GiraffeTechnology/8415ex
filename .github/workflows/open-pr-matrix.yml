@@ -122,6 +122,57 @@ jobs:
         run: |
           set -euo pipefail
           python3 -B -m unittest discover -s ci/tests -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/unit-tests.log"
+      - name: Prepare Node 22 for existing material contracts
+        if: always() && env.BOOTSTRAP_ROOT != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run all applicable material contract tests
+        if: always() && env.BOOTSTRAP_ROOT != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node -p "process.versions.node.split('.')[0]")" = 22
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          directory = Path(os.environ["BOOTSTRAP_ROOT"]) / "evidence"
+          files = sorted(Path("materials").glob("test_*.mjs"))
+          records = [{"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+                     for path in files]
+          (directory / "material-test-inputs.json").write_text(json.dumps({
+              "sourceCommit": os.environ["SOURCE_COMMIT"],
+              "sourceTree": os.environ["SOURCE_TREE"],
+              "applicability": "PRESENT" if files else "NO_MATERIAL_TEST_FILES_AT_THIS_SOURCE",
+              "files": records}, indent=2) + "\n")
+          (directory / "material-test-paths.txt").write_text(
+              "".join(str(path) + "\n" for path in files))
+          PY
+          mapfile -t tests < "$BOOTSTRAP_ROOT/evidence/material-test-paths.txt"
+          if [ "${#tests[@]}" -eq 0 ]; then
+            echo "No material test files at this exact source; no material-test pass is claimed."
+          else
+            node --version > "$BOOTSTRAP_ROOT/evidence/material-node-version.txt"
+            node --test --test-reporter=tap "${tests[@]}" 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/material-tests.tap"
+            python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          directory = Path(os.environ["BOOTSTRAP_ROOT"]) / "evidence"
+          inputs = json.loads((directory / "material-test-inputs.json").read_text())
+          log = (directory / "material-tests.tap").read_text()
+          def count(name):
+              matches = re.findall(r"^# " + name + r" (\d+)\s*$", log, re.M)
+              assert len(matches) == 1, (name, matches)
+              return int(matches[0])
+          total, passed = count("tests"), count("pass")
+          assert total >= len(inputs["files"]) and passed == total
+          assert count("fail") == count("cancelled") == count("skipped") == count("todo") == 0
+          (directory / "material-test-result.json").write_text(json.dumps({
+              "tests": total, "passed": passed, "failed": 0, "skipped": 0,
+              "scope": "Synthetic material contract tests; no browser/rendering/playback acceptance"
+          }, indent=2) + "\n")
+          PY
+          fi
       - name: Run Stage 1 domain tests
         if: always() && env.BOOTSTRAP_ROOT != ''
         shell: bash
