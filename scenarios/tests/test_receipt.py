@@ -144,11 +144,16 @@ class ReceiptBoundaries(unittest.TestCase):
         self.assertTrue(any('disagrees' in why for why in b['blocking']))
         with self.assertRaises(ValueError): receipt.build(b)
 
-    def test_register_thirteen_distinct_unresolved_decisions(self):
+    def test_register_preserves_thirteen_published_decisions_without_current_acceptance(self):
         r = decisions.register()
         self.assertEqual([d['id'] for d in r['decisions']], [f'D-{n:02}' for n in range(1,14)])
-        self.assertTrue(r['answersNothing'])
-        self.assertEqual(set(decisions.reported_locally()), {'D-03','D-04','D-07'})
+        self.assertEqual(r['publishedBaselineVersion'], '1.3')
+        self.assertEqual(r['currentCompletePRDVersion'], '1.4.1')
+        self.assertFalse(r['completeCurrentContractLoaded'])
+        self.assertEqual(r['productStatus'], 'OPEN')
+        self.assertEqual(r['acceptedCases'], [])
+        self.assertEqual(r['globalBlockers'], [])
+        self.assertEqual(decisions.reported_locally(), {})
 
     def test_parent_identity_pins_head_and_base_to_immutable_commits(self):
         with tempfile.TemporaryDirectory() as tmp:

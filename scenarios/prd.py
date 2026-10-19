@@ -3,7 +3,15 @@ from .current_prd import report
 
 
 def build(root="."):
-    result = report("sections", root)
+    try:
+        result = report("sections", root)
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        return {"schema": "8415ex-published-section-error/1", "sections": [],
+                "requirements": [], "sectionCount": 0, "consistent": False,
+                "completeCurrentContractLoaded": False, "productStatus": "OPEN",
+                "acceptedCases": [], "historicalPassInherited": False,
+                "findings": [{"finding": "published source unavailable or invalid",
+                              "detail": str(error)}]}
     numbers = result["sections"]
     identifiers = [row["id"] for row in result["requirements"]]
     missing = sorted(set(range(1, 22)) - set(numbers))

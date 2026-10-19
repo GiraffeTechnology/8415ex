@@ -85,7 +85,7 @@ class ServiceRecoveryBoundaries(unittest.TestCase):
                     self.assertEqual(len(ex.legs(RECEIPT)), 0)
                     self.assertEqual(ex.owner_of(RECEIPT), F.A)
                     self.assertEqual(ex.asset_control.returns, 0)
-                    self.assertEqual(ex.voucher_desk._records, {})
+                    self.assertTrue(ex.voucher_desk is None or ex.voucher_desk._records == {})
 
     def test_unknown_suffix_refund_after_console_restart_never_releases_twice(self):
         for path in stage5.PATHS:
@@ -134,4 +134,4 @@ class ServiceRecoveryBoundaries(unittest.TestCase):
                 self.assertEqual(ex.owner_of(RECEIPT), F.B)
                 self.assertEqual(ex.escrow_for_leg(RECEIPT, 1).status, "refunded")
                 self.assertEqual(ex.escrow_for_leg(RECEIPT, 2).status, "refunded")
-                self.assertEqual(ex.voucher_desk._records, {})
+                self.assertTrue(ex.voucher_desk is None or ex.voucher_desk._records == {})

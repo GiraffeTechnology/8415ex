@@ -5,6 +5,7 @@ bytes remain immutable historical inputs, not proof of v1.4 semantic coverage.
 """
 import argparse
 import hashlib
+from importlib import resources
 import json
 import pathlib
 import sys
@@ -37,7 +38,7 @@ def _json(raw):
 
 
 def load(root=None):
-    root = pathlib.Path(root) if root is not None else pathlib.Path(__file__).resolve().parents[1]
+    root = pathlib.Path(root) if root is not None else resources.files(__package__).parent
     lock = _json((root / "config/prd-lock.json").read_bytes())
     if lock.get("schema") != "8415ex-prd-lock/1" or lock.get("version") != VERSION:
         raise ValueError("historical published PRD baseline version pin is missing or stale")

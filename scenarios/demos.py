@@ -501,7 +501,7 @@ def demo_06(recorder):
     recovery = exchange.advance_rollback(RECEIPT)
     recorder.step("unfinished suffix recovered", recovery=recovery,
                   segmentFunds=_segment_funds(exchange), **_positions(exchange))
-    recorder.expect("only original reverse hops return to the current holder", ("T-24", "T-44"),
+    recorder.expect("only original reverse hops return to the current holder", ("T-24",),
                     [(3, 2), (2, 1)],
                     [(hop["fromPosition"], hop["toPosition"]) for hop in recovery["assetHops"]])
     recorder.expect("the registered prefix and released payment stay unchanged", ("T-24",),

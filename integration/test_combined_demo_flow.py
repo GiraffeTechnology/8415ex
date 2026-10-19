@@ -144,7 +144,9 @@ class CombinedCommittedDemoFlow(unittest.TestCase):
                         record = json.loads(captured)
                         self.assertEqual((record['source']['commit'], record['source']['tree']),
                                          (commit, tree))
-                        self.assertEqual(record['evidenceKind'], 'LOCAL_SIMULATION')
+                        self.assertEqual(record['evidenceKind'], 'SIMULATION_PUBLIC_PROJECTION')
+                        self.assertEqual(record['schema'], '8415ex-public-demo/2')
+                        self.assertNotIn('accounts', record['report']['scenarios'][0]['setup'])
                         self.assertEqual(set(record['realEvidence'].values()), {'NOT_RUN'})
                         result = record['report']['scenarios'][0]
                         self.assertEqual(result['scenarioId'], scenario_id)

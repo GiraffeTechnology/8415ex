@@ -336,7 +336,7 @@ def _matching(recorder):
                         limit_price=F.PRICE - 1)
     recorder.describe_setup(path=CONTRACT_PATH, accounts={"A": F.A, "B": F.B, "C": F.C},
         prices={"sellLimit": F.PRICE - 1, "buyLimit": F.PRICE},
-        quoteAsset=F.QUOTE_ASSET, matching="existing server price-time priority book")
+        quoteAsset=F.QUOTE_ASSET, simulatedAdapters={"matching": "simulated server price-time priority fixture"})
     before = (sell.digest, buy.digest)
     match = exchange.match_intents(sell.intent_id, buy.intent_id)
     recorder.step("independent orders admitted and matched", basis=dict(match.basis))
@@ -368,11 +368,11 @@ def _matching(recorder):
     # The original higher resting ask remains valid, while a lower bid cannot cross.
     uncrossed.revoke_authorization(low_buy.authorization_id)
     uncrossed.register_authorization(F.authorization(F.B, "auth-low-bid", "session-b"))
-    uncrossed.submit_intent(F.intent("buy-low", "buy", F.B, "auth-low-bid", None, 2,
+    uncrossed.submit_intent(F.intent("buy-lower", "buy", F.B, "auth-low-bid", None, 2,
                                      limit_price=F.PRICE - 1))
     recorder.expect("uncrossed price limits never form a trade", ("T-09",),
                     "EX_MATCH_UNEXECUTABLE",
-                    _refusal(lambda: uncrossed.match_intents(low_sell.intent_id, "buy-low")))
+                    _refusal(lambda: uncrossed.match_intents(low_sell.intent_id, "buy-lower")))
     recorder.expect("refusals preserve owner and holder positions", ("T-09",),
                     (0, 0), (uncrossed.owner_index(RECEIPT), uncrossed.holder_index(RECEIPT)))
     recorder.not_run("real market order and signature acceptance", ("T-38",),
@@ -760,6 +760,13 @@ def _recovery_and_exit(recorder):
                      "resultId": report["conflicts"][0]["resultId"]},
                     detail="discarded evidence is the one thing an investigation "
                            "cannot recover")
+
+    original_movements = late.payments.movements
+    recovered = late.resume_trading(RECEIPT)
+    recorder.expect("completed unexpired recovery starts a fresh generation without replay", ("T-23", "T-30"),
+                    {"generation": 1, "active": (), "history": 1, "payments": original_movements},
+                    {"generation": recovered["generation"], "active": late.active_leg_indices(RECEIPT),
+                     "history": len(late.historical_rollbacks(RECEIPT)), "payments": late.payments.movements})
 
     deadline, deadline_clock = F.rollback_chain_to_d(registration_path=CONTRACT_PATH)
     deadline_requests = F.submit_all(deadline)

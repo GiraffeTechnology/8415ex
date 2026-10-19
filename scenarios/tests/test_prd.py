@@ -1,5 +1,6 @@
 """Published section metadata integrity and explicit current-acceptance limits."""
 import copy
+import tempfile
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -44,6 +45,14 @@ class SectionLedger(unittest.TestCase):
 
 
 class WhenItDrifts(unittest.TestCase):
+    def test_unavailable_source_is_an_explicit_failed_report(self):
+        with tempfile.TemporaryDirectory() as missing:
+            row = prd.build(missing)
+        self.assertFalse(row["consistent"])
+        self.assertEqual(row["acceptedCases"], [])
+        self.assertEqual(row["productStatus"], "OPEN")
+        self.assertEqual(row["findings"][0]["finding"], "published source unavailable or invalid")
+
     def changed(self, change):
         report = copy.deepcopy(current_prd.report("sections", ROOT))
         change(report)
