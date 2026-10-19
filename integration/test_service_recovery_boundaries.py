@@ -6,11 +6,13 @@ checks do not demonstrate durable process recovery, real providers or signatures
 import copy
 from contextlib import contextmanager
 import http.client
+from html import escape
 import threading
 import unittest
 
 from exchange import fixtures as F, stage5, webui
 from exchange.errors import DomainError
+from exchange.authorization_page import WORDS
 
 RECEIPT = stage5.RECEIPT
 
@@ -55,6 +57,8 @@ class ServiceRecoveryBoundaries(unittest.TestCase):
                         status, page = request(address, "GET", "/authorization")
                         self.assertEqual(status, 200)
                         self.assertNotIn(reason, page)
+                        self.assertIn('<tr><th>' + escape(WORDS['en']['applies']) + '</th><td>'
+                                      + escape(WORDS['en']['yes']) + '</td></tr>', page)
                     if invalidation == "revoke":
                         ex.revoke_authorization("auth-buy-prepared")
                     else:
@@ -64,7 +68,12 @@ class ServiceRecoveryBoundaries(unittest.TestCase):
                     with console(ex, ("auth-buy-prepared",)) as address:
                         status, page = request(address, "GET", "/authorization")
                         self.assertEqual(status, 200)
-                        self.assertIn(reason, page)
+                        reason_key = 'revoked' if invalidation == 'revoke' else 'sessionLost'
+                        self.assertIn('<tr><th>' + escape(WORDS['en']['reason']) + '</th><td>'
+                                      + escape(WORDS['en'][reason_key]) + '</td></tr>', page)
+                        self.assertIn('<tr><th>' + escape(WORDS['en']['applies']) + '</th><td>'
+                                      + escape(WORDS['en']['no']) + '</td></tr>', page)
+                        self.assertNotIn(reason, page)
                         for _ in range(2):
                             with self.assertRaises(DomainError) as caught:
                                 ex.execute_transfer(match, "transfer-prepared",
