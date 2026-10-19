@@ -145,12 +145,17 @@ class AggregateCheckpointStore:
         self._scope(scope)
         if type(expected_generation) is not int or not 0 <= expected_generation < 2 ** 63 - 1:
             raise CheckpointRefused("exact bounded previous generation required")
-        if (type(immutable_components) not in (tuple, list)
-                or any(type(name) is not str or name not in self.components
-                       for name in immutable_components)
+        if type(immutable_components) not in (tuple, list):
+            raise CheckpointRefused("exact immutable component names required")
+        immutable_components = tuple(immutable_components)
+        if (any(type(name) is not str or name not in self.components
+                for name in immutable_components)
                 or len(set(immutable_components)) != len(immutable_components)):
             raise CheckpointRefused("exact immutable component names required")
-        payload = self._encode(values)
+        # Bind validation, the immutable comparison and payload to one captured
+        # map of immutable bytes, even if the caller later mutates its dict.
+        captured = values.copy() if type(values) is dict else values
+        payload = self._encode(captured)
         digest = hashlib.sha256(payload.encode()).hexdigest()
         self._boundary()
         db = self.connection
@@ -162,7 +167,7 @@ class AggregateCheckpointStore:
                 raise CheckpointRefused("stale checkpoint generation")
             # Compare the existing declaration under the same write transaction
             # and generation check that protects the subsequent mutation.
-            if previous is not None and any(previous["components"][name] != values[name]
+            if previous is not None and any(previous["components"][name] != captured[name]
                                              for name in immutable_components):
                 raise CheckpointComponentConflict("immutable checkpoint component differs")
             generation = actual + 1

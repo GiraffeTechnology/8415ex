@@ -34,7 +34,7 @@ No native callback, signing or dispatch is accepted. The result explicitly grant
 no execution authority and says completeExchangeRecovery=false. Original domain
 mutation wiring and full recovery/runtime acceptance remain open.
 
-Eleven synthetic persistence integration methods are authored for reopen fidelity,
+Twelve synthetic persistence integration methods are authored for reopen fidelity,
 cross-receipt/source binding refusal, per-leg principal links, incomplete histories,
 generation conflicts, read identity, immutable release prefixes and detached UNKNOWN/blocked facts. They are
 Their execution results are tracked separately by exact commit and CI run. No local

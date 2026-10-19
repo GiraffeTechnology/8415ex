@@ -5,7 +5,9 @@ import sqlite3
 import tempfile
 import unittest
 
-from exchange.aggregate_checkpoint import AggregateCheckpointStore, CheckpointRefused
+from exchange.aggregate_checkpoint import AggregateCheckpointStore, CheckpointRefused, CheckpointComponentConflict
+from exchange.receipt_checkpoint_codec import encode_receipt_facts
+from exchange.operational_facts_codec import encode_operational_facts
 from exchange.fixtures import A, B, receipt
 from exchange.ledger import Transfer
 from exchange.model import Asset
@@ -168,3 +170,27 @@ class ReceiptFactCheckpointTests(unittest.TestCase):
         self.assertEqual(recovered["facts"]["escrows"][0].payment_status, "unknown")
         self.assertFalse(recovered["executionAuthorized"])
         self.assertFalse(recovered["completeExchangeRecovery"])
+
+    def test_caller_map_mutation_cannot_hide_a_different_encoded_declaration(self):
+        adapter = self.adapter()
+        adapter.save(self.original, self.facts, expected_generation=0)
+        before = self.db.execute("SELECT * FROM ex_aggregate_checkpoint").fetchall()
+        original_bytes = encode_receipt_facts(self.original)
+        values = {
+            "declaration": encode_receipt_facts(replace(self.original, commodity_name="Different terms")),
+            "operations": encode_operational_facts(self.facts),
+        }
+        def mutate_on_begin(statement):
+            if statement == "BEGIN IMMEDIATE":
+                values["declaration"] = original_bytes
+        self.db.set_trace_callback(mutate_on_begin)
+        try:
+            with self.assertRaises(CheckpointComponentConflict):
+                adapter.store.save(self.original.receipt_id, values, expected_generation=1,
+                                   immutable_components=("declaration",))
+        finally:
+            self.db.set_trace_callback(None)
+        self.assertFalse(self.db.in_transaction)
+        self.assertEqual(self.db.execute("SELECT * FROM ex_aggregate_checkpoint").fetchall(), before)
+        self.assertEqual(adapter.read(self.original.receipt_id,
+                                      expected_asset=self.original.asset)["generation"], 1)
