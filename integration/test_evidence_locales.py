@@ -11,6 +11,9 @@ from integration import test_integrated_runtime_inputs as mounted
 from integration.test_integrated_workbench_http import COMMIT, TREE
 
 
+TRANSACTION = '0x' + '9e' * 32
+
+
 class EvidenceDomain:
     def __init__(self):
         self.calls = 0
@@ -64,7 +67,7 @@ class EvidenceLocaleTests(unittest.TestCase):
 
     def test_all_six_locales_keep_original_evidence_values_and_boundaries(self):
         run = {'scenario': 'DEMO-01', 'runId': 'demo-' + 'a' * 32,
-               'commit': COMMIT, 'tree': TREE, 'transactionHashes': ['0x' + 'b' * 64]}
+               'commit': COMMIT, 'tree': TREE, 'transactionHashes': [TRANSACTION]}
         for locale, words in WORDS.items():
             with self.subTest(locale=locale):
                 domain = EvidenceDomain()
@@ -74,7 +77,7 @@ class EvidenceLocaleTests(unittest.TestCase):
                 self.assertIn(words['boundary'], page)
                 self.assertIn(COMMIT, page)
                 self.assertIn(TREE, page)
-                self.assertIn('0x' + 'b' * 64, page)
+                self.assertIn(TRANSACTION, page)
                 self.assertIn('<td>11155111</td>', page)
                 self.assertIn('<td>2</td>', page)
                 self.assertEqual(domain.calls, 1)

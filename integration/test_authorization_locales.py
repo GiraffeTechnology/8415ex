@@ -25,7 +25,8 @@ class AuthorizationLocalesTests(unittest.TestCase):
                 self.assertIn(escape(words[key]), page)
             self.assertIn('<td>' + str(grant.max_amount) + '</td>', page)
             self.assertIn('<td>' + str(grant.expires_at) + '</td>', page)
-            self.assertIn('<td>' + F.QUOTE_ASSET + '</td>', page)
+            self.assertIn('<td>' + escape(words['unknown']) + '</td>', page)
+            self.assertNotIn(F.QUOTE_ASSET, page)
             for private in ('PRIVATE-GRANT', 'session-a', F.A, F.B):
                 self.assertNotIn(private, page)
             self.assertNotIn('<form', page)
