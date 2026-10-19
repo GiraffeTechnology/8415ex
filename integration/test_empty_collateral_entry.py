@@ -119,3 +119,12 @@ class EmptyCollateralEntryTests(unittest.TestCase):
             self.server("yes")
         mount_collateral_selection(server, allow_empty_catalogue=True)
         self.assertEqual(self.request(server, "/collateral?lang=en")[0], 200)
+
+    def test_collateral_post_preserves_host_refusal_before_locale_or_route_handling(self):
+        server = self.server(True)
+        status, body, headers = self.request(server, "/collateral?lang=ja", "POST",
+                                             headers={"Host": "different.example"})
+        self.assertEqual(status, 421)
+        self.assertEqual(body, "host refused")
+        self.assertEqual(headers.get("Connection"), "close")
+        self.assertEqual(server.nft_directory.choices(), [])

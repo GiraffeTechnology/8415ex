@@ -60,6 +60,9 @@ def mount_collateral_selection(server, *, allow_empty_catalogue=False):
             if request.path != "/collateral":
                 return super().do_POST()
             self.close_connection = True
+            if not self.host_ok():
+                self.send_body(421, "host refused", Connection="close")
+                return
             try:
                 query = parse_qs(request.query, max_num_fields=4)
                 locale = query.get("lang", ["en"])[0]
