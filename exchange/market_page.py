@@ -50,7 +50,15 @@ MARKET_STYLE = """
 """
 
 
-def render_market(entries, reference, locale="en", query=""):
+EMPTY_MODE = {"en": "Read-only catalogue", "zh-Hans": "只读目录", "zh-Hant": "唯讀目錄",
+              "fr": "Catalogue en lecture seule", "es": "Catálogo de solo lectura", "ja": "読み取り専用一覧"}
+
+
+def render_market(entries, reference, locale="en", query="", *, empty_catalogue=False):
+    if type(empty_catalogue) is not bool:
+        raise ValueError("explicit catalogue mode required")
+    if empty_catalogue and entries:
+        raise ValueError("empty catalogue cannot contain receipt records")
     if locale not in LOCALES or len(query) > 64:
         raise ValueError("market locale or search refused")
     t, common, states = WORDS[locale], LOCALES[locale], STATES[locale]
@@ -80,7 +88,7 @@ def render_market(entries, reference, locale="en", query=""):
     languages = ''.join('<a href="/market?' + e(urlencode({"lang": key, "q": query})) + '" lang="' + key + '">' + key + '</a>' for key in LOCALES)
     return ('<!doctype html><html lang="' + locale + '"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             '<title>8415EX · ' + e(t[0]) + '</title><style>' + STYLE + MARKET_STYLE + '</style><body><main><header class="market-top">'
-            '<img src="/assets/cube.svg" width="20" height="20" alt=""><b>8415EX</b><span class="badge">DEMO</span><a href="#nfts">' + e(t[0])
+            '<img src="/assets/cube.svg" width="20" height="20" alt=""><b>8415EX</b><span class="badge">' + e(EMPTY_MODE[locale] if empty_catalogue else "DEMO") + '</span><a href="#nfts">' + e(t[0])
             + '</a><span>' + e(t[1]) + '</span><span>' + e(t[2]) + '</span><span>' + e(t[3]) + '</span><nav>' + languages + '</nav></header>'
             '<p class="notice">' + e(t[7]) + '</p><section><h2>' + e(t[4]) + '</h2><p class="missing">' + e(status_label)
             + '</p><p class="quote">' + e(reference.get("price") if reference.get("price") is not None else common[3])

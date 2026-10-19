@@ -4,7 +4,9 @@ from types import MappingProxyType
 
 
 class NftDirectory:
-    def __init__(self, bindings):
+    def __init__(self, bindings, *, allow_empty=False):
+        if type(allow_empty) is not bool:
+            raise ValueError("explicit empty directory policy required")
         rows = {}
         for binding in bindings:
             receipt_id = binding.receipt_id
@@ -14,7 +16,7 @@ class NftDirectory:
             if key in rows:
                 raise ValueError("duplicate receipt binding")
             rows[key] = binding
-        if not rows:
+        if not rows and not allow_empty:
             raise ValueError("at least one original receipt binding required")
         self._bindings = MappingProxyType(rows)
 
