@@ -143,18 +143,19 @@ class RefundsAndGas(unittest.TestCase):
         self.assertEqual(report["segments"][0]["gasTotal"], "0")
 
 
-class ReturnDoesNotWalkIntermediates(unittest.TestCase):
+class ReturnWalksOriginalSuffix(unittest.TestCase):
     """T-20: a zero-balance intermediate wallet changes no obligation."""
 
-    def test_the_return_is_one_operation_to_the_boundary(self):
+    def test_the_return_has_one_operation_per_reverse_chain_hop(self):
         exchange, _, _ = refused_at_ab()
-        exchange.begin_rollback("rcpt-8415-0001", 0, F.rollback_authority(exchange, 0, "rb-1"))
+        state = exchange.begin_rollback("rcpt-8415-0001", 0, F.rollback_authority(exchange, 0, "rb-1"))
         exchange.advance_rollback("rcpt-8415-0001")
-        record = exchange.asset_control.lookup("return:rcpt-8415-0001:rb-1")
-        self.assertEqual(record["operations"], 1)
-        self.assertFalse(record["walkedIntermediateWallets"])
-        self.assertFalse(record["requiredIntermediateGas"])
-        self.assertEqual(exchange.asset_control.hops_walked, 0)
+        records = [exchange.asset_control.lookup(hop["key"]) for hop in state["assetHops"]]
+        self.assertEqual([(record["fromAccount"], record["toAccount"]) for record in records],
+                         [(F.D, F.C), (F.C, F.B), (F.B, F.A)])
+        self.assertTrue(all(record["operations"] == 1 for record in records))
+        self.assertTrue(all(not record["requiredIntermediateGas"] for record in records))
+        self.assertEqual(exchange.asset_control.hops_walked, 3)
 
     def test_zero_balances_at_b_and_c_do_not_block_the_return(self):
         exchange, _, _ = refused_at_ab(gas_budgets={F.B: 0, F.C: 0})
@@ -207,7 +208,7 @@ class ShortfallStaysBlocked(unittest.TestCase):
         self.assertTrue(report["complete"])
         self.assertEqual(self.exchange.owner_of("rcpt-8415-0001"), F.A)
         self.assertEqual(self.exchange.payments.movements, 3, "no refund was repeated")
-        self.assertEqual(self.exchange.asset_control.returns, 1)
+        self.assertEqual(self.exchange.asset_control.returns, 3)
 
 
 class InterruptionAndLateResults(unittest.TestCase):
@@ -233,16 +234,19 @@ class InterruptionAndLateResults(unittest.TestCase):
         self.assertIn("unknown", [entry["paymentStatus"] for entry in resumed])
 
     def test_an_unknown_asset_return_is_not_sent_twice(self):
-        exchange, _, _ = refused_at_ab(return_outcomes={"return:rcpt-8415-0001:rb-1": "unknown"})
-        exchange.begin_rollback("rcpt-8415-0001", 0, F.rollback_authority(exchange, 0, "rb-1"))
+        exchange, _, _ = refused_at_ab()
+        state = exchange.begin_rollback("rcpt-8415-0001", 0, F.rollback_authority(exchange, 0, "rb-1"))
+        first_key = state["assetHops"][0]["key"]
+        exchange.asset_control._outcomes[first_key] = "unknown"
         exchange.advance_rollback("rcpt-8415-0001")
         exchange.advance_rollback("rcpt-8415-0001")
         self.assertEqual(exchange.asset_control.returns, 0)
-        exchange.asset_control.resolve_unknown("return:rcpt-8415-0001:rb-1", "returned")
+        exchange.asset_control.resolve_unknown(first_key, "returned")
         report = exchange.advance_rollback("rcpt-8415-0001")
         self.assertTrue(report["complete"])
-        self.assertEqual(exchange.asset_control.returns, 0,
-                         "the enquiry recorded the return; nothing was resent")
+        self.assertEqual(exchange.asset_control.returns, 2,
+                         "the first hop was reconciled; only the next two hops were sent")
+        self.assertEqual(len(exchange.asset_control._records), 3)
 
     def test_an_enquiry_about_a_refund_never_becomes_a_release(self):
         """Regression: a resumed enquiry must apply the outcome the payment was
