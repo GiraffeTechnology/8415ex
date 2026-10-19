@@ -143,19 +143,20 @@ class RefundsAndGas(unittest.TestCase):
         self.assertEqual(report["segments"][0]["gasTotal"], "0")
 
 
-class ReturnWalksOriginalSuffix(unittest.TestCase):
+class DirectReturnPreservesSuffix(unittest.TestCase):
     """T-20: a zero-balance intermediate wallet changes no obligation."""
 
-    def test_the_return_has_one_operation_per_reverse_chain_hop(self):
+    def test_the_return_uses_one_direct_control_operation(self):
         exchange, _, _ = refused_at_ab()
         state = exchange.begin_rollback("rcpt-8415-0001", 0, F.rollback_authority(exchange, 0, "rb-1"))
+        key = "return:rcpt-8415-0001:" + state["authorityId"]
         exchange.advance_rollback("rcpt-8415-0001")
-        records = [exchange.asset_control.lookup(hop["key"]) for hop in state["assetHops"]]
-        self.assertEqual([(record["fromAccount"], record["toAccount"]) for record in records],
-                         [(F.D, F.C), (F.C, F.B), (F.B, F.A)])
-        self.assertTrue(all(record["operations"] == 1 for record in records))
-        self.assertTrue(all(not record["requiredIntermediateGas"] for record in records))
-        self.assertEqual(exchange.asset_control.hops_walked, 3)
+        record = exchange.asset_control.lookup(key)
+        self.assertEqual((record["fromAccount"], record["toAccount"]), (F.D, F.A))
+        self.assertEqual(record["operations"], 1)
+        self.assertFalse(record["requiredIntermediateGas"])
+        self.assertFalse(record["walkedIntermediateWallets"])
+        self.assertEqual(exchange.asset_control.hops_walked, 0)
 
     def test_zero_balances_at_b_and_c_do_not_block_the_return(self):
         exchange, _, _ = refused_at_ab(gas_budgets={F.B: 0, F.C: 0})
@@ -208,7 +209,7 @@ class ShortfallStaysBlocked(unittest.TestCase):
         self.assertTrue(report["complete"])
         self.assertEqual(self.exchange.owner_of("rcpt-8415-0001"), F.A)
         self.assertEqual(self.exchange.payments.movements, 3, "no refund was repeated")
-        self.assertEqual(self.exchange.asset_control.returns, 3)
+        self.assertEqual(self.exchange.asset_control.returns, 1)
 
 
 class InterruptionAndLateResults(unittest.TestCase):
@@ -236,7 +237,7 @@ class InterruptionAndLateResults(unittest.TestCase):
     def test_an_unknown_asset_return_is_not_sent_twice(self):
         exchange, _, _ = refused_at_ab()
         state = exchange.begin_rollback("rcpt-8415-0001", 0, F.rollback_authority(exchange, 0, "rb-1"))
-        first_key = state["assetHops"][0]["key"]
+        first_key = "return:rcpt-8415-0001:" + state["authorityId"]
         exchange.asset_control._outcomes[first_key] = "unknown"
         exchange.advance_rollback("rcpt-8415-0001")
         exchange.advance_rollback("rcpt-8415-0001")
@@ -388,8 +389,8 @@ class DuplicateAndReorderedEvents(unittest.TestCase):
             report = exchange.advance_rollback("rcpt-8415-0001")
         self.assertTrue(report["complete"])
         self.assertEqual(exchange.payments.movements, 3)
-        self.assertEqual(exchange.asset_control.returns, 3)
-        self.assertEqual(exchange.asset_control.hops_walked, 3)
+        self.assertEqual(exchange.asset_control.returns, 1)
+        self.assertEqual(exchange.asset_control.hops_walked, 0)
 
     def test_a_replayed_release_after_a_refund_is_refused(self):
         exchange, _, _ = refused_at_ab()
@@ -442,12 +443,10 @@ class RollbackConsole(unittest.TestCase):
         self.assertIn("position 1", html)
         self.assertEqual(self.exchange.rollback_report("rcpt-8415-0001")["returnBoundaryAccount"], F.B)
 
-    def test_the_page_names_each_original_reverse_hop(self):
+    def test_the_page_names_the_direct_return_boundary(self):
         html = self._page()
-        self.assertIn("original reverse hops", html)
-        self.assertIn("3 → 2", html)
-        self.assertIn("2 → 1", html)
-        self.assertNotIn("in one control operation", html)
+        self.assertIn("in one control operation", html)
+        self.assertNotIn("original reverse hops", html)
         self.assertNotIn("without walking the intermediate", html)
 
     def test_the_page_lists_the_withdrawn_mechanisms_as_unused(self):

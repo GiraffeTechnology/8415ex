@@ -144,12 +144,12 @@ class ReceiptBoundaries(unittest.TestCase):
         self.assertTrue(any('disagrees' in why for why in b['blocking']))
         with self.assertRaises(ValueError): receipt.build(b)
 
-    def test_register_preserves_thirteen_published_decisions_without_current_acceptance(self):
+    def test_register_preserves_sixteen_published_decisions_without_current_acceptance(self):
         r = decisions.register()
-        self.assertEqual([d['id'] for d in r['decisions']], [f'D-{n:02}' for n in range(1,14)])
-        self.assertEqual(r['publishedBaselineVersion'], '1.3')
-        self.assertEqual(r['currentCompletePRDVersion'], '1.4.1')
-        self.assertFalse(r['completeCurrentContractLoaded'])
+        self.assertEqual([d['id'] for d in r['decisions']], [f'D-{n:02}' for n in range(1,17)])
+        self.assertEqual(r['publishedBaselineVersion'], '1.4')
+        self.assertEqual(r['currentCompletePRDVersion'], '1.4')
+        self.assertTrue(r['completeCurrentContractLoaded'])
         self.assertEqual(r['productStatus'], 'OPEN')
         self.assertEqual(r['acceptedCases'], [])
         self.assertEqual(r['globalBlockers'], [])

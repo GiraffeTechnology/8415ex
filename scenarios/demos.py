@@ -324,8 +324,8 @@ def demo_03(recorder):
                     {"state": "complete", "complete": True, "outstanding": 0},
                     {"state": report["state"], "complete": report["complete"],
                      "outstanding": len(report["outstandingSteps"])})
-    recorder.expect("one refund movement per segment and each original reverse hop", ("T-19",),
-                    {"payments": 3, "returns": 3},
+    recorder.expect("one refund per segment and one direct boundary return", ("T-19",),
+                    {"payments": 3, "returns": 1},
                     {"payments": exchange.payments.movements,
                      "returns": exchange.asset_control.returns})
     recorder.expect("history is preserved rather than erased", ("T-17",),
@@ -408,7 +408,8 @@ def demo_05(recorder):
     exchange, _ = F.rollback_chain_to_d(registration_path=path,
                                         gas_budgets={F.B: 0, F.C: 0, F.D: 0})
     _setup(recorder, exchange, dict(PRICES),
-           {"budgets": {"B": 0, "C": 0, "D": 0},
+           {"trade": GAS["trade"], "refund": GAS["refund"],
+            "shared-return": GAS["shared-return"], "budgets": {"B": 0, "C": 0, "D": 0},
             "note": "a fixture ceiling used to exercise the shortfall path; not a fee mechanism"})
     requests = F.submit_all(exchange)
     F.refuse(exchange, requests[0], "res-ab-refused")
@@ -449,17 +450,17 @@ def demo_05(recorder):
                     {"complete": True, "owner": F.A}, 
                     {"complete": second["complete"], "owner": exchange.owner_of(RECEIPT)})
     recorder.expect("nothing was repeated across the interruption", ("T-23",),
-                    {"payments": 3, "returns": 3},
+                    {"payments": 3, "returns": 1},
                     {"payments": exchange.payments.movements,
                      "returns": exchange.asset_control.returns})
     _record_common(recorder, exchange,
                    {"owner": F.A, "ownerPosition": 0, "holder": F.A, "holderPosition": 0,
                     "registeredPrefixLegs": 0, "outstandingLegs": 3}, ("T-23", "T-02"))
-    records = [exchange.asset_control.lookup(hop["key"]) for hop in second["assetHops"]]
-    recorder.expect("each original reverse hop needs no intermediate gas", ("T-20",),
-                    [(F.D, F.C, 1, False), (F.C, F.B, 1, False), (F.B, F.A, 1, False)],
-                    [(row["fromAccount"], row["toAccount"], row["operations"],
-                      row["requiredIntermediateGas"]) for row in records])
+    row = exchange.asset_control.lookup("return:" + RECEIPT + ":" + second["authorityId"])
+    recorder.expect("one direct return needs no intermediate wallet gas", ("T-20",),
+                    (F.D, F.A, 1, False, False),
+                    (row["fromAccount"], row["toAccount"], row["operations"],
+                     row["requiredIntermediateGas"], row["walkedIntermediateWallets"]))
     recorder.expect("each leg's buyer still bears that leg's gas", ("T-21",),
                     {0: F.B, 1: F.C, 2: F.D},
                     {entry["legIndex"]: entry["gasBorneBy"] for entry in second["funds"]})
@@ -501,9 +502,11 @@ def demo_06(recorder):
     recovery = exchange.advance_rollback(RECEIPT)
     recorder.step("unfinished suffix recovered", recovery=recovery,
                   segmentFunds=_segment_funds(exchange), **_positions(exchange))
-    recorder.expect("only original reverse hops return to the current holder", ("T-24",),
-                    [(3, 2), (2, 1)],
-                    [(hop["fromPosition"], hop["toPosition"]) for hop in recovery["assetHops"]])
+    returned = exchange.asset_control.lookup("return:" + RECEIPT + ":" + recovery["authorityId"])
+    recorder.expect("one direct operation returns to the current holder", ("T-24",),
+                    (F.D, F.B, 1, False),
+                    (returned["fromAccount"], returned["toAccount"], returned["operations"],
+                     returned["walkedIntermediateWallets"]))
     recorder.expect("the registered prefix and released payment stay unchanged", ("T-24",),
                     prefix, exchange.reconciliation(RECEIPT)["segments"][0])
     _record_common(recorder, exchange,
@@ -521,15 +524,15 @@ def demo_06(recorder):
 
 DEMOS = (
     Scenario("DEMO-01", "single trade, registration, independent release and bill history",
-             ("T-02", "T-11", "T-25", "T-32", "T-33"), MAIN_PATHS["DEMO-01"], demo_01, prd_version="1.4.1"),
+             ("T-02", "T-11", "T-25", "T-32", "T-33"), MAIN_PATHS["DEMO-01"], demo_01, prd_version="1.4"),
     Scenario("DEMO-02", "serial registration with independent prefix release",
-             ("T-03", "T-04", "T-12", "T-13"), MAIN_PATHS["DEMO-02"], demo_02, prd_version="1.4.1"),
+             ("T-03", "T-04", "T-12", "T-13"), MAIN_PATHS["DEMO-02"], demo_02, prd_version="1.4"),
     Scenario("DEMO-03", "first-hop refusal returns the whole suffix to the origin",
-             ("T-17", "T-19", "T-21"), MAIN_PATHS["DEMO-03"], demo_03, prd_version="1.4.1"),
+             ("T-17", "T-19", "T-21"), MAIN_PATHS["DEMO-03"], demo_03, prd_version="1.4"),
     Scenario("DEMO-04", "finalized prefix survives a later refusal",
-             ("T-18", "T-19", "T-29"), MAIN_PATHS["DEMO-04"], demo_04, prd_version="1.4.1"),
+             ("T-18", "T-19", "T-29"), MAIN_PATHS["DEMO-04"], demo_04, prd_version="1.4"),
     Scenario("DEMO-05", "intermediate wallets hold no gas budget",
-             ("T-20", "T-21", "T-22", "T-23"), MAIN_PATHS["DEMO-05"], demo_05, prd_version="1.4.1"),
+             ("T-20", "T-21", "T-22", "T-23"), MAIN_PATHS["DEMO-05"], demo_05, prd_version="1.4"),
     Scenario("DEMO-06", "cutoff refuses a new trade while in-flight work continues",
-             ("T-24", "T-25", "T-32", "T-33"), MAIN_PATHS["DEMO-06"], demo_06, prd_version="1.4.1"),
+             ("T-24", "T-25", "T-32", "T-33"), MAIN_PATHS["DEMO-06"], demo_06, prd_version="1.4"),
 )

@@ -140,13 +140,14 @@ def build(records):
                             'No institutional cooperation implied. This file does not execute actions.</p>'
                             + ''.join(html_sections) + '</body></html>').encode()
     files["README.md"] = (
-        "# Captured local demonstration inputs\n\n"
+        "# Captured local demonstration inputs\n"
+        "\n"
         "Use replay.html to read the draft scenes; slides.md supplies editable presentation text.\n"
         "captions.vtt and scenes.json are film inputs, not a rendered film.\n"
         "Each evidence JSON preserves setup, prices, gas conditions, steps, expectations and failures.\n"
         "The manifest hashes actual member bytes; it does not independently certify execution.\n"
-        "No raw private requirements, internal configuration or credentials are included.\n"
-        "A reviewed rendering on existing approved Linux is still required for final PPT/video.\n"
+        "No credentials are included.\n"
+        "A reviewed rendering on the supported Linux configuration is still required for final PPT/video.\n"
     ).encode()
     manifest = {"schema": "8415ex-demo-materials/1", "source": source,
                 "kind": "LOCAL_SIMULATION_CONTENT_DRAFT",

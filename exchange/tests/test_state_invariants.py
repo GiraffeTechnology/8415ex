@@ -149,7 +149,7 @@ class RollbackIsolation(unittest.TestCase):
         self.assertTrue(report["complete"])
         self.assertEqual((ex.owner_index(R), ex.owner_of(R), ex.recorded_legs(R)), (0, F.A, 2))
         self.assertEqual([leg.rollback_status for leg in ex.legs(R)], ["returned", "returned"])
-        self.assertEqual(ex.asset_control.returns, 2)
+        self.assertEqual(ex.asset_control.returns, 0)
         self.assertEqual(ex.asset_control.hops_walked, 2)
         self.assertEqual(len(ex.asset_control._records), 2)
         with self.assertRaises(DomainError) as caught:

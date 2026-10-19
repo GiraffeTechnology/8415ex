@@ -19,16 +19,16 @@ class SectionLedger(unittest.TestCase):
 
     def test_exact_published_baseline_is_distinct_from_current_complete_contract(self):
         row = prd.build(ROOT)
-        self.assertEqual(row["publishedBaselineVersion"], "1.3")
-        self.assertEqual(row["currentCompletePRDVersion"], "1.4.1")
-        self.assertFalse(row["completeCurrentContractLoaded"])
+        self.assertEqual(row["publishedBaselineVersion"], "1.4")
+        self.assertEqual(row["currentCompletePRDVersion"], "1.4")
+        self.assertTrue(row["completeCurrentContractLoaded"])
         self.assertFalse(row["baselinePassIsCurrentPass"])
         self.assertFalse(row["historicalPassInherited"])
 
     def test_all_published_requirement_identifiers_remain_distinct(self):
         row = prd.build(ROOT)
         ids = [item["id"] for item in row["requirements"]]
-        self.assertEqual(len(ids), 91)
+        self.assertEqual(len(ids), 111)
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual(ids, [item["id"] for item in current_prd.load(ROOT)["requirements"]])
 
@@ -86,5 +86,6 @@ class WhenItDrifts(unittest.TestCase):
 
     def test_failed_pin_is_not_replaced_by_structural_success(self):
         with patch.object(prd, "report", side_effect=ValueError("pin mismatch")):
-            with self.assertRaisesRegex(ValueError, "pin mismatch"):
-                prd.build(ROOT)
+            row = prd.build(ROOT)
+        self.assertFalse(row["consistent"])
+        self.assertEqual(row["findings"][0]["detail"], "pin mismatch")

@@ -1,7 +1,7 @@
-"""Verify the historical published baseline, without claiming full current intake.
+"""Verify the complete published product contract without claiming acceptance.
 
-The complete current v1.4 contract is privately controlled. These public v1.3
-bytes remain immutable historical inputs, not proof of v1.4 semantic coverage.
+The exact current PRD and its structural index are independently byte-bound.
+No requirement row, prior run or document identity certifies runtime coverage.
 """
 import argparse
 import hashlib
@@ -10,11 +10,12 @@ import json
 import pathlib
 import sys
 
-VERSION = "1.3"
-CURRENT_COMPLETE_VERSION = "1.4.1"
+VERSION = "1.4"
+CURRENT_COMPLETE_VERSION = "1.4"
+CURRENT_PUBLICATION = (97728, "b3989a91f1d3f7a1de6812fa05777d0dfdf84a4eee4a7909bdda77d1196032ce")
 PINNED = {
-    "prd": (73558, "1ce035ef10eb4e09c976dc4a070299afab36fef213b775efee922da19e9479cf"),
-    "executionPlan": (77644, "1f995c74355281c0d06e59a2f0ca3569299910742f59c75e7f661687e83efcc3"),
+    "prd": CURRENT_PUBLICATION,
+    "executionPlan": (94921, "77678d33c7a06b1c2b8bcd2f25a540273e3b7e5b7852589e89ae2f76b5efdb39"),
 }
 RETIRED_IDS = frozenset({
     "physical-collection", "late-receipt-wait", "post-registration-payment",
@@ -39,16 +40,19 @@ def _json(raw):
 
 def load(root=None):
     root = pathlib.Path(root) if root is not None else resources.files(__package__).parent
+    current_raw = (root / "PRD.md").read_bytes()
+    if (len(current_raw), hashlib.sha256(current_raw).hexdigest()) != CURRENT_PUBLICATION:
+        raise ValueError("current public PRD byte identity mismatch")
     lock = _json((root / "config/prd-lock.json").read_bytes())
     if lock.get("schema") != "8415ex-prd-lock/1" or lock.get("version") != VERSION:
-        raise ValueError("historical published PRD baseline version pin is missing or stale")
+        raise ValueError("current published PRD version pin is missing or stale")
     payloads = {}
     for key, expected_path in (("prd", "PRD.md"), ("executionPlan", "config/execution-plan.json")):
         item = lock[key]
         if item.get("path") != expected_path:
             raise ValueError("unexpected product-contract path")
         if (item.get("bytes"), item.get("sha256")) != PINNED[key]:
-            raise ValueError("historical published v1.3 identity was replaced: " + expected_path)
+            raise ValueError("current published identity was replaced: " + expected_path)
         raw = (root / expected_path).read_bytes()
         if len(raw) != item["bytes"] or hashlib.sha256(raw).hexdigest() != item["sha256"]:
             raise ValueError("product-contract byte identity mismatch: " + expected_path)
@@ -57,8 +61,8 @@ def load(root=None):
     if plan.get("schema") != "8415ex-execution-plan/1" or plan.get("version") != VERSION:
         raise ValueError("execution plan is from a different PRD version")
     for key, expected in (
-        ("cases", {"T-%02d" % n for n in range(1, 69)}),
-        ("decisions", {"D-%02d" % n for n in range(1, 14)}),
+        ("cases", {"T-%02d" % n for n in range(1, 85)}),
+        ("decisions", {"D-%02d" % n for n in range(1, 17)}),
         ("demonstrations", set(LEGACY_DEMOS)), ("stages", set(range(6))),
     ):
         ids = [entry["id"] for entry in plan[key]]
@@ -67,7 +71,7 @@ def load(root=None):
     if plan["sections"] != list(range(1, 22)):
         raise ValueError("the full 21-section contract is required")
     declared = [entry["id"] for entry in plan["requirements"]]
-    if len(declared) != 91 or len(declared) != len(set(declared)):
+    if len(declared) != 111 or len(declared) != len(set(declared)):
         raise ValueError("incomplete or duplicated requirement ledger")
     if any(not set(case["requirementIds"]) <= set(declared) for case in plan["cases"]):
         raise ValueError("case refers to undeclared requirement")
@@ -86,7 +90,9 @@ def report(kind="plan", root=None):
     plan = load(root)
     common = {"schema": "8415ex-current-prd-report/1", "version": plan["version"],
               "publishedBaselineVersion": VERSION, "currentCompletePRDVersion": CURRENT_COMPLETE_VERSION,
-              "coverage": "HISTORICAL_PUBLISHED_BASELINE_ONLY", "completeCurrentContractLoaded": False,
+              "currentPublication": {"path": "PRD.md", "bytes": CURRENT_PUBLICATION[0],
+                                     "sha256": CURRENT_PUBLICATION[1]},
+              "coverage": "CURRENT_PUBLISHED_REQUIREMENTS_ONLY", "completeCurrentContractLoaded": True,
               "currentSemanticAcceptance": "OPEN", "baselinePassIsCurrentPass": False,
               "productStatus": "OPEN", "evidenceKind": "REQUIREMENTS_ONLY",
               "acceptedCases": [], "historicalPassInherited": False,
@@ -114,19 +120,19 @@ def require_current_scenario(scenario_id, revision=None):
     load()
     if scenario_id in LEGACY_DEMOS and revision != CURRENT_COMPLETE_VERSION:
         raise ValueError("PRD_MIGRATION_REQUIRED: " + scenario_id
-                         + " requires migration against the complete current v1.4.1 contract; "
-                         "the pinned public v1.3 plan is historical only. "
+                         + " requires migration against the complete current v1.4 contract; "
+                         "requirements metadata alone cannot migrate an executable scenario. "
                          "No legacy collection/burn/payment/grace step was executed.")
 
 
 def blocked(command, root=None):
     plan = load(root)
     return {"schema": "8415ex-command-migration/1", "version": CURRENT_COMPLETE_VERSION,
-            "publishedBaselineVersion": VERSION, "completeCurrentContractLoaded": False,
+            "publishedBaselineVersion": VERSION, "completeCurrentContractLoaded": True,
             "command": command, "status": "PRD_MIGRATION_REQUIRED", "executed": False,
             "allPassed": False, "productStatus": "OPEN",
             "reason": "This legacy path has not been accepted against the complete current v1.4 contract. "
-                      "The public v1.3 plan remains historical; never inherit old PASS.",
+                      "Requirements are not executed scenarios; never inherit old PASS.",
             "retiredRequirements": plan["retiredRequirements"],
             "independentWorkMayContinue": True}
 

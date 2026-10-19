@@ -1,7 +1,6 @@
 {
   "schema": "8415ex-execution-plan/1",
-  "version": "1.3",
-  "releaseDate": "2026-10-18",
+  "version": "1.4",
   "status": "OPEN",
   "sections": [
     1,
@@ -29,7 +28,7 @@
   "requirements": [
     {
       "id": "EX-SCOPE-01",
-      "rule": "Infrastructure, without operating a centralized exchange business.",
+      "rule": "A Web3 infrastructure DEMO simulating an ordinary commodity spot intermediary, with cryptocurrency and commodity-market presentation; do not claim to operate a licensed centralized exchange or real financial service.",
       "status": "CONFIRMED"
     },
     {
@@ -85,6 +84,36 @@
     {
       "id": "EX-SCOPE-12",
       "rule": "A holder possessing the original NFT may atomically burn it and mint a replacement under the remint conditions. New terms may be added, removed or changed before the new mint; retain bidirectional identity and complete history.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-SCOPE-13",
+      "rule": "Demonstrate hedging, collateral and arbitrage scenarios involving BTC/ETH and whole soybean/iron-ore receipts; labels do not authorize financing, futures or guaranteed returns.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-SCOPE-14",
+      "rule": "Both cryptocurrency and commodity warehouse-receipt NFTs are confirmed collateral choices; do not restrict the scenario to crypto collateral only. Economic and execution parameters remain D-14.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-SCOPE-15",
+      "rule": "Continuously read and refresh real public commodity spot reference prices with traceable source values/times and fetch times. NFT quotes/trades may be simulated but must not impersonate external references.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-SCOPE-16",
+      "rule": "Market makers may submit ordinary quotes under the same currency, price-priority, FIFO and authorization rules; no privileged priority, AMM, incentives or return promise is implied.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-SCOPE-17",
+      "rule": "EX frontend covers markets, NFTs, trades and evidence. Exclude wallet asset overview, account, security, validator and Agent-permission-management pages while retaining transaction authorization and balance/fee checks.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-SCOPE-18",
+      "rule": "Align six UI languages with 8415wallet.com. Source candidates are en, zh-Hans, zh-Hant, fr, es and ja; verify live alignment separately. Cover every new state/error/explanation and preserve protocol identifiers.",
       "status": "CONFIRMED"
     },
     {
@@ -148,71 +177,6 @@
       "status": "CONFIRMED"
     },
     {
-      "id": "EX-SETTLE-01",
-      "rule": "Before a trade, fully freeze its own buyer principal in the one explicitly selected NFT0-allowed currency and the buyer-confirmed maximum ETH gas separately. No conversion, currency substitution or duplicate use of funds. Original effective freezes are reconciled, never debited again after registration.",
-      "status": "CONFIRMED"
-    },
-    {
-      "id": "EX-SETTLE-02",
-      "rule": "Release each eligible segment by ordered owner/holder positions and remove its rollback control without waiting for the entire chain.",
-      "status": "CONFIRMED"
-    },
-    {
-      "id": "EX-SETTLE-03",
-      "rule": "Keep seller, buyer, price, asset, registration sequence, principal, fees and rollback per segment; no later-funds subsidy.",
-      "status": "CONFIRMED"
-    },
-    {
-      "id": "EX-SETTLE-04",
-      "rule": "Bind release to genuine authorized Oracle chain source, asset, transfer and journal; historical registration and current holder observations remain distinguishable.",
-      "status": "CONFIRMED"
-    },
-    {
-      "id": "EX-SETTLE-05",
-      "rule": "Release already frozen principal; no second buyer payment or business-payment failure branch. Technical recovery cannot duplicate debit, release or gas.",
-      "status": "CONFIRMED"
-    },
-    {
-      "id": "EX-SETTLE-06",
-      "rule": "Quote, freeze, release and refund each leg in the one currency explicitly selected from its immutable NFT0 allowed set. Keep principal and ETH gas accounts separate; no conversion, substitution or summed multi-currency payment. ETH-priced principal and gas cannot consume the same funds twice.",
-      "status": "CONFIRMED"
-    },
-    {
-      "id": "EX-SETTLE-07",
-      "rule": "If available selected-currency funds cannot fully freeze the price, warn and stop before signing, execution and broadcast. Adequate ETH gas or other allowed currencies cannot replace this order principal.",
-      "status": "CONFIRMED"
-    },
-    {
-      "id": "EX-TIME-01",
-      "rule": "Record both deadlines at mint; stop new trading at the declared cutoff.",
-      "status": "CONFIRMED"
-    },
-    {
-      "id": "EX-TIME-02",
-      "rule": "Registration beyond trading cutoff fails the unregistered suffix and returns owner to effective holder; registration must also satisfy its own mint deadline.",
-      "status": "CONFIRMED"
-    },
-    {
-      "id": "EX-TIME-03",
-      "rule": "Use mint rules and authoritative Oracle ordering for deadline decisions; protect registered/settled prefix; no late-voucher grace or second-receipt wait.",
-      "status": "CONFIRMED"
-    },
-    {
-      "id": "EX-EXIT-01",
-      "rule": "EX completion is bill-of-lading transfer with full terms and Oracle-confirmed holder, without physical collection.",
-      "status": "CONFIRMED"
-    },
-    {
-      "id": "EX-EXIT-02",
-      "rule": "Off-chain parties handle collection, transport and warehouse exit; these are not EX completion/acceptance conditions.",
-      "status": "CONFIRMED"
-    },
-    {
-      "id": "EX-EXIT-03",
-      "rule": "Do not introduce physical-collection-driven burn. Authorized holder remint atomically burns the old NFT; retain old/new receipt, registration, trade and funds history and prevent duplicate valid asset mappings.",
-      "status": "CONFIRMED"
-    },
-    {
       "id": "EX-INV-01",
       "rule": "Only one valid ordered transfer head per receipt.",
       "status": "CONFIRMED"
@@ -273,6 +237,71 @@
       "status": "CONFIRMED"
     },
     {
+      "id": "EX-SETTLE-01",
+      "rule": "Before a trade, fully freeze its own buyer principal in the one explicitly selected NFT0-allowed currency and the buyer-confirmed maximum ETH gas separately. No conversion, currency substitution or duplicate use of funds. Original effective freezes are reconciled, never debited again after registration.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-SETTLE-02",
+      "rule": "Release each eligible segment by ordered owner/holder positions and remove its rollback control without waiting for the entire chain.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-SETTLE-03",
+      "rule": "Keep seller, buyer, price, asset, registration sequence, principal, fees and rollback per segment; no later-funds subsidy.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-SETTLE-04",
+      "rule": "Bind release to genuine authorized Oracle chain source, asset, transfer and journal; historical registration and current holder observations remain distinguishable.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-SETTLE-05",
+      "rule": "Release already frozen principal; no second buyer payment or business-payment failure branch. Technical recovery cannot duplicate debit, release or gas.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-TIME-01",
+      "rule": "Record both deadlines at mint; stop new trading at the declared cutoff.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-TIME-02",
+      "rule": "Registration beyond trading cutoff fails the unregistered suffix and returns owner to effective holder; registration must also satisfy its own mint deadline.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-TIME-03",
+      "rule": "Use mint rules and authoritative Oracle ordering for deadline decisions; protect registered/settled prefix; no late-voucher grace or second-receipt wait.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-EXIT-01",
+      "rule": "EX completion is bill-of-lading transfer with full terms and Oracle-confirmed holder, without physical collection.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-EXIT-02",
+      "rule": "Off-chain parties handle collection, transport and warehouse exit; these are not EX completion/acceptance conditions.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-EXIT-03",
+      "rule": "Do not introduce physical-collection-driven burn. Authorized holder remint atomically burns the old NFT; retain old/new receipt, registration, trade and funds history and prevent duplicate valid asset mappings.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-SETTLE-06",
+      "rule": "Quote, freeze, release and refund each leg in the one currency explicitly selected from its immutable NFT0 allowed set. Keep principal and ETH gas accounts separate; no conversion, substitution or summed multi-currency payment. ETH-priced principal and gas cannot consume the same funds twice.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-SETTLE-07",
+      "rule": "If available selected-currency funds cannot fully freeze the price, warn and stop before signing, execution and broadcast. Adequate ETH gas or other allowed currencies cannot replace this order principal.",
+      "status": "CONFIRMED"
+    },
+    {
       "id": "EX-INV-13",
       "rule": "One or more allowed currencies are immutable per minted NFT and each order binds one through its whole principal lifecycle. Principal or ETH gas shortage forms no new trade. No currency conversion, aggregate currency payment or third-party subsidy bypass; old and replacement identities remain distinct.",
       "status": "CONFIRMED"
@@ -284,12 +313,12 @@
     },
     {
       "id": "EX-ROLLBACK-01",
-      "rule": "B refusal while holder remains A withdraws all unregistered segments and returns owner to A without changing holder.",
+      "rule": "If registration of B is refused while holder remains A, withdraw all unregistered segments and return owner to A without changing holder.",
       "status": "CONFIRMED"
     },
     {
       "id": "EX-ROLLBACK-02",
-      "rule": "After AB registration, C refusal withdraws only unregistered suffix and returns owner to B; preserve holder and settled prefix.",
+      "rule": "After AB registration, if registration of C is refused, withdraw only the unregistered suffix and return owner to B; preserve holder and settled prefix.",
       "status": "CONFIRMED"
     },
     {
@@ -389,7 +418,7 @@
     },
     {
       "id": "EX-MATCH-02",
-      "rule": "Reference only CME spot matching and relevant receipt specifications; no futures margin, CCP, leverage liquidation, platform dealing or unapproved commercial fees.",
+      "rule": "Reference CME spot matching and asset-specific receipt specifications only; do not import futures margin, CCP, leverage liquidation, proprietary trading or business fees. Market makers participate under the same ordinary order rules without AMM, incentives or preferential queueing.",
       "status": "CONFIRMED"
     },
     {
@@ -398,8 +427,73 @@
       "status": "CONFIRMED"
     },
     {
+      "id": "EX-PRICE-01",
+      "rule": "Continuously read real public spot references and refresh the frontend when new source records are read. Timestamp successful and failed fetches; a screenshot, hand-entered price or static design is not a live feed.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-PRICE-02",
+      "rule": "Retain provider/source, sourceAsOf, fetchedAt, currency, unit, specification/grade, market/location, priceType, sourceDelay and freshness. Preserve date-only source precision rather than inventing seconds.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-PRICE-03",
+      "rule": "Stale source, failed network/parse, conflicting units/specifications or absent data yields stale/unavailable/unknown and last-success time; retain identifiable old values without fake zero or false live labels. Record configured thresholds against actual supply cadence, not an invented SLA.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-PRICE-04",
+      "rule": "Keep references and simulated NFT quotes/trades distinct in data types, labels, timestamps and rendering. Never silently substitute futures, FX conversions, wet/dry tonnes, grades or markets.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-UI-01",
+      "rule": "Every NFT quote has its own status and correct keyboard/click detail route with preserved return context. A verified open gap displays literal openGapOF=YES in red; verified absence displays openGapOF=NO in green. Unknown/loading/error/unsupported never becomes NO or green.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-UI-02",
+      "rule": "Display independent currentPosition, ownerPosition and holderPosition from real records; distinguish ownerOf address, registration version and transfer position. Bind each signature to its role, position/transfer, original payload, applicable version/domain/nonce or equivalent and verification result. Unknown remains unknown; alignment/admission cannot imply signing.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-UI-03",
+      "rule": "Frontend ownership/signature views show positions and statuses only, never wallet names, full/truncated addresses, hover/title/accessible identity labels or recoverable identity displays. Backend authority bindings remain intact.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-UI-04",
+      "rule": "Display every applicable business condition completely as an identity-excluding projection of signed terms. Do not summarize or alter obligations or directly render identity-bearing raw documents/JSON/metadata. Keep original signed files complete, private and unchanged for hash/signature verification. The projection is not byte-identical to the original; translations are informative, placeholders cannot pass completeness.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-UI-05",
+      "rule": "An open gap, owner different from holder or current non-finality cannot automatically prohibit ordinary transfers. Existing deadline, funds and authority rules still apply; remint equality is evaluated separately.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-UI-06",
+      "rule": "Do not build wallet assets, account, security, validator or Agent-permission-management pages. Retain necessary EX eligibility/fee disclosure without disclosing wallet identities.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-I18N-01",
+      "rule": "Align with 8415wallet.com's six languages; current source candidates are English en, Simplified Chinese zh-Hans, Traditional Chinese zh-Hant, French fr, Spanish es and Japanese ja. Verify live behavior separately through safe access, never by bypassing a certificate warning.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-I18N-02",
+      "rule": "Reviewed fixed resources cover every market, NFT, gap explanation, terms heading, position/signature, missing-data, principal/gas, pending/failure/recovery message. No runtime automatic-translation dependency; verify key completeness, locale formatting and desktop/mobile layout without mixing or clipping.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-I18N-03",
+      "rule": "Preserve openGapOF=YES/NO exact spelling and YES/red NO/green across locales, along with NFT0, verified ownerOf/currentEntry/holderAsOf/openGapOf names and all chain/asset/transaction/protocol identifiers. Original signed terms retain language/version; explanations are informative and cannot change amounts, order, identity or status.",
+      "status": "CONFIRMED"
+    },
+    {
       "id": "EX-NFR-01",
-      "rule": "Run all product, unit, integration, API, browser, EVM, syntax, type, build and package tests only on existing approved remote non-Windows Linux with verified ctyun or aliyun provider binding. No local/Windows/WSL/container or unknown hosted-runner fallback. Read the rule on reconnect and bind source, command, environment and evidence; retaining a script alone is not enforcement.",
+      "rule": "CI and its applicable automated unit/model/fixture/integration/UI/API/EVM simulation, syntax/type, build and package checks may run in GitHub Actions. Runtime and integration acceptance use the project-supported Linux configuration. Record exact source, configuration and run evidence. Deployment and live-chain acceptance require separate execution evidence.",
       "status": "CONFIRMED"
     },
     {
@@ -439,7 +533,12 @@
     },
     {
       "id": "EX-NFR-09",
-      "rule": "Public repository text is English and sanitized; private links, operational topology and secrets stay private.",
+      "rule": "Product documentation is in English.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-NFR-11",
+      "rule": "Trace reference-source timing and UI projections; do not expose wallet identities, private records, signing secrets or raw authorization material. Data failure and locale changes cannot rewrite signed content.",
       "status": "CONFIRMED"
     },
     {
@@ -469,7 +568,7 @@
     },
     {
       "id": "EX-DEMO-01",
-      "rule": "Use the original approved Ethereum Sepolia chain11155111 test path. The designated Sepolia PYUSD fixture must be a member of fixture NFT0 mint-time currencies and explicitly selected by scenario orders; gas is test ETH. Do not borrow the separate Wallet Hoodi configuration or make PYUSD a universal product currency.",
+      "rule": "Use Ethereum Sepolia chain 11155111 for the demonstration test path. The designated Sepolia PYUSD fixture must be a member of fixture NFT0 mint-time currencies and explicitly selected by scenario orders; gas is test ETH. Do not borrow the separate Wallet Hoodi configuration or make PYUSD a universal product currency.",
       "status": "CONFIRMED"
     },
     {
@@ -491,6 +590,7 @@
         "EX-INV-02",
         "EX-MINT-01"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1
@@ -505,11 +605,12 @@
       "requirementIds": [
         "EX-SCOPE-03"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1
       ],
-      "assertion": "Initial owner0 equals holder0; keep accurate independent trade and registered positions after transfer.",
+      "assertion": "Initial equality and subsequent independent positions are accurate. ownerOf is an address, not a position; currentEntry latest admission and holderAsOf historical effective holder are distinct; future effectiveAt is not current effectiveness.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -520,6 +621,7 @@
         "EX-INV-01",
         "EX-INV-05"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1
@@ -536,11 +638,12 @@
         "EX-INV-05",
         "EX-INV-11"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1
       ],
-      "assertion": "Oracle registration is contiguous; rebuild out-of-order chain indexes without skipping B, changing holder without its record or inventing a waiting-for-receipt business state.",
+      "assertion": "Sequential EX/Oracle registration remains contiguous and replayable without skipping or a second receipt. Protocol versions are contiguous and effectiveAt strictly increases; same-holder confirmation is valid. Version, transfer count and holderPosition never substitute for one another.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -552,6 +655,7 @@
         "EX-INV-05",
         "EX-INV-11"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1
@@ -568,6 +672,7 @@
         "EX-AUTH-02",
         "EX-AUTH-04"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1
@@ -583,6 +688,7 @@
         "EX-INV-01",
         "EX-INV-06"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1
@@ -598,6 +704,7 @@
         "EX-AUTH-01",
         "EX-AUTH-03"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1
@@ -613,6 +720,7 @@
         "EX-MATCH-01",
         "EX-INV-12"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1
@@ -629,6 +737,7 @@
         "EX-SCOPE-09",
         "EX-MINT-05"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1
@@ -644,6 +753,7 @@
         "EX-SETTLE-01",
         "EX-SETTLE-05"
       ],
+      "decisionIds": [],
       "firstStage": 2,
       "integrationStages": [
         2
@@ -659,6 +769,7 @@
         "EX-SETTLE-02",
         "EX-INV-03"
       ],
+      "decisionIds": [],
       "firstStage": 2,
       "integrationStages": [
         2
@@ -674,6 +785,7 @@
         "EX-SETTLE-01",
         "EX-SETTLE-03"
       ],
+      "decisionIds": [],
       "firstStage": 2,
       "integrationStages": [
         2
@@ -689,11 +801,12 @@
         "EX-INV-05",
         "EX-SETTLE-04"
       ],
+      "decisionIds": [],
       "firstStage": 2,
       "integrationStages": [
         2
       ],
-      "assertion": "Reject wrong asset, segment, journal, network or unauthorized evidence source.",
+      "assertion": "Reject wrong asset/segment/journal/network/source and bind chain/token contract/tokenId/registerId/verificationProfile/authority to the remote finalized record. Any account may relay valid proof; caller allowlists and ordinary signatures do not replace proof verification.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -703,11 +816,12 @@
       "requirementIds": [
         "EX-SETTLE-04"
       ],
+      "decisionIds": [],
       "firstStage": 2,
       "integrationStages": [
         2
       ],
-      "assertion": "Historical registration at C may coexist with a current D observation; settle each segment from its own authority.",
+      "assertion": "Historical C and current D coexist correctly. Historical finality holds first.effectiveAt <= t < latest.effectiveAt; latest and later remain provisional. Earlier-than-first holderAsOf/entryAsOf revert and isFinalAsOf is false. Cancellation adds no finality; EX prefix completion is distinct.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -719,6 +833,7 @@
         "EX-INV-04",
         "EX-NFR-04"
       ],
+      "decisionIds": [],
       "firstStage": 2,
       "integrationStages": [
         2
@@ -734,11 +849,12 @@
         "EX-ROLLBACK-01",
         "EX-ROLLBACK-05"
       ],
+      "decisionIds": [],
       "firstStage": 3,
       "integrationStages": [
         3
       ],
-      "assertion": "When B refuses and holder is A, refund the unregistered suffix and return owner to A; holder stays A and the NFT is not burned.",
+      "assertion": "When registration of B is refused and holder is A, refund the unregistered suffix and return owner to A; holder stays A and the NFT is not burned.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -750,11 +866,12 @@
         "EX-INV-03",
         "EX-INV-08"
       ],
+      "decisionIds": [],
       "firstStage": 3,
       "integrationStages": [
         3
       ],
-      "assertion": "When AB is registered and C refuses, withdraw BC/CD only and return owner to effective holder B; keep registration and settled AB; never reset to issuer.",
+      "assertion": "When AB is registered and registration of C is refused, withdraw BC/CD only and return owner to effective holder B; keep registration and settled AB; never reset to issuer.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -766,6 +883,7 @@
         "EX-ROLLBACK-03",
         "EX-SETTLE-06"
       ],
+      "decisionIds": [],
       "firstStage": 3,
       "integrationStages": [
         3
@@ -782,6 +900,7 @@
         "EX-GAS-07",
         "EX-GAS-10"
       ],
+      "decisionIds": [],
       "firstStage": 3,
       "integrationStages": [
         3
@@ -796,6 +915,7 @@
       "requirementIds": [
         "EX-GAS-02"
       ],
+      "decisionIds": [],
       "firstStage": 3,
       "integrationStages": [
         3
@@ -810,6 +930,7 @@
       "requirementIds": [
         "EX-GAS-03"
       ],
+      "decisionIds": [],
       "firstStage": 3,
       "integrationStages": [
         3
@@ -826,11 +947,12 @@
         "EX-INV-07",
         "EX-TIME-03"
       ],
+      "decisionIds": [],
       "firstStage": 3,
       "integrationStages": [
         3
       ],
-      "assertion": "Resume crashed rollback idempotently without repeat refunds or charges; duplicate or obsolete messages cannot revive withdrawn segments; no late-receipt grace path.",
+      "assertion": "Resume crashed rollback without duplicate refunds/gas or revival of failed segments. cancelSettlement is not refund/owner return/registration reversal; enforce recorded initiator and strict protocol deadline independently. Gap closure cannot fabricate refusal or completion.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -842,6 +964,7 @@
         "EX-TIME-02",
         "EX-TIME-03"
       ],
+      "decisionIds": [],
       "firstStage": 4,
       "integrationStages": [
         4
@@ -859,6 +982,7 @@
         "EX-INV-08",
         "EX-SCOPE-12"
       ],
+      "decisionIds": [],
       "firstStage": 4,
       "integrationStages": [
         4
@@ -873,11 +997,12 @@
       "requirementIds": [
         "EX-NFR-05"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1
       ],
-      "assertion": "Distinguish simulated and real, pending and complete, owner and holder.",
+      "assertion": "Separate simulated/real, pending/complete, owner/holder, NONE/OPEN/ADMITTED/CANCELLED/SUPERSEDED, historical provisional/final, Oracle application refusal, admission and funds. No protocol REJECTED or overall-complete inference from NO/green.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -888,11 +1013,12 @@
         "EX-NFR-01",
         "EX-NFR-07"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1
       ],
-      "assertion": "Reproduce Linux commands and fixtures with exact source, configuration and run identity.",
+      "assertion": "Record exact source/config/run/commands/fixtures for GitHub Actions CI or the project-supported Linux configuration, as applicable. CI validates only checks actually run; it does not prove deployment or live-chain acceptance.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -904,6 +1030,7 @@
         "EX-NFR-04",
         "EX-SETTLE-05"
       ],
+      "decisionIds": [],
       "firstStage": 2,
       "integrationStages": [
         2
@@ -919,6 +1046,7 @@
         "EX-SCOPE-07",
         "EX-NFR-10"
       ],
+      "decisionIds": [],
       "firstStage": 3,
       "integrationStages": [
         3
@@ -934,6 +1062,7 @@
         "EX-INV-10",
         "EX-NFR-03"
       ],
+      "decisionIds": [],
       "firstStage": 3,
       "integrationStages": [
         3
@@ -949,6 +1078,7 @@
         "EX-INV-04",
         "EX-SETTLE-03"
       ],
+      "decisionIds": [],
       "firstStage": 2,
       "integrationStages": [
         2
@@ -966,9 +1096,11 @@
         "EX-SCOPE-09",
         "EX-REMINT-04"
       ],
+      "decisionIds": [],
       "firstStage": 4,
       "integrationStages": [
-        4
+        4,
+        5
       ],
       "assertion": "Trace bill-of-lading terms, original Oracle registration, holder and funds. Physical collection or collection-driven destruction is not completion; authorized remint separately preserves old/new NFT links and existing evidence.",
       "status": "NOT_VERIFIED",
@@ -981,6 +1113,7 @@
         "EX-EXIT-03",
         "EX-ROLLBACK-05"
       ],
+      "decisionIds": [],
       "firstStage": 4,
       "integrationStages": [
         4
@@ -996,6 +1129,7 @@
         "EX-AUTH-01",
         "EX-AUTH-05"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1
@@ -1012,11 +1146,12 @@
         "EX-SCOPE-11",
         "EX-GAS-09"
       ],
+      "decisionIds": [],
       "firstStage": 5,
       "integrationStages": [
         5
       ],
-      "assertion": "Use only approved Sepolia 11155111 and designated test PYUSD; reject wrong chain or asset before sending; no Hoodi substitution.",
+      "assertion": "Sepolia 11155111 only; fixture NFT0 immutably permits the verified designated test PYUSD and each scenario order explicitly selects it; gas is test ETH. Refuse wrong chain/asset/NFT0 selection before sending, without currency substitution, conversion or Hoodi.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -1026,6 +1161,7 @@
       "requirementIds": [
         "EX-DEMO-02"
       ],
+      "decisionIds": [],
       "firstStage": 5,
       "integrationStages": [
         5
@@ -1040,6 +1176,7 @@
       "requirementIds": [
         "EX-DEMO-03"
       ],
+      "decisionIds": [],
       "firstStage": 5,
       "integrationStages": [
         5
@@ -1054,6 +1191,7 @@
       "requirementIds": [
         "EX-NFR-07"
       ],
+      "decisionIds": [],
       "firstStage": 5,
       "integrationStages": [
         5
@@ -1069,11 +1207,12 @@
         "EX-NFR-06",
         "EX-NFR-09"
       ],
+      "decisionIds": [],
       "firstStage": 0,
       "integrationStages": [
         0
       ],
-      "assertion": "No secrets, private source documents or internal operational material in code, logs, artifacts or public diffs.",
+      "assertion": "Verify that receipt-access secrets and wallet private keys are absent from product outputs, logs, chain data and NFT metadata; product documentation is in English.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -1084,6 +1223,7 @@
         "EX-NFR-05",
         "EX-NFR-08"
       ],
+      "decisionIds": [],
       "firstStage": 0,
       "integrationStages": [
         0
@@ -1101,6 +1241,7 @@
         "EX-MINT-04",
         "EX-MINT-06"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1
@@ -1116,6 +1257,7 @@
         "EX-MINT-03",
         "EX-NFR-06"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1
@@ -1132,6 +1274,7 @@
         "EX-GAS-05",
         "EX-GAS-06"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1,
@@ -1149,6 +1292,7 @@
         "EX-INV-08",
         "EX-TIME-01"
       ],
+      "decisionIds": [],
       "firstStage": 3,
       "integrationStages": [
         3,
@@ -1167,12 +1311,13 @@
         "EX-INV-11",
         "EX-TIME-03"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1,
         4
       ],
-      "assertion": "The off-chain voucher itself is the receipt; Oracle alone ingests, verifies and writes it; holder follows that record; no EX raw-voucher intake, independent holder writer, second receipt or late wait.",
+      "assertion": "The voucher is the one receipt; Oracle alone ingests/verifies/writes it and holder follows it. No EX raw intake, independent holder writer, second receipt or late wait. Proof validates the accepted profile's remote finalized record, not legal title/source honesty/goods/payment; expectedHolder/initiator do not prove admitted holder.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -1182,6 +1327,7 @@
       "requirementIds": [
         "EX-ARCH-01"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1,
@@ -1198,6 +1344,7 @@
         "EX-ARCH-02",
         "EX-ARCH-03"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1,
@@ -1215,6 +1362,7 @@
         "EX-SCOPE-02",
         "EX-MATCH-02"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1,
@@ -1231,6 +1379,7 @@
         "EX-GAS-06",
         "EX-GAS-04"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1,
@@ -1247,6 +1396,7 @@
         "EX-GAS-05",
         "EX-INV-04"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1,
@@ -1265,6 +1415,7 @@
         "EX-GAS-10",
         "EX-INV-04"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1,
@@ -1283,6 +1434,7 @@
         "EX-GAS-10",
         "EX-INV-13"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1,
@@ -1301,6 +1453,7 @@
         "EX-GAS-07",
         "EX-GAS-10"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1,
@@ -1321,6 +1474,7 @@
         "EX-GAS-09",
         "EX-SCOPE-11"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1,
@@ -1341,6 +1495,7 @@
         "EX-AUTH-04",
         "EX-INV-04"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1,
@@ -1360,6 +1515,7 @@
         "EX-GAS-07",
         "EX-GAS-08"
       ],
+      "decisionIds": [],
       "firstStage": 3,
       "integrationStages": [
         3,
@@ -1379,6 +1535,7 @@
         "EX-SETTLE-06",
         "EX-INV-13"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1,
@@ -1398,6 +1555,7 @@
         "EX-SCOPE-11",
         "EX-DEMO-01"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1,
@@ -1417,6 +1575,7 @@
         "EX-GAS-08",
         "EX-INV-13"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1,
@@ -1436,6 +1595,7 @@
         "EX-INV-13",
         "EX-REMINT-03"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1,
@@ -1455,6 +1615,7 @@
         "EX-GAS-07",
         "EX-INV-13"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1,
@@ -1475,6 +1636,7 @@
         "EX-SETTLE-06",
         "EX-INV-12"
       ],
+      "decisionIds": [],
       "firstStage": 1,
       "integrationStages": [
         1,
@@ -1492,6 +1654,7 @@
         "EX-AUTH-01",
         "EX-AUTH-04"
       ],
+      "decisionIds": [],
       "firstStage": 4,
       "integrationStages": [
         4,
@@ -1508,6 +1671,7 @@
         "EX-REMINT-02",
         "EX-INV-14"
       ],
+      "decisionIds": [],
       "firstStage": 4,
       "integrationStages": [
         4,
@@ -1525,6 +1689,7 @@
         "EX-MINT-07",
         "EX-GAS-09"
       ],
+      "decisionIds": [],
       "firstStage": 4,
       "integrationStages": [
         4,
@@ -1542,6 +1707,7 @@
         "EX-INV-04",
         "EX-INV-14"
       ],
+      "decisionIds": [],
       "firstStage": 4,
       "integrationStages": [
         4,
@@ -1559,6 +1725,7 @@
         "EX-SCOPE-12",
         "EX-INV-14"
       ],
+      "decisionIds": [],
       "firstStage": 4,
       "integrationStages": [
         4,
@@ -1576,12 +1743,299 @@
         "EX-INV-08",
         "EX-SCOPE-03"
       ],
+      "decisionIds": [],
       "firstStage": 4,
       "integrationStages": [
         4,
         5
       ],
-      "assertion": "Possession and holder equal to owner are the confirmed no-unfinished-trade mechanism for remint, subject to existing authority. No extra clearing/refund/unfreeze/migration approval. This predicate cannot block ordinary resale with owner ahead of holder.",
+      "assertion": "Possession and holder equality establish the confirmed EX remint business predicate with existing authority; no cleanup/refund/unfreeze/migration approval. Address equality is not an ERC proof of no gap/escrow/tasks and cannot block ordinary owner-ahead-of-holder resale.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-69",
+      "requirementIds": [
+        "EX-SCOPE-01",
+        "EX-SCOPE-13"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "Market is an ordinary commodity spot-intermediary infrastructure DEMO with crypto/commodity styling, BTC/ETH and soybean/iron-ore scenes and simulation labels; no real financial or institutional endorsement.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-70",
+      "requirementIds": [
+        "EX-SCOPE-14"
+      ],
+      "decisionIds": [
+        "D-14"
+      ],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "Both crypto and warehouse NFTs are selectable collateral. Do not invent valuation/LTV/financing/liquidation/returns; undefined mechanisms affect only dependent actions while core spot work continues.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-71",
+      "requirementIds": [
+        "EX-SCOPE-15",
+        "EX-PRICE-01",
+        "EX-PRICE-02"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "Continuously read/update actual external spot sources with traceable successful reads and source changes. Separate source/fetch times faithfully, preserving precision; static designs/manual values cannot pass actual integration.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-72",
+      "requirementIds": [
+        "EX-PRICE-02",
+        "EX-PRICE-03",
+        "EX-PRICE-04"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "Show provider/currency/unit/specification/market/priceType/as-of/fetch/delay. Reproduce stale/unavailable/parse failure/recovery honestly without fake zero, per-second-source claims or silent futures/unit substitution.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-73",
+      "requirementIds": [
+        "EX-UI-01"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "Each NFT has independent quote/status and correct click/keyboard/back/switch detail navigation. Only supported successful openGapOf nonzero/zero bytes32 maps to openGapOF=YES red/NO green. Unsupported/unknown/loading/error never maps to NO/green, another NFT's state or inferred positions.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-74",
+      "requirementIds": [
+        "EX-UI-04",
+        "EX-MINT-01",
+        "EX-EXIT-01"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "Show all business conditions completely in an identity-excluding projection without summary or changed obligations. Keep unchanged complete private originals for hash/signature checks; never render identity-bearing originals or claim projection byte identity. Missing/placeholders fail completeness; locale explanation is informative.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-75",
+      "requirementIds": [
+        "EX-UI-02"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "Bind current/owner/holder independently to actual records on one timeline; 8/7/1 is a fixture. Cover equality, divergence, long chains and unknown values without hardcoded offsets or merged markers.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-76",
+      "requirementIds": [
+        "EX-UI-02",
+        "EX-NFR-11"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "Every signature status binds its position/transfer, role, payload, applicable scheme version/domain/nonce or equivalent and verification. Distinguish unknown/unsigned/pending/signed and transaction/order/registration-proof/admission; never infer signing from alignment, chain length or proof success or move historic signatures to current owner.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-77",
+      "requirementIds": [
+        "EX-UI-03",
+        "EX-SCOPE-17"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "No wallet names or full/truncated addresses across cards/details/terms/embeddings/popups/hover/title/accessibility/download/copy. Raw documents/JSON/metadata cannot leak identities. Backend originals/hash/signature/authority stay intact; add no identity permission prompt.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-78",
+      "requirementIds": [
+        "EX-UI-05",
+        "EX-SCOPE-03",
+        "EX-REMINT-01"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "openGapOF=YES red and owner!=holder do not automatically block ordinary transfers. Independent deadline/principal/gas/authority reasons remain accurate; remint qualification remains separate.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-79",
+      "requirementIds": [
+        "EX-SCOPE-16",
+        "EX-MATCH-01",
+        "EX-MATCH-02"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "Market makers and ordinary participants follow same-currency price/FIFO without identity priority, selected-counterparty bypass or default AMM/rebate/incentive/return promises.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-80",
+      "requirementIds": [
+        "EX-SCOPE-18",
+        "EX-I18N-01",
+        "EX-I18N-02",
+        "EX-I18N-03"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "All six candidate languages cover markets/cards/terms/timeline/unknown/errors/principal/gas without mixed language or clipping. Preserve protocol identifiers and exact openGapOF=YES/NO with YES red/NO green; unknown stays unknown and original signed language remains unchanged.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-81",
+      "requirementIds": [
+        "EX-UI-06",
+        "EX-AUTH-01",
+        "EX-GAS-10"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "No wallet asset/account/security/validator/Agent-permission-management routes; per-trade authority, balance/freeze and gas confirmation remain enforced.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-82",
+      "requirementIds": [
+        "EX-PRICE-04",
+        "EX-MATCH-01",
+        "EX-SCOPE-11"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "Separate external references, simulated NFT quotes/trades and real chain evidence. A per-tonne reference cannot replace whole-receipt price or trigger FX-based cross-currency matching/payment/gas conversion.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-83",
+      "requirementIds": [
+        "EX-NFR-09"
+      ],
+      "decisionIds": [],
+      "firstStage": 0,
+      "integrationStages": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "assertion": "Documents/design/code/runtime have independent identities. v1.4 cannot inherit a historical loader pass or clickable design as runtime acceptance; preserve T-01..68, six stages/demos and the current product edition.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-84",
+      "requirementIds": [
+        "EX-ARCH-03",
+        "EX-UI-01",
+        "EX-UI-04",
+        "EX-PRICE-03",
+        "EX-I18N-02"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "Responsive market/details navigation and loading/error/empty/long-chain states recover; all three sources share real states and six-language rules. Missing feed/original terms stays explicit, never overall-complete.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -1591,19 +2045,20 @@
     {
       "id": 0,
       "title": "Baseline and evidence alignment",
-      "entry": "Read current instructions, source, CI handoff and approved Linux execution references; separate bootstrap, fixtures, application and deployment.",
+      "entry": "Verify current source, CI evidence and Linux execution configuration; separate bootstrap, fixtures, application and deployment.",
       "actions": [
-        "Resolve full branch/commit/tree and actual diff; do not recover cancelled actions from history.",
+        "Resolve full branch/commit/tree and actual diff.",
         "Inventory existing wallet, orders, Oracle, journal, settlement and UI reuse interfaces and precise missing bindings.",
         "Map ArtFi whole-artwork contracts, the three source middleware routes and their actual frontend entrypoints.",
-        "Trace requirement to test to exact source to run to artifact; preserve private operational records separately."
+        "Trace requirement to test to exact source to run to artifact."
       ],
       "deliverables": "Baseline identity, interface map, requirement/test map and current PRD pin.",
       "acceptance": "Independent source/evidence identity; no assertion that CI means product acceptance.",
       "status": "NOT_VERIFIED",
       "cases": [
         "T-39",
-        "T-40"
+        "T-40",
+        "T-83"
       ],
       "continueAfterPR": true,
       "waitForCIToDevelopNext": false
@@ -1611,7 +2066,7 @@
     {
       "id": 1,
       "title": "Domain state and basic interaction",
-      "entry": "Use verified source and approved Linux path; label fixtures wherever a real integration is absent.",
+      "entry": "Use verified source and supported Linux configuration; label fixtures wherever a real integration is absent.",
       "actions": [
         "Implement complete mint declaration, whole NFT, encrypted off-chain mapping, both deadlines and voucher format; ordered owner/holder positions.",
         "Independent bids/asks; price/FIFO/best-price matching and replayable trusted book sequence.",
@@ -1637,8 +2092,6 @@
         "T-26",
         "T-27",
         "T-34",
-        "T-39",
-        "T-40",
         "T-41",
         "T-42",
         "T-43",
@@ -1658,7 +2111,22 @@
         "T-59",
         "T-60",
         "T-61",
-        "T-62"
+        "T-62",
+        "T-69",
+        "T-70",
+        "T-71",
+        "T-72",
+        "T-73",
+        "T-74",
+        "T-75",
+        "T-76",
+        "T-77",
+        "T-78",
+        "T-79",
+        "T-80",
+        "T-81",
+        "T-82",
+        "T-84"
       ],
       "continueAfterPR": true,
       "waitForCIToDevelopNext": false
@@ -1685,14 +2153,7 @@
         "T-15",
         "T-16",
         "T-28",
-        "T-31",
-        "T-39",
-        "T-40",
-        "T-51",
-        "T-54",
-        "T-57",
-        "T-59",
-        "T-61"
+        "T-31"
       ],
       "continueAfterPR": true,
       "waitForCIToDevelopNext": false
@@ -1702,7 +2163,7 @@
       "title": "Suffix rollback and buyer gas",
       "entry": "Segment model is verified; genuine rollback needs existing authorized control and test gas path.",
       "actions": [
-        "B refusal with holder A unwinds all unregistered suffix; after registered AB, C refusal unwinds BC/CD only and returns owner to holder B.",
+        "If registration of B is refused with holder A, unwind the unregistered suffix; after registered AB, if registration of C is refused, unwind BC/CD only and return owner to holder B.",
         "Keep registered segments even while technical release is recovering; never revoke holder or reset issuer.",
         "Refund original buyers; actual gas and net amounts use separate explicit assets and units.",
         "Return NFT without intermediate-wallet traversal or reliance on ordinary wallet ETH; no duplicate full shared-operation charging.",
@@ -1724,53 +2185,33 @@
         "T-23",
         "T-29",
         "T-30",
-        "T-39",
-        "T-40",
-        "T-43",
         "T-44",
-        "T-49",
-        "T-50",
-        "T-51",
-        "T-52",
-        "T-53",
-        "T-54",
-        "T-55",
-        "T-56",
-        "T-57",
-        "T-59",
-        "T-61"
+        "T-56"
       ],
       "continueAfterPR": true,
       "waitForCIToDevelopNext": false
     },
     {
       "id": 4,
-      "title": "Deadline, bill transfer and restored trading",
-      "entry": "Reproducible trading, Oracle and rollback; verifiable mint cutoffs/formats. No collection or burn gate.",
+      "title": "Deadline, bill transfer, restored trading and holder remint",
+      "entry": "Reproducible trading, Oracle and rollback; verifiable mint cutoffs/formats. No physical-collection or collection-driven-burn gate; authorized holder remint remains required.",
       "actions": [
         "Reject new trades at cutoff and verify mint units, timezone, precision and serialized boundary semantics.",
         "Overdue unregistered suffix fails; return only owner to current holder; preserve registration, issuer and settled prefix.",
         "Resolve registration/deadline races against one authoritative ordered state; no holder-first/receipt-later, second receipt or grace stage.",
         "Valid unexpired unburned NFT may begin a new chain when authorized; expiry cannot be bypassed by recovery.",
         "Allow ordinary owner-ahead-of-holder continuous resale.",
-        "Show full bill terms, off-chain collection obligations and Oracle/transfer history without implementing physical fulfillment or destruction.",
-        "Reject duplicate mapping and transfer replay; preserve history and idempotent technical recovery.",
-        "Implement authorized holder possession plus holder=owner remint with atomic old burn/new valid mint, editable new terms and bidirectional history; no extra clearing or approval gate.",
-        "Resolve UNKNOWN and concurrent remint/trade/registration against original authority; do not impose remint predicates on ordinary transfers."
+        "Show full bill terms, off-chain collection obligations and Oracle/transfer history without implementing physical fulfillment or collection-driven destruction.",
+        "Reject duplicate mapping and transfer replay; preserve history and idempotent technical recovery."
       ],
       "deliverables": "Deadline and suffix recovery model, bill-transfer/scope UI, boundary fixtures and resumed-trading evidence.",
-      "acceptance": "T-24,25,32,33,44,45; only applicable branch evidence; no out-of-scope fulfillment in completion. T63-68 actual remint evidence is required; no fixture or ERC721-only transfer substitute.",
+      "acceptance": "T-24,25,32,33,44,45; only applicable branch evidence; no out-of-scope fulfillment in completion.",
       "status": "NOT_VERIFIED",
       "cases": [
         "T-24",
         "T-25",
         "T-32",
         "T-33",
-        "T-39",
-        "T-40",
-        "T-44",
-        "T-45",
-        "T-60",
         "T-63",
         "T-64",
         "T-65",
@@ -1786,7 +2227,7 @@
       "title": "Sepolia integration and final delivery",
       "entry": "Affected model/integration checks and exact runtime configuration, permissions, asset control and designated test asset are verified for each real path.",
       "actions": [
-        "Deploy exact candidate using existing approved Linux process; absent target blocks that deployment only while packaging proceeds.",
+        "Deploy exact candidate using project-supported Linux process; absent target blocks that deployment only while packaging proceeds.",
         "Execute six revised scenarios on Sepolia 11155111 with actual chain records and explicitly simulated registrars, never Hoodi substitution.",
         "Cover all three source/Oracle contracts and record each scenario's chosen main source.",
         "Verify whole-artwork backend alignment, each middleware route and frontend; join actual Oracle, funds and UI evidence.",
@@ -1800,28 +2241,7 @@
         "T-35",
         "T-36",
         "T-37",
-        "T-38",
-        "T-39",
-        "T-40",
-        "T-46",
-        "T-47",
-        "T-48",
-        "T-52",
-        "T-53",
-        "T-54",
-        "T-55",
-        "T-56",
-        "T-57",
-        "T-58",
-        "T-60",
-        "T-61",
-        "T-62",
-        "T-63",
-        "T-64",
-        "T-65",
-        "T-66",
-        "T-67",
-        "T-68"
+        "T-38"
       ],
       "continueAfterPR": true,
       "waitForCIToDevelopNext": false
@@ -1832,92 +2252,97 @@
       "id": "D-01",
       "status": "CONFIRMED",
       "rule": "Price priority, equal-price FIFO and best executable price; no specified-counterparty queue priority.",
-      "blocks": "No product decision remains; validate the matching implementation.",
-      "doesNotBlock": "Independent authorized work and all paths not needing the specific missing input."
+      "blocks": "No product decision remains; validate the matching implementation."
     },
     {
       "id": "D-02",
       "status": "ENGINEERING_VERIFICATION",
       "rule": "Complete asset-specific receipt/mint data, encrypted off-chain secret mapping, both cutoffs and declared registration format are fixed.",
-      "blocks": "Only unresolved actual schema, serialization or controlled-store bindings.",
-      "doesNotBlock": "Independent authorized work and all paths not needing the specific missing input."
+      "blocks": "Only unresolved actual schema, serialization or controlled-store bindings."
     },
     {
       "id": "D-03",
       "status": "CONFIRMED",
       "rule": "Overdue unregistered suffix fails at cutoff; return owner to effective holder and preserve prefix; no late-receipt grace.",
-      "blocks": "Verify actual time, Oracle ordering and concurrency boundaries; not a new product choice.",
-      "doesNotBlock": "Independent authorized work and all paths not needing the specific missing input."
+      "blocks": "Verify actual time, Oracle ordering and concurrency boundaries; not a new product choice."
     },
     {
       "id": "D-04",
       "status": "PARTIALLY_PENDING",
       "rule": "Cap/P50 ETH and contemporaneous USD, confirmation, cap-sized freeze, actual debit and unused unfreeze are fixed.",
-      "blocks": "Only allocation of one genuinely shared operation remains a product decision; actual send/payment interfaces require engineering verification.",
-      "doesNotBlock": "Independent authorized work and all paths not needing the specific missing input."
+      "blocks": "Only allocation of one genuinely shared operation remains a product decision; actual send/payment interfaces require engineering verification."
     },
     {
       "id": "D-05",
       "status": "ENGINEERING_VERIFICATION",
       "rule": "Real owner return uses existing authorized asset control and wallet grant.",
-      "blocks": "Only actual rollback lacking verified authority or interface; models and settled business rules proceed.",
-      "doesNotBlock": "Independent authorized work and all paths not needing the specific missing input."
+      "blocks": "Only actual rollback lacking verified authority or interface; models and settled business rules proceed."
     },
     {
       "id": "D-06",
       "status": "CLOSED",
       "rule": "Principal is frozen before trade; registration releases that original position; no second buyer payment business branch.",
-      "blocks": "Only technical unknown-result and idempotent recovery remain.",
-      "doesNotBlock": "Independent authorized work and all paths not needing the specific missing input."
+      "blocks": "Only technical unknown-result and idempotent recovery remain."
     },
     {
       "id": "D-07",
-      "status": "OUT_OF_SCOPE",
-      "rule": "Physical collection, transport, warehouse exit and collection-driven NFT burn are removed; retain terms, transfer and history.",
-      "blocks": "No Stage 4/5 physical delivery or burn gate.",
-      "doesNotBlock": "Independent authorized work and all paths not needing the specific missing input."
+      "status": "CONFIRMED",
+      "rule": "Physical fulfillment remains outside EX; holder possession/equality, authorized atomic remint and new terms are in scope without additional cleanup/migration decisions.",
+      "blocks": "No physical-delivery gate; implement confirmed remint."
     },
     {
       "id": "D-08",
       "status": "ENGINEERING_VERIFICATION",
       "rule": "Bind original Oracle source, journal, asset, segment and actual deployment interfaces.",
-      "blocks": "Only the concrete missing integration path; other paths proceed.",
-      "doesNotBlock": "Independent authorized work and all paths not needing the specific missing input."
+      "blocks": "Only the concrete missing integration path; other paths proceed."
     },
     {
       "id": "D-09",
       "status": "ENGINEERING_VERIFICATION",
       "rule": "Verify wallet compatibility from real semantics and interfaces.",
-      "blocks": "Only unverified wallet execution; supported paths and contract checks proceed.",
-      "doesNotBlock": "Independent authorized work and all paths not needing the specific missing input."
+      "blocks": "Only unverified wallet execution; supported paths and contract checks proceed."
     },
     {
       "id": "D-10",
       "status": "PARKED",
       "rule": "Agent service-fee mechanism, rate, timing, bearer and refunds.",
-      "blocks": "Commercial charging only; all core stages and fee-free demo proceed.",
-      "doesNotBlock": "Independent authorized work and all paths not needing the specific missing input."
+      "blocks": "Commercial charging only; all core stages and fee-free demo proceed."
     },
     {
       "id": "D-11",
       "status": "PARKED",
       "rule": "Real commercial asset classes, cooperation, registrars and admission.",
-      "blocks": "Later real business expansion only; three simulated sources proceed.",
-      "doesNotBlock": "Independent authorized work and all paths not needing the specific missing input."
+      "blocks": "Later real business expansion only; three simulated sources proceed."
     },
     {
       "id": "D-12",
       "status": "PARKED",
       "rule": "Commercial pricing, revenue, funding, operations and legal path.",
-      "blocks": "Later commercial or outward commitments only; authorized test development proceeds.",
-      "doesNotBlock": "Independent authorized work and all paths not needing the specific missing input."
+      "blocks": "Later commercial or outward commitments only; authorized test development proceeds."
     },
     {
       "id": "D-13",
-      "status": "EXECUTION_VERIFICATION",
-      "rule": "Any separately required private server document synchronization needs its approved destination and actual byte readback.",
-      "blocks": "That document synchronization only; never block independent development.",
-      "doesNotBlock": "Independent authorized work and all paths not needing the specific missing input."
+      "status": "RESERVED",
+      "rule": "No product decision is assigned to this identifier.",
+      "blocks": "No product dependency."
+    },
+    {
+      "id": "D-14",
+      "status": "PARTLY_CONFIRMED",
+      "rule": "Crypto and warehouse-NFT collateral and hedging/collateral/arbitrage scenes are confirmed; valuation, ratios, financing, liquidation and returns remain undefined.",
+      "blocks": "Only dependent mechanisms/economic calculations; do not block choices, market, references, spot or settlement."
+    },
+    {
+      "id": "D-15",
+      "status": "ENGINEERING_OPEN",
+      "rule": "Continuous references are confirmed; verify actual permitted feed method/endpoints/display rights/cadence. Public pages do not prove integration.",
+      "blocks": "Actual provider integration/acceptance only; contracts and unavailable-state UI continue."
+    },
+    {
+      "id": "D-16",
+      "status": "ENGINEERING_VERIFICATION",
+      "rule": "Verify live six-language alignment safely; source candidates en/zh-Hans/zh-Hant/fr/es/ja remain implementable.",
+      "blocks": "Unverified live-alignment claim only, not independent delivery."
     }
   ],
   "demonstrations": [
@@ -1926,7 +2351,7 @@
       "title": "Single bill-of-lading transfer",
       "source": "REG-DIRECT",
       "setup": "A to B; Oracle writes the verified registration voucher and holder reaches B.",
-      "expected": "Release original frozen AB funds; owner=holder=B; readable bill and registration history; no collection or burn.",
+      "expected": "Release original frozen AB funds; owner=holder=B; readable bill and registration history; no physical collection or collection-driven burn.",
       "cases": [
         "T-02",
         "T-11",
@@ -1952,7 +2377,7 @@
     },
     {
       "id": "DEMO-03",
-      "title": "B refusal",
+      "title": "Registration of B is refused",
       "source": "REG-INTERMEDIARY",
       "setup": "Owner D, holder A; B registration refused.",
       "expected": "Unwind only unregistered AB/BC/CD, owner returns to A, original buyers refunded, actual fees separate and charged once.",
@@ -1966,9 +2391,9 @@
     },
     {
       "id": "DEMO-04",
-      "title": "C refusal protects AB",
+      "title": "Refused registration of C preserves AB",
       "source": "REG-DIRECT",
-      "setup": "AB registered and settled; owner D, holder B; C refused.",
+      "setup": "AB registered and settled; owner D, holder B; registration of C is refused.",
       "expected": "Unwind BC/CD, owner returns to B; preserve AB registration and released principal; no issuer reset.",
       "cases": [
         "T-18",
@@ -1997,7 +2422,7 @@
       "title": "Cutoff failure and recovery boundary",
       "source": "REG-INTERMEDIARY",
       "setup": "At trade cutoff attempt a new transfer with unregistered segments outstanding.",
-      "expected": "Reject new trade; overdue unregistered suffix fails and owner returns to effective holder; keep registered/settled prefix; no expired reopening or burn.",
+      "expected": "Reject new trade; overdue unregistered suffix fails and owner returns to effective holder; keep registered/settled prefix; no expired reopening or collection-driven burn.",
       "cases": [
         "T-24",
         "T-25",
@@ -2109,30 +2534,16 @@
     "continueAfterStagePR": true,
     "waitForCIToDevelopNext": false,
     "mergeRequiresExactHeadChecks": true,
-    "partialDependencyIsNotGlobalStop": true,
-    "productExecution": "approved-linux-only",
     "network": {
       "name": "Sepolia",
-      "chainId": 11155111,
-      "testToken": "existing approved Sepolia PYUSD reference; verify before send"
+      "chainId": 11155111
     },
-    "noNewCredentialsOrResources": true,
-    "noMainnetOrRealValue": true
+    "ci": "GitHub Actions",
+    "runtime": "project-supported Linux"
   },
-  "legacyScenarioPolicy": {
-    "unmigratedRevision": "pre-1.2",
-    "status": "MIGRATION_REQUIRED",
-    "allowLegacyAcceptance": false,
-    "blockedEntryPoints": [
-      "scenarios.cli legacy scenario/report commands",
-      "scenarios.harness Scenario.run for DEMO-01..06",
-      "exchange.stage5.run_scenario"
-    ]
-  },
-  "privacy": {
-    "publicEdition": "English product requirements; operational and private source locators excluded",
-    "secretsInRepository": false,
-    "privateSourceOrOperationalLocatorsIncluded": false,
-    "publicationStatus": "PREPARED_LOCALLY_NOT_PUBLISHED"
+  "source": {
+    "path": "PRD.md",
+    "bytes": 97728,
+    "sha256": "b3989a91f1d3f7a1de6812fa05777d0dfdf84a4eee4a7909bdda77d1196032ce"
   }
 }

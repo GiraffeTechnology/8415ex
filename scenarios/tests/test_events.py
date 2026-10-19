@@ -21,7 +21,7 @@ CURRENT_DOMAIN_KINDS = {
     "registration-result-idempotent", "registration-result", "registration-result-drained",
     "escrow-locked", "payment-attempt-started", "segment-release-attempt", "payment-enquiry",
     "gas-recorded", "rollback-opened", "rollback-advanced", "segment-refunded",
-    "segment-refund-attempt", "asset-hop-returned", "rollback-step-blocked",
+    "segment-refund-attempt", "asset-returned", "rollback-step-blocked",
     "asset-return-attempt", "late-result-conflict",
 }
 CURRENT_AUDIT_GROUPS = {

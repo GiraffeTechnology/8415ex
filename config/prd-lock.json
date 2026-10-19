@@ -1,14 +1,14 @@
 {
   "schema": "8415ex-prd-lock/1",
-  "version": "1.3",
+  "version": "1.4",
   "prd": {
     "path": "PRD.md",
-    "bytes": 73558,
-    "sha256": "1ce035ef10eb4e09c976dc4a070299afab36fef213b775efee922da19e9479cf"
+    "bytes": 97728,
+    "sha256": "b3989a91f1d3f7a1de6812fa05777d0dfdf84a4eee4a7909bdda77d1196032ce"
   },
   "executionPlan": {
     "path": "config/execution-plan.json",
-    "bytes": 77644,
-    "sha256": "1f995c74355281c0d06e59a2f0ca3569299910742f59c75e7f661687e83efcc3"
+    "bytes": 94921,
+    "sha256": "77678d33c7a06b1c2b8bcd2f25a540273e3b7e5b7852589e89ae2f76b5efdb39"
   }
 }

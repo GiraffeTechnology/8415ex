@@ -10,10 +10,9 @@ withdrew them: it never takes the asset into temporary custody, never imposes a
 time-limited redemption or an overdue sale, and never liquidates a position to
 cover a shortfall. A shortfall is reported as a blocked, resumable state.
 
-The asset follows the original accepted suffix in reverse, one evidenced hop
-at a time. Intermediate wallets need no new unreserved ETH payment when the
-same approved return obligation already has sufficient ETH reserved. Individual
-hop consistency does not imply one atomic transaction for the whole suffix.
+The asset return is one control operation from the current owner to the
+boundary account. It does not walk back through each intermediate wallet and it
+does not depend on those wallets holding gas at that moment.
 """
 from dataclasses import dataclass, replace
 
@@ -91,9 +90,10 @@ class RollbackStep:
 class SimulatedAssetControl:
     """A simulated, pre-arranged asset-return control.
 
-    One call represents one original reverse-chain hop, not a complete suffix.
-    It does not read an intermediate wallet's unreserved balance or reserve
-    another payment. The caller supplies the authorized hop and stable key.
+    One call moves the receipt from wherever the chain head is to the boundary
+    account. It is deliberately not a walk through the intermediate wallets, and
+    it does not read their balances: the requirement is that a return never
+    depends on an intermediate ordinary wallet holding gas at that moment.
 
     ``outcomes`` lets a test drive the first answer for a key. A repeat of that
     key returns the stored record and moves nothing again.
@@ -110,14 +110,12 @@ class SimulatedAssetControl:
         return self._records.get(identifier(key, "EX_ASSET_CONTROL_REFUSED"))
 
     def return_asset(self, key, from_account, to_account, asset):
-        """Perform one keyed reverse-chain hop; repeats move nothing again."""
+        """Return the receipt to the boundary account in one operation."""
         identifier(key, "EX_ASSET_CONTROL_REFUSED")
         existing = self._records.get(key)
         if existing is not None:
-            require((existing["fromAccount"], existing["toAccount"], existing["chainId"],
-                     existing["contract"], existing["tokenId"]) ==
-                    (from_account, to_account, asset.chain_id, asset.contract, asset.token_id),
-                    "EX_ASSET_CONTROL_SUBSTITUTION_REFUSED", "the original hop binding differs")
+            require(existing["toAccount"] == to_account, "EX_ASSET_CONTROL_SUBSTITUTION_REFUSED",
+                    f"{key} was already used to return to {existing['toAccount']}")
             return dict(existing, repeated=True)
         address(from_account, "EX_ASSET_CONTROL_REFUSED")
         address(to_account, "EX_ASSET_CONTROL_REFUSED")
@@ -126,8 +124,7 @@ class SimulatedAssetControl:
         outcome = self._outcomes.pop(key, "returned")
         require(outcome in ("returned", "failed", "unknown"), "EX_ASSET_CONTROL_REFUSED", outcome)
         record = {"key": key, "fromAccount": from_account, "toAccount": to_account,
-                  "chainId": asset.chain_id, "contract": asset.contract,
-                  "tokenId": asset.token_id, "status": outcome,
+                  "chainId": asset.chain_id, "tokenId": asset.token_id, "status": outcome,
                   "reference": f"sim-return:{key}", "observedAt": self._clock(),
                   "operations": 1, "walkedIntermediateWallets": False,
                   "requiredIntermediateGas": False, "simulated": True}
@@ -135,7 +132,6 @@ class SimulatedAssetControl:
             self._records[key] = record
         if outcome == "returned":
             self.returns += 1
-            self.hops_walked += 1
         return dict(record, repeated=False)
 
     def resolve_unknown(self, key, status):

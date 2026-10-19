@@ -10,4 +10,4 @@ The returned observation retains the exact raw hash and block identity, and its 
 
 Protocol source: [Ethereum JSON-RPC receipt specification](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_gettransactionreceipt). The source describes per-transaction gasUsed, effectiveGasPrice and status. Type support here is intentionally narrower than future network protocol support.
 
-Validation input: eight authored unittest methods, NOT_RUN. Proposed validation-owner command: python -m unittest integration.test_receipt_gas_observer -v. Initial source only; no product import, compiler, tests, provider query, chain confirmation, wallet accounting, deployed route or final acceptance has been executed by the author.
+Validation input: eight authored unittest methods, NOT_RUN. Validation command: python -m unittest integration.test_receipt_gas_observer -v. Initial source only; no product import, compiler, tests, provider query, chain confirmation, wallet accounting, deployed route or final acceptance has been executed by the author.

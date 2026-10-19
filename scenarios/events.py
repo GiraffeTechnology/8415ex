@@ -78,7 +78,7 @@ AUDIT_GROUPS = (
         "group": "rollback",
         "requires": "a rollback opened, progressing, blocked and finished",
         "kinds": ("rollback-opened", "rollback-advanced", "rollback-step-blocked",
-                  "asset-return-attempt", "asset-hop-returned"),
+                  "asset-return-attempt", "asset-returned"),
         "evidence": "recorded",
     },
     {
@@ -151,7 +151,7 @@ DECLARED_KINDS = tuple(sorted(set(
 #: when it does not - counting the attempt as well would double-count it.
 MOVEMENT_KINDS = {
     "transfer-executed": "asset",
-    "asset-hop-returned": "asset",
+    "asset-returned": "asset",
     "escrow-locked": "fund",
     "segment-refunded": "fund",
 }

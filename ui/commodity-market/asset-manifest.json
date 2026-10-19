@@ -1,0 +1,109 @@
+{
+  "schema": "commodity-market-static/1",
+  "defaultLocale": "en",
+  "locales": [
+    "en",
+    "zh-Hans",
+    "zh-Hant",
+    "fr",
+    "es",
+    "ja"
+  ],
+  "commodities": [
+    "gold",
+    "silver",
+    "copper",
+    "iron-ore",
+    "crude-oil",
+    "coal",
+    "soy",
+    "corn"
+  ],
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 2472,
+      "sha256": "51c27b6b5a7838f2e37ba83b29dd59c8e0f2653276d8df8d1d78068834da73ec"
+    },
+    {
+      "path": "app.js",
+      "bytes": 5016,
+      "sha256": "063e645269f0ff7e44cf204f2f6645ab3ad1d67a81fae5beb1f6ed1b92d5de20"
+    },
+    {
+      "path": "assets/coal.svg",
+      "bytes": 214,
+      "sha256": "d170b57c2cfc16f9364893e2de18ddf7cd86429d178d3f0305c74fe0021cfc03"
+    },
+    {
+      "path": "assets/copper.png",
+      "bytes": 33728,
+      "sha256": "1f6ff50d3aede2a5440525f06ea2b11655e093d53c4861cd661c4e80d503a219"
+    },
+    {
+      "path": "assets/corn.svg",
+      "bytes": 314,
+      "sha256": "ece1cc11b5aa45d319e34a4ced1bde90e1c42182474eb21bc07fb969a885af80"
+    },
+    {
+      "path": "assets/crude-oil.svg",
+      "bytes": 302,
+      "sha256": "83db659962fd1ec8c00a7f25192cc79de32e48b94a463165ba41a9e1deeff6dd"
+    },
+    {
+      "path": "assets/cube.svg",
+      "bytes": 448,
+      "sha256": "c82ae045002d11872e2aaf1c7f01a4b52ca338418c98942836deea4337255e64"
+    },
+    {
+      "path": "assets/gold.svg",
+      "bytes": 230,
+      "sha256": "1ce061f9c8c32229c3e8949341a8bcbec07e3bb83f2a03bc2ab36f3c0f661aa3"
+    },
+    {
+      "path": "assets/ore.png",
+      "bytes": 30256,
+      "sha256": "a58643c93600a82ed9dfc20904d62794348092ca45d7733c9eb76a45baf2a065"
+    },
+    {
+      "path": "assets/search.svg",
+      "bytes": 673,
+      "sha256": "ca4e463960efe1f9181c4cd361d4c87f85dd962105d6c8c266d84716f47b1940"
+    },
+    {
+      "path": "assets/silver.svg",
+      "bytes": 230,
+      "sha256": "e11e2a37d21e9b9c3310782cdd59cd86c82399fadc868b040f2907daa453faed"
+    },
+    {
+      "path": "assets/soy.png",
+      "bytes": 30183,
+      "sha256": "d889f0943b26929ce6a71a0cfb23492060eb927e902ee8954c02c98dd6f7e12a"
+    },
+    {
+      "path": "assets/sparkline-stale.svg",
+      "bytes": 504,
+      "sha256": "c85408978551d1863a7258d2f217941134631937fc2357c6c8744463cff61ba4"
+    },
+    {
+      "path": "assets/sparkline.svg",
+      "bytes": 504,
+      "sha256": "e7de2c127d8040a0a42629c6db918dc90e5f2496cf00ce325c7ecedee5e78f81"
+    },
+    {
+      "path": "index.html",
+      "bytes": 4257,
+      "sha256": "cc0ebd8387e35f0a4c62c0317b0a8b3fda94e257d77e785a4376a0130ef947d5"
+    },
+    {
+      "path": "locales.js",
+      "bytes": 7663,
+      "sha256": "6ae8aa1e092b9ae5b0635b492b6e07e15c545a6f9fa818e864f91c199b08e5d8"
+    },
+    {
+      "path": "styles.css",
+      "bytes": 5828,
+      "sha256": "ebeb88a16d11f70cfe4229ea6ed5e97ae51766eddf4e0756a3f6b62b026c7794"
+    }
+  ]
+}

@@ -153,11 +153,7 @@ def rollback_page(exchange, receipt_id, now=None):
             _row("Last finalized position", f"leg {state['lastFinalizedPosition']} - this prefix "
                                             f"is not reopened, reversed or re-collected"),
             _row("Return boundary", f"position {state['lastFinalizedPosition']} - the asset returns here, "
-                                    f"through the original reverse hops, preserving the finalized prefix"),
-            _row("Reverse hop evidence", "; ".join(
-                f"{hop['fromPosition']} → {hop['toPosition']}: {result['status']}"
-                for hop, result in zip(state.get("assetHops", ()), state.get("hopResults", ())))
-             or ("not recorded" if "assetHops" not in state else "none")),
+                                    f"in one control operation, preserving the finalized prefix"),
             _row("Asset returned", "yes" if state["assetControl"]["returned"] else "not yet"),
             _row("Outstanding steps", ", ".join(
                 f"{step['stepId']} ({step['status']})" for step in state["outstandingSteps"])

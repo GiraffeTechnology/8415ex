@@ -1400,24 +1400,12 @@ class Exchange:
             steps.append(RollbackStep(step_id=f"{authority.authority_id}:refund:{index}",
                                       kind="refund", receipt_id=receipt_id, leg_index=index,
                                       key=f"refund:{escrow_id}"))
-        sequence_id = digest({"authorityId": authority.authority_id,
-                              "intervalBinding": authority.binding,
-                              "generation": len(self._rollback_history[receipt_id])})
-        asset_hops = []
-        active = self._active_legs[receipt_id]
-        for index in reversed(interval["affectedLegs"]):
-            leg = self.leg(receipt_id, index)
-            previous = active.index(index) - 1
-            to_position = active[previous] + 1 if previous >= 0 else 0
-            hop_key = f"return:{receipt_id}:{sequence_id}:{index}"
-            asset_hops.append({"key": hop_key, "legIndex": index,
-                               "fromPosition": index + 1, "toPosition": to_position,
-                               "fromAccount": leg.buyer, "toAccount": leg.seller})
-            steps.append(RollbackStep(step_id=f"{sequence_id}:asset-return:{index}",
-                                      kind="asset-return", receipt_id=receipt_id,
-                                      leg_index=index, key=hop_key))
         for index in interval["affectedLegs"]:
             self._replace_leg(receipt_id, index, rollback_status="in-progress")
+        steps.append(RollbackStep(step_id=f"{authority.authority_id}:asset-return",
+                                  kind="asset-return", receipt_id=receipt_id,
+                                  leg_index=interval["boundaryIndex"],
+                                  key=f"return:{receipt_id}:{authority.authority_id}"))
         self._rollbacks[receipt_id] = {
             "authorityId": authority.authority_id, "source": authority.source,
             "refusedLegIndex": refused_leg_index,
@@ -1428,8 +1416,7 @@ class Exchange:
             "boundaryAccount": interval["boundaryAccount"],
             "finalizedPrefixLegs": interval["finalizedPrefixLegs"],
             "affectedLegs": interval["affectedLegs"], "steps": steps,
-            "state": "in-progress", "openedAt": now, "conflicts": [],
-            "sequenceId": sequence_id, "assetHops": asset_hops, "hopCursor": 0}
+            "state": "in-progress", "openedAt": now, "conflicts": []}
         self._record(receipt_id, "rollback-opened", {
             "authorityId": authority.authority_id, "triggerKind": trigger,
             "refusedLegIndex": refused_leg_index,
@@ -1445,7 +1432,7 @@ class Exchange:
     def _gas_available(self, account):
         return self._budgets.get(account)
 
-    def advance_rollback(self, receipt_id, now=None, *, max_asset_hops=None):
+    def advance_rollback(self, receipt_id, now=None):
         """Run the pending steps once each, and report what is still open.
 
         Every step asks what already happened before acting, so a resumed
@@ -1454,8 +1441,6 @@ class Exchange:
         into custody and nothing is liquidated to cover it.
         """
         now = self._now(now)
-        require(max_asset_hops is None or (type(max_asset_hops) is int and max_asset_hops > 0),
-                "EX_ROLLBACK_STEP_LIMIT_REFUSED", "positive hop count or no per-call limit")
         state = self._rollbacks[receipt_id]
         require(state is not None, "EX_ROLLBACK_NOT_OPEN", receipt_id)
         require(self.payments is not None and self.asset_control is not None,
@@ -1463,7 +1448,6 @@ class Exchange:
                 "a rollback needs the payment adapter and the asset-return control")
         receipt = self.receipt(receipt_id)
         updated = []
-        asset_blocked, asset_done = False, 0
         for step in state["steps"]:
             if step.status == "done":
                 updated.append(step)
@@ -1471,13 +1455,7 @@ class Exchange:
             if step.kind == "refund":
                 updated.append(self._advance_refund(receipt_id, step, now))
             else:
-                if asset_blocked or (max_asset_hops is not None and asset_done >= max_asset_hops):
-                    updated.append(step)
-                    continue
-                result = self._advance_return(receipt_id, receipt, state, step, now)
-                updated.append(result)
-                asset_blocked = result.status != "done"
-                asset_done += int(result.status == "done")
+                updated.append(self._advance_return(receipt_id, receipt, state, step, now))
         state["steps"] = updated
         outstanding = [step for step in updated if step.status != "done"]
         blocked = [step for step in updated if step.status == "blocked"]
@@ -1518,7 +1496,8 @@ class Exchange:
                                 payment_key=step.key, payment_status="settled",
                                 payment_intent="refund",
                                 payment_reference=record["reference"])
-            self._replace_leg(receipt_id, step.leg_index, funding_status="refunded")
+            self._replace_leg(receipt_id, step.leg_index, funding_status="refunded",
+                              rollback_status="returned")
             self._record(receipt_id, "segment-refunded", {
                 "legIndex": step.leg_index, "escrowId": escrow.escrow_id,
                 "paidTo": escrow.payer, "principal": str(escrow.principal),
@@ -1534,67 +1513,49 @@ class Exchange:
         return replace(step, status="blocked", detail=(("paymentStatus", record["status"]),))
 
     def _advance_return(self, receipt_id, receipt, state, step, now):
-        require("assetHops" in state and "hopCursor" in state and "sequenceId" in state,
-                "EX_ROLLBACK_SEQUENCE_MIGRATION_REQUIRED",
-                "historical single-return state needs original outcome reconciliation")
-        cursor = state["hopCursor"]
-        require(type(cursor) is int and 0 <= cursor < len(state["assetHops"]),
-                "EX_ROLLBACK_CURSOR_REFUSED", "next original reverse-chain hop required")
-        hop = state["assetHops"][cursor]
-        require(step.key == hop["key"] and step.leg_index == hop["legIndex"],
-                "EX_ROLLBACK_CURSOR_REFUSED", "a different hop cannot consume this cursor")
+        destination = state["boundaryAccount"]
         current = self.owner_of(receipt_id)
-        require((current, self.owner_index(receipt_id)) ==
-                (hop["fromAccount"], hop["fromPosition"]),
-                "EX_ROLLBACK_POSITION_REFUSED", "the original hop source occurrence changed")
-        known = self.asset_control.lookup(step.key)
-        bearer = self.leg(receipt_id, state["affectedLegs"][-1]).buyer
+        if current == destination:
+            # Equal addresses can be different occurrences in a circular chain.
+            for index in state["affectedLegs"]:
+                self._replace_leg(receipt_id, index, rollback_status="returned")
+            self._returned_to[receipt_id] = (state["boundaryIndex"], destination)
+            self._record(receipt_id, "asset-returned", {
+                "stepId": step.step_id, "fromAccount": current, "toAccount": destination,
+                "operations": 0, "boundaryIndex": state["boundaryIndex"]})
+            return replace(step, status="done", detail=(("already", "at the boundary"),))
+        bearer = self.leg(receipt_id, self.recorded_legs(receipt_id) - 1).buyer
         available = self._gas_available(bearer)
-        if (known is None or known["status"] not in ("returned", "unknown")) \
-                and available is not None and available <= 0:
-            # Preserve the existing approved-obligation budget. Do not demand
-            # a fresh unreserved balance from each intermediate account. An
-            # already submitted/UNKNOWN hop is enquired even if that budget's
-            # later observation changes; it must never be submitted again here.
+        if available is not None and available <= 0:
+            # A shortfall is a blocked, resumable state. It is never a reason to
+            # take custody, force a sale or liquidate.
             self._record(receipt_id, "rollback-step-blocked", {
                 "stepId": step.step_id, "reason": "EX_GAS_BUDGET_EXHAUSTED", "bearer": bearer,
                 "custodyTaken": False, "forcedSale": False, "liquidation": False,
                 "resumable": True})
             return replace(step, status="blocked", detail=(("reason", "EX_GAS_BUDGET_EXHAUSTED"),
                                                            ("bearer", bearer)))
+        known = self.asset_control.lookup(step.key)
         record = known if known is not None and known["status"] in ("returned", "unknown") \
-            else self.asset_control.return_asset(step.key, hop["fromAccount"], hop["toAccount"], receipt.asset)
-        require(isinstance(record, dict) and record.get("key") == step.key
-                and (record.get("fromAccount"), record.get("toAccount"), record.get("chainId"),
-                     record.get("tokenId")) ==
-                (hop["fromAccount"], hop["toAccount"], receipt.asset.chain_id, receipt.asset.token_id)
-                and record.get("contract", receipt.asset.contract) == receipt.asset.contract
-                and record.get("status") in ("returned", "unknown", "failed")
-                and (record.get("status") != "returned" or
-                     (type(record.get("reference")) is str and bool(record["reference"]))),
-                "EX_ROLLBACK_HOP_RESULT_REFUSED", "original hop result binding differs")
-        require(self._rollbacks[receipt_id] is state and state["hopCursor"] == cursor
-                and (self.owner_of(receipt_id), self.owner_index(receipt_id)) ==
-                (hop["fromAccount"], hop["fromPosition"]),
-                "EX_ROLLBACK_POSITION_REFUSED", "hop state changed during original control call")
+            else self.asset_control.return_asset(step.key, current, destination, receipt.asset)
         if record["status"] != "returned":
             self._record(receipt_id, "asset-return-attempt", {
-                "sequenceId": state["sequenceId"], "hopCursor": cursor,
-                "stepId": step.step_id, "status": record["status"],
-                "reference": record.get("reference"), "secondReturnSent": False})
-            return replace(step, status="blocked", detail=(("returnStatus", record["status"]),
-                           ("reference", record.get("reference"))))
-        self._replace_leg(receipt_id, step.leg_index, rollback_status="returned")
-        self._returned_to[receipt_id] = (hop["toPosition"], hop["toAccount"])
-        state["hopCursor"] = cursor + 1
-        self._record(receipt_id, "asset-hop-returned", {
-            "sequenceId": state["sequenceId"], "hopCursor": cursor + 1,
+                "stepId": step.step_id, "status": record["status"], "secondReturnSent": False})
+            return replace(step, status="blocked", detail=(("returnStatus", record["status"]),))
+        # The chain head is now the boundary account. The legs above it stay in
+        # history; they are marked returned rather than erased.
+        for index in state["affectedLegs"]:
+            if self.leg(receipt_id, index).rollback_status == "in-progress":
+                self._replace_leg(receipt_id, index, rollback_status="returned")
+        self._returned_to[receipt_id] = (state["boundaryIndex"], destination)
+        self._record(receipt_id, "asset-returned", {
             "stepId": step.step_id, "fromAccount": record["fromAccount"],
-            "toAccount": record["toAccount"], "fromPosition": hop["fromPosition"],
-            "toPosition": hop["toPosition"], "reference": record.get("reference"),
+            "toAccount": record["toAccount"], "operations": record["operations"],
+            "walkedIntermediateWallets": record["walkedIntermediateWallets"],
+            "requiredIntermediateGas": record["requiredIntermediateGas"],
             "boundaryIndex": state["boundaryIndex"]})
-        return replace(step, status="done", detail=(("toAccount", hop["toAccount"]),
-                       ("toPosition", hop["toPosition"]), ("reference", record.get("reference"))))
+        return replace(step, status="done", detail=(("toAccount", destination),
+                                                     ("operations", "1")))
 
     def asset_position_after_rollback(self, receipt_id):
         """Who holds the receipt once a rollback returned it, by record.
@@ -1605,14 +1566,11 @@ class Exchange:
         state = self._rollbacks[self.receipt(receipt_id).receipt_id]
         if state is None:
             return {"returned": False, "account": self.owner_of(receipt_id)}
-        returns = [step for step in state["steps"] if step.kind == "asset-return"]
-        returned = bool(returns) and all(step.status == "done" for step in returns)
+        returned = any(step.kind == "asset-return" and step.status == "done"
+                       for step in state["steps"])
         return {"returned": returned,
                 "account": state["boundaryAccount"] if returned else self.owner_of(receipt_id),
                 "boundaryIndex": state["boundaryIndex"],
-                "sequenceId": state.get("sequenceId"), "hopCursor": state.get("hopCursor"),
-                "hopCount": len(state.get("assetHops", ())),
-                "currentPosition": self.owner_index(receipt_id),
                 "historyPreserved": True}
 
     def record_late_registration_conflict(self, receipt_id, evidence):
@@ -1678,13 +1636,6 @@ class Exchange:
             "complete": state["state"] == "complete",
             "trigger": state["trigger"], "refusedLegIndex": state["refusedLegIndex"],
             "authorityId": state["authorityId"], "source": state["source"],
-            "sequenceId": state.get("sequenceId"),
-            "hopCursor": state.get("hopCursor"),
-            "assetHops": tuple(deepcopy(state.get("assetHops", ()))),
-            "hopResults": tuple({"stepId": step.step_id, "key": step.key,
-                                 "legIndex": step.leg_index, "status": step.status,
-                                 "detail": dict(step.detail)}
-                                for step in state["steps"] if step.kind == "asset-return"),
             "affectedLegs": state["affectedLegs"],
             "finalizedPrefixLegs": state["finalizedPrefixLegs"],
             "lastFinalizedPosition": state["boundaryIndex"],
@@ -1785,9 +1736,9 @@ class Exchange:
         state = self._exits[self.receipt(receipt_id).receipt_id]
         if state is None:
             return {"receiptId": receipt_id, "open": False, "state": None, "complete": False,
-                    "retiredOperation": True, "executable": False, "prdVersion": "1.3",
                     "burned": False, "steps": (), "historyPreserved": True,
                     "distinctCompletionInstants": (), "physicalAndOnChainAreAtomic": False,
+                    "retiredOperation": True, "executable": False, "prdVersion": "1.3",
                     "observedAt": now}
         steps = tuple({"step": step.name, "status": step.status,
                        "completedAt": step.completed_at, "detail": dict(step.detail)}

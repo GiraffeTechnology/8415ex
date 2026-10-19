@@ -36,7 +36,7 @@ class CrossRouteAcceptance(unittest.TestCase):
         for path in PATHS:
             with self.subTest(path=path):
                 ex, _ = self.refused(path)
-                key = ex.rollback_report(RECEIPT)["assetHops"][0]["key"]
+                key = "return:" + RECEIPT + ":" + ex.rollback_report(RECEIPT)["authorityId"]
                 ex.asset_control._outcomes[key] = "unknown"
                 self.assertFalse(ex.advance_rollback(RECEIPT)["complete"])
                 ex.advance_rollback(RECEIPT)

@@ -161,7 +161,7 @@ class ScenarioContent(unittest.TestCase):
         names = self._names("DEMO-06")
         self.assertIn("instant before the cutoff", names)
         self.assertIn("cutoff instant itself refuses", names)
-        self.assertIn("original reverse hops", names)
+        self.assertIn("one direct operation", names)
         self.assertIn("registered prefix and released payment stay unchanged", names)
         self.assertIn("does not burn or reopen", names)
 

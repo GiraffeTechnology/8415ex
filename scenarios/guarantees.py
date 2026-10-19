@@ -607,11 +607,11 @@ def _idempotence(recorder):
                   movements=exchange.payments.movements,
                   assetReturns=exchange.asset_control.returns)
     recorder.expect("repeating the advance repeats no movement", ("T-30",),
-                    {"complete": True, "movements": 3, "assetReturns": 3},
+                    {"complete": True, "movements": 3, "assetReturns": 1},
                     {"complete": report["complete"],
                      "movements": exchange.payments.movements,
                      "assetReturns": exchange.asset_control.returns},
-                    detail="three original buyer refunds and three original reverse hops, "
+                    detail="three original buyer refunds and one direct boundary return, "
                            "however many times the same recovery is asked")
     state = exchange.segment_release_state(RECEIPT, 1)
     recorder.expect("a release replayed after a refund is refused", ("T-30",),
@@ -762,6 +762,13 @@ def _recovery_and_exit(recorder):
                            "cannot recover")
 
     original_movements = late.payments.movements
+    original_verifier = late._mint_book.verify
+    expected_validity = {"receiptId": RECEIPT, "asset": list(late.receipt(RECEIPT).asset.key),
+        "mintDeclarationDigest": late._mint_declarations[RECEIPT]["declarationDigest"],
+        "owner": F.A, "holder": F.A, "boundaryIndex": 0, "observedAt": late._now(None)}
+    # Exact synthetic validity evidence only; never a production authority result.
+    late._mint_book.verify = lambda kind, payload: (payload == expected_validity
+        if kind == "current-asset-validity" else original_verifier(kind, payload))
     recovered = late.resume_trading(RECEIPT)
     recorder.expect("completed unexpired recovery starts a fresh generation without replay", ("T-23", "T-30"),
                     {"generation": 1, "active": (), "history": 1, "payments": original_movements},
@@ -871,7 +878,7 @@ def _adapter_enquiry(recorder):
     control_requests = F.submit_all(control)
     F.refuse(control, control_requests[0], "res-ab-refused")
     state = control.begin_rollback(RECEIPT, 0, F.rollback_authority(control, 0, "rb-1"))
-    return_key = state["assetHops"][0]["key"]
+    return_key = "return:" + RECEIPT + ":" + state["authorityId"]
     control.asset_control._outcomes[return_key] = "unknown"
     control.advance_rollback(RECEIPT)
     control.advance_rollback(RECEIPT)
@@ -886,7 +893,7 @@ def _adapter_enquiry(recorder):
     completed = control.advance_rollback(RECEIPT)
     recorder.expect("the enquiry records the return and sends nothing", ("T-23",),
                     {"status": "returned", "resolved": True, "complete": True,
-                     "returns": 2},
+                     "returns": 0},
                     {"status": resolved["status"], "resolved": "resolvedAt" in resolved,
                      "complete": completed["complete"],
                      "returns": control.asset_control.returns},

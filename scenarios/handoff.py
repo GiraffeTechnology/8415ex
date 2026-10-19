@@ -41,7 +41,7 @@ def build(matrix=None):
              mainPath=entry["source"].replace("-", "_"),
              steps=[entry["setup"], entry["expected"]],
              evidence={name: NOT_RUN for name, _ in EVIDENCE_SLOTS},
-             localResult="NOT_VERIFIED against version 1.2")
+             localResult="NOT_VERIFIED against current published requirements")
         for entry in load()["demonstrations"]
     ]
     return current
