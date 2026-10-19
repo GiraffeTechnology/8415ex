@@ -1,14 +1,22 @@
 """Mount the two-category scenario selector without a financing command."""
 from html import escape
+from http.server import HTTPServer
 from urllib.parse import parse_qs, urlsplit
 
 from .collateral_scenario import WORDS, render_collateral
+from .nft_directory import NftDirectory
 from .remint_review_workbench import RemintReviewWorkbenchServer
 
 
-def mount_collateral_selection(server):
-    if not isinstance(server, RemintReviewWorkbenchServer):
-        raise ValueError("original composed workbench server required")
+def mount_collateral_selection(server, *, allow_empty_catalogue=False):
+    if type(allow_empty_catalogue) is not bool:
+        raise ValueError("explicit empty catalogue composition option required")
+    directory = getattr(server, "nft_directory", None)
+    empty_directory_server = (allow_empty_catalogue
+        and isinstance(server, HTTPServer)
+        and type(directory) is NftDirectory and not directory._bindings)
+    if not isinstance(server, RemintReviewWorkbenchServer) and not empty_directory_server:
+        raise ValueError("original workbench or explicitly selected empty catalogue required")
     if getattr(server, "_collateral_selection_mounted", False):
         return server
     parent = server.RequestHandlerClass

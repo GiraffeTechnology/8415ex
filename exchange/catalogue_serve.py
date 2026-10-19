@@ -16,7 +16,10 @@ from .workbench import WorkbenchHandler
 class EmptyCatalogueServer(HTTPServer):
     """Loopback origin for an operator's existing proxy, without trading inputs."""
 
-    def __init__(self, *, port, commit, tree, reference_feed=None):
+    def __init__(self, *, port, commit, tree, reference_feed=None,
+                 collateral_selection=False):
+        if type(collateral_selection) is not bool:
+            raise ValueError("explicit collateral selection option required")
         if commit is None or tree is None:
             raise ValueError("explicit declared source identities required")
         source = {"commit": identity(commit), "tree": identity(tree),
@@ -27,6 +30,16 @@ class EmptyCatalogueServer(HTTPServer):
         self.reference_feed = reference_feed
         self.nft_directory = NftDirectory((), allow_empty=True)
         super().__init__(("127.0.0.1", port), EmptyCatalogueHandler)
+        if collateral_selection:
+            # Import after selecting the original empty server. The shared
+            # selector accepts this explicit empty-directory composition, so
+            # module CLI execution needs no second server or class-name alias.
+            try:
+                from .collateral_workbench import mount_collateral_selection
+                mount_collateral_selection(self, allow_empty_catalogue=True)
+            except Exception:
+                self.server_close()
+                raise
 
     @property
     def origin(self):
@@ -91,7 +104,9 @@ class EmptyCatalogueHandler(WorkbenchHandler):
                 feed = self.server.reference_feed
                 reference = feed.snapshot() if feed is not None else {"status": "not-connected", "price": None}
                 if request.path == "/market":
-                    self.send_body(200, render_market([], reference, locale, search, empty_catalogue=True))
+                    body = render_market([], reference, locale, search, empty_catalogue=True)
+                    body = body.replace("<main>", "<main>" + self.native_navigation(locale), 1)
+                    self.send_body(200, body)
                 else:
                     self.send_body(200, json.dumps({"nfts": [], "reference": reference}, sort_keys=True),
                                    "application/json; charset=utf-8")
@@ -119,8 +134,11 @@ def main(argv=None):
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--tree", required=True)
+    parser.add_argument("--collateral-selection", action="store_true",
+                        help="mount the read-only scenario selector on this empty catalogue")
     args = parser.parse_args(argv)
-    server = EmptyCatalogueServer(port=args.port, commit=args.commit, tree=args.tree)
+    server = EmptyCatalogueServer(port=args.port, commit=args.commit, tree=args.tree,
+                                  collateral_selection=args.collateral_selection)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
