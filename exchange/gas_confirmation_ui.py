@@ -1,10 +1,26 @@
 """Server-rendered gas disclosure and existing-wallet confirmation boundary."""
 from html import escape
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 from .gas_budget import GasQuote, BuyerConfirmation, GasBudgetRefused
+from .gas_disclosure_locales import WORDS, AVAILABILITY
 
 
 def _escape(value):
     return escape(str(value), quote=True)
+
+
+class GasDisclosureUnavailable(GasBudgetRefused):
+    """Fixed public availability reason, separate from private source errors."""
+    def __init__(self, code):
+        if code not in AVAILABILITY["en"]:
+            raise GasBudgetRefused("known public quote availability reason required")
+        self.code = code
+        super().__init__(code)
+
+    def message(self, locale):
+        if type(locale) is not str or locale not in AVAILABILITY:
+            raise GasBudgetRefused("supported disclosure locale required")
+        return AVAILABILITY[locale][self.code]
 
 
 class GasConfirmationPage:
@@ -37,54 +53,70 @@ class GasConfirmationPage:
     def _quote(self, now):
         if type(now) is not int or now < 0:
             raise GasBudgetRefused('trusted current time required')
-        quote = self.current_quote()
+        try:
+            quote = self.current_quote()
+        except Exception:
+            raise GasDisclosureUnavailable("QUOTE_UNAVAILABLE") from None
         if not isinstance(quote, GasQuote):
-            raise GasBudgetRefused('current typed quote unavailable')
-        if not quote.quoted_at <= now < quote.valid_until:
-            raise GasBudgetRefused('quote expired or not yet valid; refresh before confirming')
+            raise GasDisclosureUnavailable("QUOTE_MISSING")
+        if now < quote.quoted_at:
+            raise GasDisclosureUnavailable("QUOTE_NOT_YET_VALID")
+        if now >= quote.valid_until:
+            raise GasDisclosureUnavailable("QUOTE_EXPIRED")
         return quote
 
-    def render(self, now, csrf_token):
+    def render(self, now, csrf_token, locale="en"):
+        if type(locale) is not str or locale not in WORDS:
+            raise GasBudgetRefused('supported disclosure locale required')
+        words = WORDS[locale]
         quote = self._quote(now)
         if type(csrf_token) is not str or not csrf_token:
             raise GasBudgetRefused('existing application CSRF token required')
         data = quote.disclosure()
+        target = self.post_path
+        if locale != 'en':
+            route = urlsplit(target)
+            query = parse_qsl(route.query, keep_blank_values=True)
+            if any(key == 'lang' for key, _ in query):
+                raise GasBudgetRefused('confirmation locale already bound')
+            target = urlunsplit((route.scheme, route.netloc, route.path,
+                                urlencode(query + [('lang', locale)]), route.fragment))
         rows = ''.join('<tr><td>' + '</td><td>'.join(_escape(value) for value in (
             sample.sample_id, sample.fee_wei, sample.observed_at, sample.block_number,
             sample.source, sample.raw_sha256)) + '</td></tr>' for sample in quote.samples)
-        actions = ', '.join(quote.actions)
+        cap = _escape(data['cap']['ETH']) + ' ETH / $' + _escape(data['cap']['USD']) + ' USD'
+        median = _escape(data['median']['ETH']) + ' ETH / $' + _escape(data['median']['USD']) + ' USD'
+        values = (
+            ('maximum', cap), ('median', median),
+            ('quote', _escape(quote.quote_id) + ' / ' + _escape(quote.version)),
+            ('actions', _escape(', '.join(quote.actions))), ('chain', _escape(quote.chain_id)),
+            ('fxTime', _escape(quote.rate_observed_at)),
+            ('fxSource', _escape(quote.rate_source) + ' / ' + _escape(quote.usd_micro_per_eth)),
+            ('expires', _escape(quote.valid_until)),
+        )
+        definitions = ''.join('<dt>' + _escape(words[key]) + '</dt><dd>' + value + '</dd>'
+                              for key, value in values)
+        headers = ''.join('<th>' + _escape(words[key]) + '</th>'
+                          for key in ('sample', 'wei', 'time', 'block', 'source', 'raw'))
         def hidden(name, value):
             return '<input type="hidden" name="' + name + '" value="' + _escape(value) + '">'
-        return ('<section aria-labelledby="gas-quote-heading">'
-            '<h2 id="gas-quote-heading">Gas limit and median</h2>'
-            '<dl><dt>Maximum gas fee</dt><dd>' + _escape(data['cap']['ETH']) + ' ETH / $'
-            + _escape(data['cap']['USD']) + ' USD</dd><dt>Statistical median (P50)</dt><dd>'
-            + _escape(data['median']['ETH']) + ' ETH / $' + _escape(data['median']['USD'])
-            + ' USD</dd><dt>Quote / version</dt><dd>' + _escape(quote.quote_id) + ' / '
-            + _escape(quote.version) + '</dd><dt>Covered actions</dt><dd>' + _escape(actions)
-            + '</dd><dt>Chain</dt><dd>' + _escape(quote.chain_id)
-            + '</dd><dt>FX observation (UTC epoch seconds)</dt><dd>' + _escape(quote.rate_observed_at)
-            + '</dd><dt>FX source / micro-USD per ETH</dt><dd>' + _escape(quote.rate_source)
-            + ' / ' + _escape(quote.usd_micro_per_eth) + '</dd><dt>Valid until (UTC epoch seconds)</dt><dd>'
-            + _escape(quote.valid_until) + '</dd></dl>'
-            '<p>The maximum is an execution limit, not an estimate of actual consumption. '
-            'The wallet freezes this gas maximum separately from the purchase price. '
-            'Actual gas is charged, including consumed gas from failed transactions; '
-            'unused gas prepayment is released after outcomes are known. '
-            'Higher fees require a refreshed quote and confirmation. '
-            'Unlisted future actions are not covered.</p>'
-            '<details><summary>Median sample evidence (' + _escape(len(quote.samples)) + ' samples)</summary>'
-            '<p>sorted-P50-middle-or-two-middle-mean; sample time window '
-            + _escape(quote.window_start) + ' to ' + _escape(quote.window_end)
-            + '; scope ' + _escape(quote.scope) + '; FX SHA-256 ' + _escape(quote.rate_sha256)
-            + '</p><table><thead><tr><th>Sample</th><th>Wei</th><th>Time</th><th>Block</th>'
-            '<th>Source</th><th>Raw SHA-256</th></tr></thead><tbody>' + rows + '</tbody></table></details>'
-            '<form method="post" action="' + _escape(self.post_path) + '">'
+        return ('<section lang="' + locale + '" aria-labelledby="gas-quote-heading">'
+            '<h2 id="gas-quote-heading">' + _escape(words['heading']) + '</h2><dl>'
+            + definitions + '</dl><p>' + _escape(words['explanation']) + '</p>'
+            '<details><summary>' + _escape(words['evidence']) + ' ('
+            + _escape(len(quote.samples)) + ' ' + _escape(words['samples']) + ')</summary>'
+            '<p>sorted-P50-middle-or-two-middle-mean; ' + _escape(words['window']) + ' '
+            + _escape(quote.window_start) + ' ' + _escape(words['to']) + ' '
+            + _escape(quote.window_end) + '; ' + _escape(words['scope']) + ' '
+            + _escape(quote.scope) + '; FX SHA-256 ' + _escape(quote.rate_sha256)
+            + '</p><table><thead><tr>' + headers + '</tr></thead><tbody>'
+            + rows + '</tbody></table></details>'
+            '<form method="post" action="' + _escape(target) + '">'
             + hidden('csrf', csrf_token) + hidden('quoteId', quote.quote_id)
             + hidden('version', quote.version) + hidden('quoteDigest', quote.digest)
             + '<label><input type="checkbox" name="accepted" value="yes" required>'
-            'Confirm this gas maximum and separate prepayment with my wallet</label>'
-            '<button type="submit">Continue to wallet confirmation</button></form></section>')
+            + _escape(words['consent']) + '</label><button type="submit">'
+            + _escape(words['continue']) + '</button></form></section>')
 
     def submit(self, fields, now):
         expected = {'csrf', 'quoteId', 'version', 'quoteDigest', 'accepted'}
@@ -112,3 +144,6 @@ class GasConfirmationPage:
         if self._quote(now).digest != quote.digest:
             raise GasBudgetRefused('quote changed during confirmation; do not send')
         return confirmation
+
+
+

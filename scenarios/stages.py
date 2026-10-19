@@ -46,6 +46,8 @@ NOT_A_DELIVERABLE = {
 #: is checked, so a deliverable cannot claim a module that does not exist.
 DEVELOPED_HERE = {
     0: (
+        {"deliverable": "verify immutable published requirements pins and distinguish current semantic acceptance",
+         "where": "scenarios/current_prd.py"},
         {"deliverable": "the baseline source and run identity a reviewer can re-derive",
          "where": "scenarios/manifest.py"},
         {"deliverable": "the reuse and interface map, with the interfaces still unlocated",

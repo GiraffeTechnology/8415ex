@@ -12,8 +12,10 @@ requirement, not decoration:
 * nothing on these pages can mark an outcome by hand.
 """
 from html import escape
+import re
 
 from .model import REGISTRATION_PATHS
+from .timeline_projection import timeline_projection
 
 #: Wording for each registration status. "pending" must never read as complete.
 REGISTRATION_WORDING = {
@@ -45,60 +47,17 @@ def _table(rows):
     return "<table>" + "".join(rows) + "</table>"
 
 
-def receipt_page(exchange, receipt_id, now=None):
-    """Whole receipt, both positions, the registered prefix and exit readiness."""
-    view = exchange.receipt_view(receipt_id, now)
-    readiness = exchange.redemption_readiness(receipt_id, view["owner"]["account"], now)
-    rows = [
-        _row("Receipt", f"{view['receiptId']} / {view['commodity']['receiptNumber']}"),
-        _row("Whole receipt", f"1 NFT = 1 whole warehouse receipt (tradeable units: "
-                              f"{view['tradeableUnits']})"),
-        _row("Goods inside this receipt", f"{view['commodity']['quantity']} "
-                                          f"{view['commodity']['unit']} of "
-                                          f"{view['commodity']['name']}"),
-        _row("Asset", f"chain {view['asset']['chainId']} / {view['asset']['contract']} "
-                      f"/ token {view['asset']['tokenId']}"),
-        _row("Owner (on-chain trade position)",
-             f"{view['owner']['account']} at position {view['owner']['position']}"),
-        _row("Holder (registration-confirmed position)",
-             f"{view['holder']['account']} at position {view['holder']['position']}"),
-        _row("Owner and holder agree", "yes" if view["ownerEqualsHolder"] else
-             "no - the registrar is behind the trade chain, which is the normal lag"),
-        _row("Current trade head", f"position {view['owner']['position']}"),
-        _row("Registered prefix", f"{view['registeredPrefixLegs']} of "
-                                  f"{view['owner']['position']} legs confirmed"),
-        _row("Legs still outstanding", view["outstandingLegs"]),
-        _row("Registration path", f"{view['registrationPathLabel']} - simulated role only, "
-                                  f"not a real registration institution"),
-        _row("Trading window", "open" if view["tradingOpen"] else
-             "closed - no new trade is accepted for this receipt"),
-        _row("Segmented funding", "each leg funds its own escrow; released per segment"
-             if view["fundingModelled"] else "not modelled in this stage"),
-        _row("Exit / collection", "not available from this page. "
-             + ("the necessary condition owner == holder holds, and it is not sufficient"
-                if readiness["necessaryConditionMet"] else
-                "blocked: " + ", ".join(readiness["blockingReasons"]))),
-        _row("Further checks not performed here",
-             ", ".join(readiness["furtherChecksNotPerformedHere"])),
-    ]
-    exit_state = exchange.exit_report(receipt_id, now)
-    if exit_state["open"]:
-        rows.extend([
-            _row("Exit requested by", f"{exit_state['requester']} "
-                                      f"(request {exit_state['requestId']})"),
-            _row("Verified checks on record", ", ".join(exit_state["verifiedChecks"]) or "none"),
-            _row("Exit progress", ", ".join(
-                f"{entry['step']}: {entry['status']}"
-                + (f" at {entry['completedAt']}" if entry["completedAt"] else "")
-                for entry in exit_state["steps"])),
-            _row("Physical hand-over and on-chain burn", "these are not one atomic act; each "
-                 "step records its own completion instant"),
-            _row("Token burned", "yes - the asset link, registration order, funds and "
-                                 "collection records are retained"
-                 if exit_state["burned"] else "no"),
-            _row("Undefined exit ordering", "; ".join(exit_state["undefinedOrdering"])),
-        ])
-    return "<h2>Receipt detail</h2>" + _table(rows)
+def receipt_page(exchange, receipt_id, now=None, *, read_details=None, verify_details=None, verify_signature=None):
+    """A complete HTML document from original-verified privacy-safe detail only.
+
+    Direct library callers have the same boundary as the native HTTP entry.
+    An absent original reader stays explicitly unavailable; raw mint declarations
+    must never become a fallback for missing verified business clauses.
+    """
+    from .nft_detail import receipt_detail
+    from .nft_detail_page import render_detail
+    return render_detail(receipt_detail(exchange, receipt_id, read_details=read_details,
+                         verify_details=verify_details, verify_signature=verify_signature, now=now))
 
 
 def authorization_page(exchange, receipt_id, authorization_ids, now=None):
@@ -107,18 +66,15 @@ def authorization_page(exchange, receipt_id, authorization_ids, now=None):
     blocks = ["<h2>Authorization and trade</h2>",
               "<p>Connecting a wallet authorizes nothing by itself. Each action below is "
               "checked against the constraints that wallet signed.</p>"]
-    for authorization_id in authorization_ids:
+    for ordinal, authorization_id in enumerate(authorization_ids, 1):
         state = exchange.authorization_state(authorization_id, now)
         grant = exchange.authorization(authorization_id)
         blocks.append(_table([
-            _row("Authorization", state["authorizationId"]),
-            _row("Wallet account", state["account"]),
+            _row("Authorization", f"scope {ordinal}"),
             _row("Applies right now", "yes" if state["applies"] else
-                 "no - " + ", ".join(state["reasons"])),
-            _row("Active session / bound session",
-                 f"{state['activeSession']} / {state['boundSession']}"),
+                 "no - original authorization checks did not pass"),
             _row("Allowed actions", ", ".join(grant.allowed_actions)),
-            _row("Allowed counterparties", ", ".join(grant.counterparties) or "any"),
+            _row("Counterparty scope", "restricted by original grant" if grant.counterparties else "unrestricted by this grant"),
             _row("Amount bound", f"{grant.max_amount} (smallest units of {grant.quote_asset})"),
             _row("Asset", f"chain {grant.chain_id} / token {grant.asset.token_id} "
                           f"(one whole receipt)"),
@@ -140,12 +96,17 @@ def authorization_page(exchange, receipt_id, authorization_ids, now=None):
 def timeline_page(exchange, receipt_id, now=None):
     """Each hop with its registration and funding state, never collapsed."""
     view = exchange.receipt_view(receipt_id, now)
+    positions = {row["legIndex"]: row for row in
+                 timeline_projection(exchange, receipt_id, now=now)["legs"]}
     header = ("<tr><th>Leg</th><th>From</th><th>To</th><th>Price</th><th>Execution</th>"
               "<th>Registration</th><th>Funding</th><th>Rollback</th></tr>")
     rows = [header]
     for leg in view["legs"]:
+        position = positions[leg["legIndex"]]
+        source = position["fromPosition"]
         rows.append("<tr>" + "".join(f"<td>{escape(str(cell))}</td>" for cell in (
-            leg["legIndex"], leg["seller"], leg["buyer"],
+            leg["legIndex"], f"position {source if source is not None else '?'}",
+            f"position {position['toPosition']}",
             f"{leg['price']} {leg['quoteAsset']}",
             "trade submitted and observed locally",
             REGISTRATION_WORDING[leg["registrationStatus"]] + " (simulated)",
@@ -162,7 +123,7 @@ def timeline_page(exchange, receipt_id, now=None):
             + ("New trades are refused from that instant; registration, settlement and "
                "rollback already in flight continue under their own rules. "
                if deadline["pastDeadline"] else "")
-            + (f"Unfinished segments would return to {deadline['unfinishedSuffixReturnsTo']}, "
+            + (f"Unfinished segments would return to position {view['holder']['position']}, "
                f"the last confirmed holder. "
                if deadline["pastDeadline"] and deadline["unfinishedSuffixReturnsTo"] else "")
             + "</p>"
@@ -172,7 +133,7 @@ def timeline_page(exchange, receipt_id, now=None):
 
 
 def rollback_page(exchange, receipt_id, now=None):
-    """Stage 1 states plainly that rollback is not implemented yet."""
+    """Show evidenced reverse hops and the protected registered prefix."""
     view = exchange.receipt_view(receipt_id, now)
     rows = [
         _row("Finalized prefix", f"{view['registeredPrefixLegs']} legs confirmed and shown, "
@@ -191,9 +152,8 @@ def rollback_page(exchange, receipt_id, now=None):
             _row("Affected interval", ", ".join(str(i) for i in state["affectedLegs"])),
             _row("Last finalized position", f"leg {state['lastFinalizedPosition']} - this prefix "
                                             f"is not reopened, reversed or re-collected"),
-            _row("Return boundary", f"{state['returnBoundaryAccount']} - the asset returns here, "
-                                    f"in one control operation, without walking the intermediate "
-                                    f"wallets or needing their gas"),
+            _row("Return boundary", f"position {state['lastFinalizedPosition']} - the asset returns here, "
+                                    f"in one control operation, preserving the finalized prefix"),
             _row("Asset returned", "yes" if state["assetControl"]["returned"] else "not yet"),
             _row("Outstanding steps", ", ".join(
                 f"{step['stepId']} ({step['status']})" for step in state["outstandingSteps"])
@@ -216,7 +176,7 @@ def rollback_page(exchange, receipt_id, now=None):
                 segment["legIndex"], f"{segment['principal']} {segment['quoteAsset']}",
                 segment["escrowStatus"], segment["paymentStatus"] or "no attempt yet",
                 segment["netToPayee"], segment["netToPayer"],
-                f"{segment['gasTotal']} ({segment['gasBorneBy']})",
+                f"{segment['gasTotal']} ETH wei (buyer at position {segment['legIndex'] + 1})",
                 segment["rollbackStatus"])) + "</tr>")
         money = ("<p>Release and refund are mutually exclusive, and a released segment's "
                  "rollback capability is gone for good. A shared on-chain operation is "
@@ -257,13 +217,23 @@ def queue_page(exchange, receipt_id, now=None):
 def evidence_page(exchange, receipt_id, run, now=None):
     """Run identity for this page load. It never presents an older run as this one."""
     view = exchange.receipt_view(receipt_id, now)
+    def source_identity(name):
+        value = run.get(name)
+        return value if isinstance(value, str) and re.fullmatch(r"[0-9a-f]{40}", value) else "not supplied"
+    scenario = run.get("scenario")
+    scenario = scenario if isinstance(scenario, str) and re.fullmatch(r"DEMO-0[1-6]", scenario) else "native domain observation"
+    run_id = run.get("runId")
+    run_id = run_id if isinstance(run_id, str) and re.fullmatch(r"demo-[0-9a-f]{32}", run_id) else "private run reference"
+    hashes = run.get("transactionHashes", ())
+    hashes = [hashes] if isinstance(hashes, str) else hashes
+    hashes = [item for item in hashes if isinstance(item, str) and re.fullmatch(r"0x[0-9a-fA-F]{64}", item)] if isinstance(hashes, (tuple, list)) else []
     rows = [
-        _row("Scenario", run.get("scenario", "local Stage 1 fixture")),
-        _row("Run id", run.get("runId", "not supplied")),
-        _row("Source commit", run.get("commit", "not supplied")),
-        _row("Source tree", run.get("tree", "not supplied")),
+        _row("Scenario", scenario),
+        _row("Run id", run_id),
+        _row("Source commit", source_identity("commit")),
+        _row("Source tree", source_identity("tree")),
         _row("Network", f"chain id {view['asset']['chainId']} (test network)"),
-        _row("Transaction hashes", run.get("transactionHashes", "none - Stage 1 sends no transaction")),
+        _row("Transaction hashes", ", ".join(hashes) or "no verified transaction hash supplied"),
         _row("Registration evidence", "simulated adapter results only"),
         _row("Final assertion", f"owner position {view['owner']['position']}, "
                                 f"holder position {view['holder']['position']}, "
@@ -300,8 +270,9 @@ def page(exchange, receipt_id, name, authorization_ids=(), run=None, now=None):
     """Render one named page as a complete HTML document."""
     if name not in PAGES:
         raise KeyError(name)
+    if name == "receipt":
+        return receipt_page(exchange, receipt_id, now)
     body = {
-        "receipt": lambda: receipt_page(exchange, receipt_id, now),
         "authorization": lambda: authorization_page(exchange, receipt_id, authorization_ids, now),
         "timeline": lambda: timeline_page(exchange, receipt_id, now),
         "rollback": lambda: rollback_page(exchange, receipt_id, now),
@@ -322,3 +293,6 @@ def page(exchange, receipt_id, name, authorization_ids=(), run=None, now=None):
             f"<header><b>8415ex</b> status console</header><nav>{tabs}</nav>"
             f"<div class=\"banner\">{escape(banner)}</div>"
             f"<main>{body}</main></body></html>")
+
+
+

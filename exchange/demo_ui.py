@@ -14,6 +14,7 @@ import uuid
 
 from scenarios.demos import DEMOS
 from scenarios.harness import run_all
+from .demo_public import run_record
 
 MAX_RUNS = 16
 MAX_BODY = 2048
@@ -122,13 +123,14 @@ class DemoHandler(BaseHTTPRequestHandler):
         return self.shell(form + '<h2>Recent runs (up to 16)</h2><ul>' + history + '</ul>')
 
     def run_page(self, record, step):
+        record = run_record(record)
         result = record["report"]["scenarios"][0]
         steps = result["steps"]
         if not 0 <= step <= len(steps):
             raise ValueError("step outside recorded range")
         key = escape(record["runId"], quote=True)
         nav = ('<p><a href="/">Scenarios</a> · <a href="/evidence?id=' + key
-               + '">JSON evidence for this run</a></p>')
+               + '">Public projection for this run</a></p>')
         if step:
             nav += '<a href="/run?id=' + key + '&amp;step=' + str(step - 1) + '">Previous observation</a> '
         if step < len(steps):
@@ -138,7 +140,7 @@ class DemoHandler(BaseHTTPRequestHandler):
                        + '</td><td>' + escape(e["outcome"]) + '</td><td><pre>' + pretty(e["expected"])
                        + '</pre></td><td><pre>' + pretty(e["observed"]) + '</pre>'
                        + escape(e.get("detail") or "") + '</td></tr>' for e in result["expectations"])
-        return self.shell('<h2>' + escape(result["scenarioId"] + ' — ' + result["title"]) + '</h2>'
+        return self.shell('<p>' + escape(record["projection"]) + '</p><h2>' + escape(result["scenarioId"] + ' — ' + result["title"]) + '</h2>'
                           + '<p>Run ' + key + ' · simulated path ' + escape(result["mainPath"])
                           + ' · ' + ('local checks passed' if result["passed"] else 'LOCAL FAILURE')
                           + '</p>' + nav + '<h3>Recorded observation ' + str(step) + '/' + str(len(steps))
@@ -170,14 +172,14 @@ class DemoHandler(BaseHTTPRequestHandler):
                 self.send_body(404, "run unknown or expired from memory")
                 return
             if request.path == "/evidence":
-                self.send_body(200, json.dumps(record, sort_keys=True), "application/json; charset=utf-8")
+                self.send_body(200, json.dumps(run_record(record), sort_keys=True), "application/json; charset=utf-8")
             else:
                 values = query.get("step", ["0"])
                 if len(values) != 1:
                     raise ValueError("one observation index required")
                 self.send_body(200, self.run_page(record, int(values[0])))
         except ValueError as error:
-            self.send_body(400, escape(str(error)))
+            self.send_body(400, "simulation request refused; original diagnostic remains private")
 
     def do_POST(self):
         if not self.host_ok() or self.headers.get("Origin") != self.server.origin:
@@ -211,7 +213,7 @@ class DemoHandler(BaseHTTPRequestHandler):
             self.close_connection = True
             self.send_body(408, "simulation request body timed out")
         except (ValueError, UnicodeError) as error:
-            self.send_body(400, escape(str(error)))
+            self.send_body(400, "simulation request refused; original diagnostic remains private")
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Run the loopback-only synthetic scenario console.")
@@ -231,3 +233,4 @@ def main(argv=None):
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

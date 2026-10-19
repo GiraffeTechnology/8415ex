@@ -23,8 +23,11 @@ def validate(records):
     for record in records:
         if not isinstance(record, dict):
             raise ValueError("captured record mapping required")
-        if record.get("evidenceKind") != "LOCAL_SIMULATION":
-            raise ValueError("only labelled local records accepted")
+        kind = record.get("evidenceKind")
+        if kind != "LOCAL_SIMULATION" and not (
+                kind == "SIMULATION_PUBLIC_PROJECTION"
+                and record.get("schema") == "8415ex-public-demo/2"):
+            raise ValueError("only labelled local or typed public simulation records accepted")
         current = record.get("source", {})
         if not isinstance(current, dict):
             raise ValueError("captured source mapping required")

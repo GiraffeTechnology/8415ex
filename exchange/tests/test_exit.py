@@ -1,9 +1,15 @@
-"""T-24, T-25, T-32, T-33: the trading deadline, exit eligibility and the burn."""
+"""V1.4 T24/T25/T32: exact trading cutoff and retired physical-flow boundaries.
+
+Positive physical collection/voucher/burn assertions belong to historical Git
+versions. Holder remint is separate and retains its dedicated regression suite.
+"""
+from copy import deepcopy
 import unittest
+from unittest.mock import patch
 
 from exchange import fixtures as F
 from exchange.errors import DomainError
-from exchange.exit import EXIT_STEPS, REQUIRED_OTHER_CHECKS, exit_step_key
+from exchange.exit import EXIT_STEPS, ExitStep, RedemptionRequest, exit_step_key
 from exchange.rollback import rollback_binding
 
 
@@ -38,7 +44,8 @@ class DeadlineBoundary(unittest.TestCase):
             F.funded_hop(self.exchange, F.A, F.B, 1, "transfer-late",
                          "session-a", "session-b", price=F.PRICE_AB, now=self.stop,
                          expires_at=self.stop + 1)
-        self.assertIn(caught.exception.code, ("EX_MATCH_UNEXECUTABLE", "EX_TRADE_WINDOW_CLOSED"))
+        self.assertEqual(caught.exception.code, "EX_ORDER_NOT_ACCEPTED")
+        self.assertEqual(state["tradeBlockingReasons"], ("EX_TRADE_WINDOW_CLOSED",))
         self.assertEqual(self.exchange.owner_index("rcpt-8415-0001"), 0)
 
     def test_an_in_flight_registration_continues_after_the_deadline(self):
@@ -82,7 +89,7 @@ class DeadlineBoundary(unittest.TestCase):
             exchange.begin_rollback("rcpt-8415-0001", 1, authority, trigger="deadline")
         self.assertEqual(caught.exception.code, "EX_ROLLBACK_TRIGGER_REFUSED")
 
-    def test_a_live_timeout_and_deadline_conflict_is_reported_not_ranked(self):
+    def test_timeout_and_deadline_use_confirmed_oracle_rules_without_a_policy_gate(self):
         F.funded_hop(self.exchange, F.A, F.B, 1, "transfer-ab", "session-a", "session-b",
                      price=F.PRICE_AB)
         self.exchange.submit_registration("rcpt-8415-0001", 0, "req-leg-0", 3_600)
@@ -90,266 +97,176 @@ class DeadlineBoundary(unittest.TestCase):
         state = self.exchange.evaluate_deadline("rcpt-8415-0001")
         self.assertEqual(state["overdueRequests"], (0,))
         self.assertTrue(state["pastDeadline"])
-        self.assertEqual(len(state["undefinedOrdering"]), 1)
-        self.assertIn("D-03", state["undefinedOrdering"][0])
-        self.assertIn("not defined", state["undefinedOrdering"][0])
+        self.assertEqual(state["undefinedOrdering"], ())
+        self.assertTrue(state["requiresAuthoritativeReconciliation"])
+        self.assertFalse(state["graceReceiptRequired"])
+        self.assertFalse(state["recoveryExecutedByReport"])
+        self.assertEqual(state["registrationTimeSource"],
+                         "single authoritative Oracle record under mint conditions")
 
 
-class ExitEligibility(unittest.TestCase):
-    """T-25: divergence refuses the exit, and agreement is not enough on its own."""
+class RetiredPhysicalOperations(unittest.TestCase):
+    """No grant, check list, replay or report may revive physical fulfillment."""
 
     def setUp(self):
         self.exchange, self.clock = F.settled_at_b()
         F.redeem_authorization(self.exchange)
 
-    def test_owner_equals_holder_with_every_check_is_eligible(self):
-        eligibility = self.exchange.exit_eligibility("rcpt-8415-0001", F.B, "auth-redeem",
-                                                     F.ALL_CHECKS)
-        self.assertTrue(eligibility["eligible"])
-        self.assertTrue(eligibility["ownerEqualsHolderIsNotSufficient"])
+    def snapshot(self):
+        ex = self.exchange
+        return deepcopy({
+            "owner": ex.owner_of("rcpt-8415-0001"),
+            "holder": ex.holder_of("rcpt-8415-0001"),
+            "legs": ex.recorded_legs("rcpt-8415-0001"),
+            "timeline": ex.receipt_timeline("rcpt-8415-0001"),
+            "funds": ex.reconciliation("rcpt-8415-0001"),
+            "exit": ex._exits["rcpt-8415-0001"],
+            "deskRecords": ex.voucher_desk._records,
+            "deskHistory": ex.voucher_desk._history,
+        })
 
-    def test_divergence_refuses_the_exit(self):
-        exchange, _ = F.rollback_chain_to_d()
-        requests = F.submit_all(exchange)
-        F.confirm(exchange, requests[0], "res-ab")
-        exchange.connect_wallet(F.D, "session-d")
-        exchange.register_authorization(F.authorization(F.D, "auth-d", "session-d",
-                                                        actions=("redeem",)))
-        eligibility = exchange.exit_eligibility("rcpt-8415-0001", F.D, "auth-d", F.ALL_CHECKS)
-        self.assertFalse(eligibility["eligible"])
-        self.assertIn("EX_OWNER_HOLDER_DIVERGED", eligibility["reasons"])
+    def assert_retired(self, operation):
+        before = self.snapshot()
+        with patch.object(self.exchange.voucher_desk, "act",
+                          side_effect=AssertionError("physical action must not run")):
+            with self.assertRaises(DomainError) as caught:
+                operation()
+        self.assertEqual(caught.exception.code, "EX_PHYSICAL_FULFILLMENT_RETIRED")
+        self.assertEqual(self.snapshot(), before)
 
-    def test_agreement_alone_is_not_sufficient_when_a_check_is_unverified(self):
-        for missing in REQUIRED_OTHER_CHECKS:
-            with self.subTest(missing=missing):
-                supplied = tuple(c for c in F.ALL_CHECKS if c != missing)
-                eligibility = self.exchange.exit_eligibility("rcpt-8415-0001", F.B, "auth-redeem",
-                                                             supplied)
-                self.assertTrue(eligibility["ownerEqualsHolder"])
-                self.assertFalse(eligibility["eligible"])
-                self.assertIn("EX_REDEMPTION_CHECKS_NOT_VERIFIED", eligibility["reasons"])
-                self.assertEqual(eligibility["missingChecks"], (missing,))
+    def test_agreement_and_complete_checks_cannot_make_physical_exit_eligible(self):
+        before = self.snapshot()
+        result = self.exchange.exit_eligibility(
+            "rcpt-8415-0001", F.B, "auth-redeem", F.ALL_CHECKS)
+        self.assertFalse(result["eligible"])
+        self.assertEqual(result["reasons"], ("EX_PHYSICAL_FULFILLMENT_RETIRED",))
+        self.assertEqual(result["physicalActions"], ())
+        self.assertEqual(self.snapshot(), before)
 
-    def test_no_supplied_check_means_nothing_is_assumed_passed(self):
-        eligibility = self.exchange.exit_eligibility("rcpt-8415-0001", F.B, "auth-redeem")
-        self.assertEqual(eligibility["missingChecks"], REQUIRED_OTHER_CHECKS)
-        self.assertFalse(eligibility["eligible"])
-
-    def test_another_account_cannot_request_the_exit(self):
-        eligibility = self.exchange.exit_eligibility("rcpt-8415-0001", F.C, "auth-redeem",
-                                                     F.ALL_CHECKS)
-        self.assertFalse(eligibility["eligible"])
-        self.assertIn("EX_REDEMPTION_REQUESTER_REFUSED", eligibility["reasons"])
-
-    def test_an_authorization_that_does_not_cover_the_exit_is_refused(self):
-        self.exchange.register_authorization(
-            F.authorization(F.B, "auth-trade-only", "session-b", actions=("sell", "buy")))
-        eligibility = self.exchange.exit_eligibility("rcpt-8415-0001", F.B, "auth-trade-only",
-                                                     F.ALL_CHECKS)
-        self.assertFalse(eligibility["eligible"])
-        self.assertIn("EX_AUTH_ACTION_REFUSED", eligibility["reasons"])
-
-    def test_a_revoked_authorization_refuses_the_exit(self):
+    def test_missing_or_revoked_grants_do_not_create_a_new_physical_checklist(self):
         self.exchange.revoke_authorization("auth-redeem")
-        eligibility = self.exchange.exit_eligibility("rcpt-8415-0001", F.B, "auth-redeem",
-                                                     F.ALL_CHECKS)
-        self.assertFalse(eligibility["eligible"])
-        self.assertIn("EX_AUTH_REVOKED", eligibility["reasons"])
+        before = self.snapshot()
+        for account, grant in ((F.B, None), (F.B, "auth-redeem"), (F.C, "auth-redeem")):
+            with self.subTest(account=account, grant=grant):
+                result = self.exchange.exit_eligibility(
+                    "rcpt-8415-0001", account, grant)
+                self.assertFalse(result["eligible"])
+                self.assertEqual(result["reasons"], ("EX_PHYSICAL_FULFILLMENT_RETIRED",))
+                self.assertEqual(result["physicalActions"], ())
+        self.assertEqual(self.snapshot(), before)
 
-    def test_requesting_without_eligibility_is_refused_and_opens_nothing(self):
-        with self.assertRaises(DomainError) as caught:
-            self.exchange.request_redemption("rcpt-8415-0001", F.B, "auth-redeem", "rdm-1")
-        self.assertEqual(caught.exception.code, "EX_REDEMPTION_REFUSED")
-        self.assertFalse(self.exchange.exit_report("rcpt-8415-0001")["open"])
+    def test_new_redemption_is_refused_even_with_the_old_full_grant_and_checks(self):
+        self.assert_retired(lambda: self.exchange.request_redemption(
+            "rcpt-8415-0001", F.B, "auth-redeem", "retired-request", F.ALL_CHECKS))
 
-
-class VoucherAndBurn(unittest.TestCase):
-    """T-32: stop-resale, voucher and burn are separate, recoverable records."""
-
-    def setUp(self):
-        self.exchange, self.clock = F.settled_at_b()
-        F.redeem_authorization(self.exchange)
-        self.exchange.request_redemption("rcpt-8415-0001", F.B, "auth-redeem", "rdm-1",
-                                         F.ALL_CHECKS)
-
-    def test_the_four_steps_are_recorded_separately(self):
-        self.clock.advance(5)
-        self.exchange.advance_exit("rcpt-8415-0001", through="stop-resale")
-        self.clock.advance(5)
-        self.exchange.advance_exit("rcpt-8415-0001", through="voucher-issued")
-        self.clock.advance(5)
-        self.exchange.advance_exit("rcpt-8415-0001", through="voucher-handover-confirmed")
-        self.clock.advance(5)
-        report = self.exchange.advance_exit("rcpt-8415-0001")
-        self.assertEqual(tuple(entry["step"] for entry in report["steps"]), EXIT_STEPS)
-        self.assertTrue(all(entry["status"] == "done" for entry in report["steps"]))
-        self.assertEqual(len(report["distinctCompletionInstants"]), 4)
-
-    def test_the_physical_handover_and_the_burn_are_not_atomic(self):
-        self.clock.advance(5)
-        self.exchange.advance_exit("rcpt-8415-0001", through="voucher-handover-confirmed")
-        self.clock.advance(120)
-        report = self.exchange.advance_exit("rcpt-8415-0001")
-        self.assertFalse(report["physicalAndOnChainAreAtomic"])
-        self.assertTrue(report["completionInstantsDiffer"])
-        handover = next(e for e in report["steps"] if e["step"] == "voucher-handover-confirmed")
-        burn = next(e for e in report["steps"] if e["step"] == "burn")
-        self.assertNotEqual(handover["completedAt"], burn["completedAt"])
-
-    def test_a_later_step_is_never_completed_from_an_earlier_one(self):
-        report = self.exchange.advance_exit("rcpt-8415-0001", through="voucher-issued")
-        statuses = {entry["step"]: entry["status"] for entry in report["steps"]}
-        self.assertEqual(statuses["voucher-handover-confirmed"], "pending")
-        self.assertEqual(statuses["burn"], "pending")
-        self.assertFalse(report["burned"])
-
-    def test_a_failed_step_blocks_and_then_recovers(self):
-        exchange, clock = F.settled_at_b(voucher_outcomes={exit_step_key("burn", "rcpt-8415-0001", "rdm-1"): "failed"})
-        F.redeem_authorization(exchange)
-        exchange.request_redemption("rcpt-8415-0001", F.B, "auth-redeem", "rdm-1", F.ALL_CHECKS)
-        report = exchange.advance_exit("rcpt-8415-0001")
-        self.assertEqual(report["state"], "blocked")
-        self.assertFalse(report["burned"])
-        clock.advance(30)
-        report = exchange.advance_exit("rcpt-8415-0001")
-        self.assertTrue(report["complete"])
-        self.assertTrue(report["burned"])
-
-    def test_an_unknown_step_outcome_is_resolved_by_enquiry(self):
-        exchange, _ = F.settled_at_b(voucher_outcomes={exit_step_key("voucher-issued", "rcpt-8415-0001", "rdm-1"): "unknown"})
-        F.redeem_authorization(exchange)
-        exchange.request_redemption("rcpt-8415-0001", F.B, "auth-redeem", "rdm-1", F.ALL_CHECKS)
-        report = exchange.advance_exit("rcpt-8415-0001")
-        self.assertEqual(report["state"], "blocked")
-        exchange.voucher_desk.resolve_unknown(exit_step_key("voucher-issued", "rcpt-8415-0001", "rdm-1"), "done")
-        report = exchange.advance_exit("rcpt-8415-0001")
-        self.assertTrue(report["complete"])
-
-    def test_the_undefined_exit_order_is_reported(self):
-        report = self.exchange.exit_report("rcpt-8415-0001")
-        self.assertEqual(len(report["undefinedOrdering"]), 1)
-        self.assertIn("D-07", report["undefinedOrdering"][0])
-
-    def test_the_desk_is_marked_simulated(self):
-        self.assertTrue(self.exchange.voucher_desk.simulated)
-        self.assertIn("simulated", self.exchange.voucher_desk.label)
-
-
-class NoRepeatedExit(unittest.TestCase):
-    """T-33: repeated collection, voucher, burn and replay are refused."""
-
-    def setUp(self):
-        self.exchange, self.clock = F.settled_at_b()
-        F.redeem_authorization(self.exchange)
-        self.exchange.request_redemption("rcpt-8415-0001", F.B, "auth-redeem", "rdm-1",
-                                         F.ALL_CHECKS)
-        self.exchange.advance_exit("rcpt-8415-0001")
-
-    def test_a_second_redemption_request_is_refused(self):
-        eligibility = self.exchange.exit_eligibility("rcpt-8415-0001", F.B, "auth-redeem",
-                                                     F.ALL_CHECKS)
-        self.assertFalse(eligibility["eligible"])
-        self.assertIn("EX_REDEMPTION_ALREADY_REQUESTED", eligibility["reasons"])
-        with self.assertRaises(DomainError) as caught:
-            self.exchange.request_redemption("rcpt-8415-0001", F.B, "auth-redeem", "rdm-2",
-                                             F.ALL_CHECKS)
-        self.assertEqual(caught.exception.code, "EX_REDEMPTION_REFUSED")
-
-    def test_repeated_advance_calls_repeat_no_act(self):
-        before = dict(self.exchange.voucher_desk._records)
+    def test_repeated_redemption_does_not_open_a_request_or_repeat_funds_actions(self):
         for _ in range(3):
-            report = self.exchange.advance_exit("rcpt-8415-0001")
-        self.assertTrue(report["complete"])
-        self.assertEqual(self.exchange.voucher_desk._records.keys(), before.keys())
-
-    def test_a_replayed_voucher_key_for_another_step_is_refused(self):
-        with self.assertRaises(DomainError) as caught:
-            self.exchange.voucher_desk.act(exit_step_key("burn", "rcpt-8415-0001", "rdm-1"), "voucher-issued", "rcpt-8415-0001", F.B)
-        self.assertEqual(caught.exception.code, "EX_VOUCHER_SUBSTITUTION_REFUSED")
-
-    def test_a_replayed_voucher_key_for_another_account_is_refused(self):
-        with self.assertRaises(DomainError) as caught:
-            self.exchange.voucher_desk.act(exit_step_key("burn", "rcpt-8415-0001", "rdm-1"), "burn", "rcpt-8415-0001", F.C)
-        self.assertEqual(caught.exception.code, "EX_VOUCHER_SUBSTITUTION_REFUSED")
-
-    def test_the_history_stays_readable_after_the_burn(self):
-        timeline = self.exchange.receipt_timeline("rcpt-8415-0001")
-        kinds = [entry["kind"] for entry in timeline]
-        self.assertIn("receipt-minted", kinds)
-        self.assertIn("transfer-executed", kinds)
-        self.assertIn("registration-result", kinds)
-        self.assertIn("segment-release-attempt", kinds)
-        self.assertIn("receipt-burned", kinds)
-        burned = next(e for e in timeline if e["kind"] == "receipt-burned")
-        for retained in ("assetLink", "registrationOrder", "fundsRecord", "collectionRecord"):
-            self.assertEqual(burned["detail"][retained], "retained")
-        self.assertTrue(burned["detail"]["historyPreserved"])
-        self.assertEqual(self.exchange.recorded_legs("rcpt-8415-0001"), 1)
-        self.assertEqual(self.exchange.reconciliation("rcpt-8415-0001")["segments"][0]["released"],
-                         True)
-
-    def test_the_exit_report_still_answers_after_the_burn(self):
+            self.assert_retired(lambda: self.exchange.request_redemption(
+                "rcpt-8415-0001", F.B, "auth-redeem", "same-retired-request", F.ALL_CHECKS))
         report = self.exchange.exit_report("rcpt-8415-0001")
-        self.assertTrue(report["burned"])
-        self.assertTrue(report["historyPreserved"])
-        self.assertTrue(report["complete"])
+        self.assertFalse(report["open"])
+        self.assertFalse(report["complete"])
+        self.assertTrue(report["retiredOperation"])
+        self.assertFalse(report["executable"])
 
+    def test_each_old_exit_step_and_default_resume_refuse_without_mutation(self):
+        for step in (None,) + EXIT_STEPS:
+            with self.subTest(step=step):
+                self.assert_retired(lambda: self.exchange.advance_exit(
+                    "rcpt-8415-0001", through=step))
 
-class ExitConsole(unittest.TestCase):
-    """The pages report the deadline and the exit without claiming atomicity."""
-
-    def setUp(self):
-        from exchange import views
-        self.views = views
-        self.exchange, self.clock = F.settled_at_b()
-        F.redeem_authorization(self.exchange)
-        self.exchange.request_redemption("rcpt-8415-0001", F.B, "auth-redeem", "rdm-1",
-                                         F.ALL_CHECKS)
-        self.clock.advance(5)
-        self.exchange.advance_exit("rcpt-8415-0001", through="voucher-handover-confirmed")
-        self.clock.advance(60)
-        self.exchange.advance_exit("rcpt-8415-0001")
-
-    def _page(self, name):
-        return self.views.page(self.exchange, "rcpt-8415-0001", name, run={"runId": "exit"})
-
-    def test_the_receipt_page_denies_atomicity(self):
-        html = self._page("receipt")
-        self.assertIn("not one atomic act", html)
-        self.assertIn("records its own completion instant", html)
-
-    def test_the_receipt_page_lists_each_step_with_its_instant(self):
-        html = self._page("receipt")
+    def test_the_old_simulator_cannot_create_or_replay_physical_actions(self):
+        before = self.snapshot()
         for step in EXIT_STEPS:
-            self.assertIn(step, html)
-        self.assertIn("Verified checks on record", html)
+            key = exit_step_key(step, "rcpt-8415-0001", "old-request")
+            for account in (F.B, F.C):
+                with self.subTest(step=step, account=account):
+                    with self.assertRaises(DomainError) as caught:
+                        self.exchange.voucher_desk.act(
+                            key, step, "rcpt-8415-0001", account)
+                    self.assertEqual(caught.exception.code, "EX_PHYSICAL_FULFILLMENT_RETIRED")
+        self.assertEqual(self.snapshot(), before)
 
-    def test_the_receipt_page_says_the_records_are_retained_after_the_burn(self):
-        self.assertIn("records are retained", self._page("receipt"))
+    def test_retired_readiness_is_read_only_and_never_a_new_acceptance_condition(self):
+        before = self.snapshot()
+        for _ in range(3):
+            result = self.exchange.redemption_readiness("rcpt-8415-0001", F.B)
+            self.assertFalse(result["eligible"])
+            self.assertEqual(result["reasons"], ("EX_PHYSICAL_FULFILLMENT_RETIRED",))
+        self.assertEqual(self.snapshot(), before)
 
-    def test_the_receipt_page_reports_the_undefined_exit_ordering(self):
-        self.assertIn("D-07", self._page("receipt"))
+    def test_a_refused_physical_request_does_not_block_an_authorized_new_trade(self):
+        self.assert_retired(lambda: self.exchange.request_redemption(
+            "rcpt-8415-0001", F.B, "auth-redeem", "never-opened", F.ALL_CHECKS))
+        _, leg = F.funded_hop(
+            self.exchange, F.B, F.C, 2, "transfer-bc",
+            "session-b", "session-c", price=F.PRICE_BC)
+        self.assertEqual(leg.buyer, F.C)
+        self.assertEqual(self.exchange.owner_of("rcpt-8415-0001"), F.C)
+        self.assertEqual(self.exchange.holder_of("rcpt-8415-0001"), F.B)
 
-    def test_the_timeline_states_the_deadline_behaviour(self):
-        exchange, clock = F.exit_exchange()
-        F.funded_hop(exchange, F.A, F.B, 1, "transfer-ab", "session-a", "session-b",
-                     price=F.PRICE_AB)
-        exchange.submit_registration("rcpt-8415-0001", 0, "req-leg-0", 3_600)
-        clock.now = exchange.receipt("rcpt-8415-0001").trade_stop_at
-        html = self.views.page(exchange, "rcpt-8415-0001", "timeline")
-        self.assertIn("New trades are refused from that instant", html)
-        self.assertIn("continue under their own rules", html)
-        self.assertIn("Undefined ordering", html)
-        self.assertIn("D-03", html)
+    def historical_unknown(self):
+        """Synthetic retained evidence only; never a new physical attempt."""
+        request = RedemptionRequest(
+            "historical-request", "rcpt-8415-0001", F.B,
+            "auth-redeem", self.clock.now)
+        key = exit_step_key("burn", request.receipt_id, request.request_id)
+        steps = tuple(ExitStep(
+            step, exit_step_key(step, request.receipt_id, request.request_id),
+            status="blocked" if step == "burn" else "pending",
+            detail=(("outcome", "unknown"),) if step == "burn" else ())
+            for step in EXIT_STEPS)
+        self.exchange._exits[request.receipt_id] = {
+            "request": request, "steps": steps, "state": "blocked",
+            "verifiedChecks": F.ALL_CHECKS}
+        self.exchange.voucher_desk._records[key] = {
+            "key": key, "step": "burn", "receiptId": request.receipt_id,
+            "account": F.B, "status": "unknown", "effect": "unknown"}
+        self.exchange.voucher_desk._history[key] = [
+            dict(self.exchange.voucher_desk._records[key])]
+        return key
 
-    def test_the_timeline_names_the_return_target_after_the_deadline(self):
-        exchange, clock = F.rollback_chain_to_d()
-        requests = F.submit_all(exchange)
-        F.confirm(exchange, requests[0], "res-ab")
-        clock.now = exchange.receipt("rcpt-8415-0001").trade_stop_at
-        html = self.views.page(exchange, "rcpt-8415-0001", "timeline")
-        self.assertIn("the last confirmed holder", html)
-        self.assertIn(F.B, html)
+    def test_historical_unknown_stays_readable_and_cannot_be_resumed(self):
+        self.historical_unknown()
+        before = self.snapshot()
+        report = self.exchange.exit_report("rcpt-8415-0001")
+        self.assertTrue(report["open"])
+        self.assertEqual(report["state"], "blocked")
+        self.assertFalse(report["complete"])
+        self.assertFalse(report["burned"])
+        self.assertTrue(report["retiredOperation"])
+        self.assertFalse(report["executable"])
+        self.assertTrue(report["historyPreserved"])
+        self.assertEqual(report["requestId"], "historical-request")
+        burn = next(row for row in report["steps"] if row["step"] == "burn")
+        self.assertEqual(burn["detail"]["outcome"], "unknown")
+        self.assertIsNone(burn["completedAt"])
+        self.assertEqual(self.snapshot(), before)
+        self.assert_retired(lambda: self.exchange.advance_exit("rcpt-8415-0001"))
+
+    def test_historical_lookup_and_report_do_not_erase_or_resolve_unknown(self):
+        key = self.historical_unknown()
+        before = self.snapshot()
+        for _ in range(3):
+            self.assertEqual(self.exchange.voucher_desk.lookup(key)["status"], "unknown")
+            self.assertEqual(len(self.exchange.voucher_desk.history(key)), 1)
+            self.exchange.exit_report("rcpt-8415-0001")
+        self.assertEqual(self.snapshot(), before)
+
+    def test_observed_unknown_resolution_retains_history_without_replaying_a_step(self):
+        key = self.historical_unknown()
+        before_timeline = self.exchange.receipt_timeline("rcpt-8415-0001")
+        before_funds = deepcopy(self.exchange.reconciliation("rcpt-8415-0001"))
+        with patch.object(self.exchange.voucher_desk, "act",
+                          side_effect=AssertionError("resolution must not execute")):
+            result = self.exchange.voucher_desk.resolve_unknown(key, "failed")
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["effect"], "not-applied")
+        self.assertEqual(len(self.exchange.voucher_desk.history(key)), 2)
+        self.assertEqual(self.exchange.voucher_desk.history(key)[0]["status"], "unknown")
+        self.assertEqual(self.exchange.receipt_timeline("rcpt-8415-0001"), before_timeline)
+        self.assertEqual(self.exchange.reconciliation("rcpt-8415-0001"), before_funds)
+        self.assert_retired(lambda: self.exchange.advance_exit("rcpt-8415-0001"))
 
 
 if __name__ == "__main__":

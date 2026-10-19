@@ -55,6 +55,7 @@ class ServiceRecoveryBoundaries(unittest.TestCase):
                         status, page = request(address, "GET", "/authorization")
                         self.assertEqual(status, 200)
                         self.assertNotIn(reason, page)
+                        self.assertIn("<tr><th>Applies right now</th><td>yes</td></tr>", page)
                     if invalidation == "revoke":
                         ex.revoke_authorization("auth-buy-prepared")
                     else:
@@ -64,7 +65,12 @@ class ServiceRecoveryBoundaries(unittest.TestCase):
                     with console(ex, ("auth-buy-prepared",)) as address:
                         status, page = request(address, "GET", "/authorization")
                         self.assertEqual(status, 200)
-                        self.assertIn(reason, page)
+                        current = ex.authorization_state("auth-buy-prepared")
+                        self.assertIs(current["applies"], False)
+                        self.assertIn(reason, current["reasons"])
+                        self.assertIn("<tr><th>Applies right now</th><td>no - original "
+                                      "authorization checks did not pass</td></tr>", page)
+                        self.assertNotIn(reason, page)
                         for _ in range(2):
                             with self.assertRaises(DomainError) as caught:
                                 ex.execute_transfer(match, "transfer-prepared",
@@ -79,7 +85,7 @@ class ServiceRecoveryBoundaries(unittest.TestCase):
                     self.assertEqual(len(ex.legs(RECEIPT)), 0)
                     self.assertEqual(ex.owner_of(RECEIPT), F.A)
                     self.assertEqual(ex.asset_control.returns, 0)
-                    self.assertEqual(ex.voucher_desk._records, {})
+                    self.assertTrue(ex.voucher_desk is None or ex.voucher_desk._records == {})
 
     def test_unknown_suffix_refund_after_console_restart_never_releases_twice(self):
         for path in stage5.PATHS:
@@ -128,4 +134,4 @@ class ServiceRecoveryBoundaries(unittest.TestCase):
                 self.assertEqual(ex.owner_of(RECEIPT), F.B)
                 self.assertEqual(ex.escrow_for_leg(RECEIPT, 1).status, "refunded")
                 self.assertEqual(ex.escrow_for_leg(RECEIPT, 2).status, "refunded")
-                self.assertEqual(ex.voucher_desk._records, {})
+                self.assertTrue(ex.voucher_desk is None or ex.voucher_desk._records == {})

@@ -138,23 +138,24 @@ class RollbackIsolation(unittest.TestCase):
                 self.assertEqual(ex.deferred_legs(R), (2,))
                 self.assertEqual(len(ex.rollback_report(R)["conflicts"]), 1)
 
-    def test_equal_return_address_restores_occurrence_without_asset_move(self):
+    def test_equal_return_address_needs_no_intermediate_return(self):
         ex, _ = F.rollback_exchange()
         F.funded_hop(ex, F.A, F.B, 1, "transfer-ab", "session-a", "session-b")
         F.funded_hop(ex, F.B, F.A, 2, "transfer-ba", "session-b", "session-a")
         requests = F.submit_all(ex)
         F.refuse(ex, requests[0], "refused-ab")
         ex.begin_rollback(R, 0, F.rollback_authority(ex, 0, "rb"))
-        ex.asset_control.return_asset = Mock(side_effect=AssertionError("no asset move needed"))
         report = ex.advance_rollback(R)
         self.assertTrue(report["complete"])
         self.assertEqual((ex.owner_index(R), ex.owner_of(R), ex.recorded_legs(R)), (0, F.A, 2))
         self.assertEqual([leg.rollback_status for leg in ex.legs(R)], ["returned", "returned"])
-        ex.asset_control.return_asset.assert_not_called()
+        self.assertEqual(ex.asset_control.returns, 0)
+        self.assertEqual(ex.asset_control.hops_walked, 0)
+        self.assertEqual(len(ex.asset_control._records), 0)
         with self.assertRaises(DomainError) as caught:
             pending_match(ex, suffix="again", nonce=3)
         self.assertEqual(caught.exception.code, "EX_MATCH_UNEXECUTABLE")
-        self.assertIn("EX_TRADE_RETURNED_CHAIN_CLOSED", caught.exception.detail)
+        self.assertIn("EX_TRADE_RETURNED_CHAIN_CLOSED", ex.validate_intent("sell-again")["reasons"])
 
     def test_unfunded_suffix_marks_every_leg_returned(self):
         for circular in (False, True):
@@ -175,72 +176,69 @@ class RollbackIsolation(unittest.TestCase):
 
 
 class ExitIsolation(unittest.TestCase):
-    def test_each_exit_phase_freezes_resale_and_new_funding(self):
+    def test_retired_exit_phases_never_freeze_resale_or_new_funding(self):
         for through in (None, "stop-resale", "voucher-issued", "burn", "blocked"):
             with self.subTest(through=through):
-                key = exit_step_key("voucher-issued", R, "rdm")
-                ex, _ = F.settled_at_b(voucher_outcomes={key: "unknown"} if through == "blocked" else {})
+                ex, _ = F.settled_at_b()
                 match = pending_match(ex, F.B, F.C, nonce=2)
-                F.redeem_authorization(ex)
-                ex.request_redemption(R, F.B, "auth-redeem", "rdm", F.ALL_CHECKS)
-                if through:
-                    ex.advance_exit(R, through="burn" if through == "blocked" else through)
-                before = copy.deepcopy((ex._legs, ex._escrows, ex._used_nonces))
-                for operation in (lambda: ex.lock_escrow(match, "escrow-next"),
-                                  lambda: ex.execute_transfer(match, "transfer-next")):
-                    with self.assertRaises(DomainError):
+                before = copy.deepcopy((ex._legs, ex._escrows, ex._used_nonces, ex._events))
+                for operation in (
+                        lambda: ex.request_redemption(R, F.B, "unused", "rdm", F.ALL_CHECKS),
+                        lambda: ex.advance_exit(R, through=through)):
+                    with self.assertRaises(DomainError) as caught:
                         operation()
-                self.assertEqual((ex._legs, ex._escrows, ex._used_nonces), before)
-                if through == "blocked":
-                    ex.voucher_desk.resolve_unknown(key, "done")
-                    self.assertTrue(ex.advance_exit(R)["complete"])
-                self.assertEqual(ex.owner_of(R), F.B)
+                    self.assertEqual(caught.exception.code, "EX_PHYSICAL_FULFILLMENT_RETIRED")
+                    self.assertEqual((ex._legs, ex._escrows, ex._used_nonces, ex._events), before)
+                escrow = ex.lock_escrow(match, "escrow-next")
+                ex.execute_transfer(match, "transfer-next", escrow_id=escrow.escrow_id)
+                self.assertEqual(ex.owner_of(R), F.C)
+                self.assertEqual(ex.holder_of(R), F.B)
+                self.assertIsNone(ex._exits[R])
 
-    def test_same_request_id_on_different_receipts_has_distinct_acts(self):
+    def test_same_request_id_on_different_receipts_cannot_create_retired_acts(self):
         ex, _ = F.exit_exchange()
         second = replace(F.receipt(), receipt_id="rcpt-two", receipt_number="WR-two",
                          asset=replace(F.asset(), token_id=F.TOKEN_ID + 1))
-        ex.mint(second)
-        F.redeem_authorization(ex, F.A, "auth-first", "session-a")
-        ex.register_authorization(F.authorization(F.A, "auth-second", "session-a",
-                                                  actions=("redeem",), asset_override=second.asset))
-        for rid, aid in ((R, "auth-first"), (second.receipt_id, "auth-second")):
-            ex.request_redemption(rid, F.A, aid, "shared-request", F.ALL_CHECKS)
-            self.assertTrue(ex.advance_exit(rid)["complete"])
-        records = ex.voucher_desk._records
-        self.assertEqual(len(records), len(EXIT_STEPS) * 2)
-        self.assertEqual({record["receiptId"] for record in records.values()}, {R, second.receipt_id})
-        before = copy.deepcopy(records)
-        ex.advance_exit(R)
-        self.assertEqual(records, before)
+        ex.mint(second, specification=F.mint_specification(second))
+        for rid in (R, second.receipt_id):
+            with self.assertRaises(DomainError) as caught:
+                ex.request_redemption(rid, F.A, "unused", "shared-request", F.ALL_CHECKS)
+            self.assertEqual(caught.exception.code, "EX_PHYSICAL_FULFILLMENT_RETIRED")
+            self.assertIsNone(ex._exits[rid])
+        self.assertEqual(ex.voucher_desk._records, {})
+        self.assertNotEqual(exit_step_key("burn", R, "shared-request"),
+                            exit_step_key("burn", second.receipt_id, "shared-request"))
 
-    def test_lookup_and_direct_desk_reject_other_receipt_account_or_step(self):
+    def test_direct_desk_retirement_preserves_each_historical_binding(self):
         for changed in ({"receiptId": "other"}, {"account": F.C}, {"step": "burn"}, {"key": "other"}):
             with self.subTest(changed=changed):
-                ex, _ = F.settled_at_b()
-                F.redeem_authorization(ex)
-                ex.request_redemption(R, F.B, "auth-redeem", "rdm", F.ALL_CHECKS)
-                key = exit_step_key("stop-resale", R, "rdm")
-                record = ex.voucher_desk.act(key, "stop-resale", R, F.B)
-                ex.voucher_desk.lookup = Mock(return_value=dict(record, **changed))
-                with self.assertRaises(DomainError):
-                    ex.advance_exit(R)
-                self.assertFalse(ex.exit_report(R)["burned"])
-        desk = SimulatedVoucherDesk(F.ManualClock(), "REG_DIRECT")
-        desk.act("shared-key", "burn", R, F.A)
-        with self.assertRaises(DomainError):
-            desk.act("shared-key", "burn", "other", F.A)
+                desk = SimulatedVoucherDesk(F.ManualClock(), "REG_DIRECT")
+                record = {"key": "historical", "receiptId": R, "account": F.B,
+                          "step": "stop-resale", "status": "unknown", "attempt": 1}
+                desk._records["historical"] = dict(record)
+                desk._history["historical"] = [dict(record)]
+                substituted = dict(record, **changed)
+                before = copy.deepcopy((desk._records, desk._history))
+                with self.assertRaises(DomainError) as caught:
+                    desk.act(substituted["key"], substituted["step"],
+                             substituted["receiptId"], substituted["account"])
+                self.assertEqual(caught.exception.code, "EX_PHYSICAL_FULFILLMENT_RETIRED")
+                self.assertEqual((desk._records, desk._history), before)
+                self.assertEqual(desk.lookup("historical"), record)
 
-    def test_completed_exit_is_idempotent_after_authorization_expires(self):
+    def test_historical_exit_read_stays_nonexecutable_after_session_expiry(self):
         ex, clock = F.settled_at_b()
-        F.redeem_authorization(ex)
-        ex.request_redemption(R, F.B, "auth-redeem", "rdm", F.ALL_CHECKS)
-        ex.advance_exit(R)
-        records = copy.deepcopy(ex.voucher_desk._records)
+        before = copy.deepcopy((ex._legs, ex._escrows, ex._events, ex.voucher_desk._records))
         clock.advance(1_000_000)
         ex.disconnect_wallet(F.B)
-        self.assertTrue(ex.advance_exit(R)["complete"])
-        self.assertEqual(ex.voucher_desk._records, records)
+        view = ex.exit_report(R)
+        self.assertTrue(view["retiredOperation"])
+        self.assertFalse(view["executable"])
+        self.assertFalse(view["burned"])
+        with self.assertRaises(DomainError) as caught:
+            ex.advance_exit(R)
+        self.assertEqual(caught.exception.code, "EX_PHYSICAL_FULFILLMENT_RETIRED")
+        self.assertEqual((ex._legs, ex._escrows, ex._events, ex.voucher_desk._records), before)
 
     def test_exit_keys_are_unambiguous_and_bounded(self):
         self.assertNotEqual(exit_step_key("burn", "a:b", "c"),

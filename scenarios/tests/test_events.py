@@ -14,6 +14,21 @@ from scenarios import events
 
 ROOT = str(Path(__file__).resolve().parents[2])
 
+CURRENT_DOMAIN_KINDS = {
+    "price-currency-admission-refused", "eth-gas-admission-refused", "combined-eth-admission-refused",
+    "intent-accepted", "intent-refused",
+    "receipt-minted", "trading-resumed", "transfer-executed", "registration-submitted",
+    "registration-result-idempotent", "registration-result", "registration-result-drained",
+    "escrow-locked", "payment-attempt-started", "segment-release-attempt", "payment-enquiry",
+    "gas-recorded", "rollback-opened", "rollback-advanced", "segment-refunded",
+    "segment-refund-attempt", "asset-returned", "rollback-step-blocked",
+    "asset-return-attempt", "late-result-conflict",
+}
+CURRENT_AUDIT_GROUPS = {
+    "intent-decision", "transfer", "registration", "final-prefix", "funding", "rollback",
+    "trading-recovery", "currency-admission", "eth-gas-admission", "remint", "reorg-recovery",
+}
+
 
 def _settled_chain():
     """A -> B -> C -> D, funded, two legs registered, one segment released."""
@@ -38,7 +53,8 @@ class Vocabulary(unittest.TestCase):
         self.assertIsNone(found["error"])
         self.assertIn("transfer-executed", found["kinds"])
         self.assertIn("registration-result-drained", found["kinds"])
-        self.assertGreater(found["kindCount"], 20)
+        self.assertEqual(set(found["kinds"]), CURRENT_DOMAIN_KINDS)
+        self.assertEqual(found["kindCount"], len(CURRENT_DOMAIN_KINDS))
 
     def test_every_kind_the_domain_records_is_accounted_for(self):
         self.assertEqual(self.conformance["undeclaredKindsRecorded"], [],
@@ -46,8 +62,9 @@ class Vocabulary(unittest.TestCase):
         self.assertTrue(self.conformance["accountedFor"])
 
     def test_a_kind_the_contract_needs_and_the_domain_lacks_is_named_not_hidden(self):
-        self.assertEqual(self.conformance["declaredKindsNotRecorded"],
-                         ["intent-accepted", "intent-refused"])
+        self.assertEqual(self.conformance["declaredKindsNotRecorded"], [])
+        self.assertEqual(set(self.conformance["requiredUnmappedAuditGroups"]),
+                         {"remint"})
 
     def test_a_chain_only_kind_is_not_reported_as_an_unrecorded_defect(self):
         chain_only = {entry["kind"] for entry in events.CHAIN_ONLY_KINDS}
@@ -80,7 +97,7 @@ class Vocabulary(unittest.TestCase):
 
     def test_the_contract_is_readable_without_a_run(self):
         contract = events.contract()
-        self.assertEqual(len(contract["groups"]), 8)
+        self.assertEqual({group["group"] for group in contract["groups"]}, CURRENT_AUDIT_GROUPS)
         self.assertTrue(contract["readOnly"])
         self.assertTrue(contract["contractDigest"].startswith("0x"))
         report = events.build(root=ROOT)
@@ -151,10 +168,26 @@ class Coverage(unittest.TestCase):
         cls.coverage = events.coverage(
             cls.exchange.receipt_timeline("rcpt-8415-0001"))
 
-    def test_it_reports_all_eight_groups_and_invents_none(self):
-        self.assertEqual(self.coverage["groupCount"], 8)
+    def test_it_reports_all_current_groups_and_invents_none(self):
+        self.assertEqual(self.coverage["groupCount"], len(CURRENT_AUDIT_GROUPS))
         self.assertEqual([entry["group"] for entry in self.coverage["groups"]],
                          [group["group"] for group in events.AUDIT_GROUPS])
+
+    def test_unjoined_current_requirements_are_explicit_gaps_not_recorded_coverage(self):
+        groups = {entry["group"]: entry for entry in self.coverage["groups"]}
+        for name in ("remint",):
+            with self.subTest(group=name):
+                self.assertEqual(groups[name]["status"], "not-recorded-interface-gap")
+                self.assertTrue(groups[name]["whyNotLocal"])
+                self.assertNotIn(name, self.coverage["recordedGroups"])
+        for name in ("currency-admission", "eth-gas-admission"):
+            self.assertEqual(groups[name]["status"], "not-observed")
+            self.assertNotIn(name, self.coverage["recordedGroups"])
+
+    def test_retired_physical_events_are_not_required_current_domain_events(self):
+        self.assertTrue(set(events.RETIRED_PHYSICAL_KINDS).isdisjoint(events.DECLARED_KINDS))
+        self.assertNotIn("redemption", CURRENT_AUDIT_GROUPS)
+        self.assertEqual(events.conformance(ROOT)["retiredPhysicalKindsRecorded"], [])
 
     def test_every_group_has_exactly_one_status(self):
         placed = [group for groups in self.coverage["byStatus"].values()
@@ -203,13 +236,14 @@ class Coverage(unittest.TestCase):
         self.assertIn("not an acceptance result", said)
         self.assertIn("not a derivation presented as a record", said)
 
-    def test_the_intent_group_cannot_be_evidenced_until_the_domain_records_it(self):
+    def test_known_receipt_intent_records_do_not_hide_the_remaining_unbound_intake_gap(self):
         intent = {entry["group"]: entry
                   for entry in self.coverage["groups"]}["intent-decision"]
-        self.assertEqual(intent["status"], "not-observed")
+        self.assertEqual(intent["status"], "partly-recorded")
+        self.assertGreater(intent["observedCounts"]["intent-accepted"], 0)
+        self.assertEqual(intent["observedCounts"]["intent-refused"], 0)
         gaps = [gap["gap"] for gap in events.INTERFACE_GAPS]
-        self.assertIn("no event is recorded when an intent is accepted or refused",
-                      gaps)
+        self.assertIn("malformed or unknown-asset submissions have no receipt-correlated event", gaps)
 
 
 class Replay(unittest.TestCase):
@@ -225,6 +259,18 @@ class Replay(unittest.TestCase):
         self.assertEqual(state["consumed"], len(self.timeline))
         self.assertEqual(state["duplicatesIgnored"], 0)
         self.assertTrue(state["sequential"])
+
+    def test_retained_retired_history_is_labelled_and_replayed_without_reexecution(self):
+        event = dict(self.timeline[0], kind="receipt-burned")
+        state = events.replay([event, event])
+        self.assertEqual(state["duplicatesIgnored"], 1)
+        self.assertEqual(state["assetMovementCount"], 1)
+        self.assertEqual(state["retiredPhysicalKinds"],
+                         [{"kind": "receipt-burned", "sequence": event["sequence"], "executable": False}])
+        self.assertEqual(state["undeclaredKinds"], [])
+        coverage = events.coverage([event])
+        self.assertEqual(coverage["retiredPhysicalKindsObserved"], ["receipt-burned"])
+        self.assertNotIn("remint", coverage["recordedGroups"])
 
     def test_rebuilding_from_the_same_events_twice_gives_the_same_view(self):
         rebuild = events.rebuilt_identically(self.timeline, "run-1", self.asset_key)
@@ -317,3 +363,4 @@ class Replay(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

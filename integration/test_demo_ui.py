@@ -58,7 +58,11 @@ class InteractiveDemoJourney(unittest.TestCase):
                     status, _, raw = request(server, "GET", "/evidence?id=" + key)
                     self.assertEqual(status, 200)
                     record = json.loads(raw)
-                    self.assertEqual(record, stored)
+                    self.assertEqual(record, demo_ui.run_record(stored))
+                    self.assertEqual(record["evidenceKind"], "SIMULATION_PUBLIC_PROJECTION")
+                    self.assertEqual(record["schema"], "8415ex-public-demo/2")
+                    self.assertNotIn("accounts", record["report"]["scenarios"][0]["setup"])
+                    self.assertTrue(stored["report"]["scenarios"][0]["setup"]["accounts"])
                     result = record["report"]["scenarios"][0]
                     self.assertEqual(result["scenarioId"], scenario.scenario_id)
                     self.assertEqual(result["mainPath"], scenario.main_path)
@@ -108,7 +112,7 @@ class InteractiveDemoJourney(unittest.TestCase):
             recorder.step("<script>unsafe</script>", observed="<img src=x>")
             recorder.expect("injected mismatch", ("T-36",), "expected", "actual")
             raise RuntimeError("synthetic failure")
-        scenario = Scenario("DEMO-01", "<script>title</script>", ("T-36",), "REG_DIRECT", broken)
+        scenario = Scenario("DEMO-01", "<script>title</script>", ("T-36",), "REG_DIRECT", broken, prd_version="1.4")
         with patch.object(demo_ui, "DEMOS", (scenario,)), running() as server:
             _, headers, _ = post(server)
             key = headers["Location"].split("id=")[1]
@@ -117,10 +121,11 @@ class InteractiveDemoJourney(unittest.TestCase):
             self.assertIn("synthetic failure", result["error"])
             _, _, page = request(server, "GET", headers["Location"] + "&step=1")
             self.assertIn("LOCAL FAILURE", page)
-            self.assertIn("&lt;script&gt;", page)
+            self.assertNotIn("&lt;script&gt;", page)
             self.assertNotIn("<script>", page)
             self.assertNotIn("<img src=x>", page)
-            self.assertIn("synthetic failure", page)
+            self.assertIn("Original run error retained privately", page)
+            self.assertNotIn("synthetic failure", page)
 
     def test_history_is_bounded_and_old_run_does_not_reexecute(self):
         with running() as server:
@@ -184,7 +189,11 @@ class InteractiveDemoJourney(unittest.TestCase):
                         response.begin()
                         response_body = response.read().decode()
                         self.assertEqual(response.status, 400)
-                        self.assertIn("incomplete request body", response_body)
+                        self.assertEqual(response_body,
+                            "simulation request refused; original diagnostic remains private")
+                        self.assertNotIn("incomplete request body", response_body)
+                        self.assertNotIn(server.csrf, response_body)
+                        self.assertEqual(response.getheader("Cache-Control"), "no-store")
                         parse.assert_not_called()
                         execute.assert_not_called()
                         self.assertEqual(len(server.runs), 0)

@@ -1,0 +1,37 @@
+[
+  {
+    "path": "/assets/copper.png",
+    "bytes": 33728,
+    "sha256": "1f6ff50d3aede2a5440525f06ea2b11655e093d53c4861cd661c4e80d503a219"
+  },
+  {
+    "path": "/assets/cube.svg",
+    "bytes": 448,
+    "sha256": "c82ae045002d11872e2aaf1c7f01a4b52ca338418c98942836deea4337255e64"
+  },
+  {
+    "path": "/assets/ore.png",
+    "bytes": 30256,
+    "sha256": "a58643c93600a82ed9dfc20904d62794348092ca45d7733c9eb76a45baf2a065"
+  },
+  {
+    "path": "/assets/search.svg",
+    "bytes": 673,
+    "sha256": "ca4e463960efe1f9181c4cd361d4c87f85dd962105d6c8c266d84716f47b1940"
+  },
+  {
+    "path": "/assets/soy.png",
+    "bytes": 30183,
+    "sha256": "d889f0943b26929ce6a71a0cfb23492060eb927e902ee8954c02c98dd6f7e12a"
+  },
+  {
+    "path": "/assets/sparkline-stale.svg",
+    "bytes": 504,
+    "sha256": "c85408978551d1863a7258d2f217941134631937fc2357c6c8744463cff61ba4"
+  },
+  {
+    "path": "/assets/sparkline.svg",
+    "bytes": 504,
+    "sha256": "e7de2c127d8040a0a42629c6db918dc90e5f2496cf00ce325c7ecedee5e78f81"
+  }
+]

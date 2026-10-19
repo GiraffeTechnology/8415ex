@@ -13,14 +13,18 @@ reached B or later" is a statement about that index, never about the numeric
 value of an address.
 """
 from dataclasses import dataclass, field, replace
+from copy import deepcopy
+import re
 
 from .errors import DomainError, require
+from .eth_trade_gas import ETHTradeGasGate
+from .price_balance import NFT0PriceBalanceGate
 from .ids import address, amount, digest, identifier, instant
 from .model import WHOLE_RECEIPT_UNITS, Asset, AuthorizationReference, TradeIntent, WarehouseReceipt
+from .mint_specification import MintSpecification, MintDeclarationBook
+from .priority_exchange import PriorityBook, PriorityRefused
 from .registration import (DISPOSITIONS, RegistrationEvidence, RegistrationRequest,
                            default_registrars)
-from .exit import (EXIT_STEPS, REQUIRED_OTHER_CHECKS, ExitStep, RedemptionRequest,
-                   SimulatedVoucherDesk, exit_step_key)
 from .rollback import (ROLLBACK_STATES, WITHDRAWN_MECHANISMS, GasBudget, RollbackAuthority,
                        RollbackStep, SimulatedAssetControl, rollback_binding)
 from .settlement import (EscrowPosition, ReleaseAuthority, SimulatedPaymentAdapter,
@@ -96,7 +100,8 @@ class Exchange:
 
     def __init__(self, clock, payment_adapter=None, release_sources=(), funding_required=False,
                  asset_control=None, rollback_sources=(), gas_budgets=None,
-                 voucher_desk=None):
+                 voucher_desk=None, mint_verifier=None, eth_gas_gate=None, price_balance_gate=None,
+                 priority_store=None):
         """``funding_required`` turns on the Stage 2 rule that a leg only forms
         once its own buyer's money is in escrow. Stage 1 leaves it off and
         records funding as not modelled rather than implying a payment.
@@ -107,6 +112,9 @@ class Exchange:
         """
         require(callable(clock), "EX_CLOCK_REFUSED", "a clock function is required")
         self._clock = clock
+        self._eth_gas_gate = eth_gas_gate
+        self._price_balance_gate = price_balance_gate
+        self._priority_store = priority_store
         self.payments = payment_adapter
         self.funding_required = bool(funding_required)
         self._release_sources = frozenset(identifier(s, "EX_RELEASE_SOURCE_REFUSED")
@@ -121,13 +129,19 @@ class Exchange:
         self._gas = {}
         self._rollbacks = {}
         self._returned_to = {}
+        self._active_legs = {}
+        self._rollback_history = {}
         self.voucher_desk = voucher_desk
         self._exits = {}
+        self._mint_book = MintDeclarationBook(mint_verifier) if callable(mint_verifier) else None
+        self._mint_declarations = {}
+        self._nft0_currency_sets = {}
         self._receipts = {}
         self._asset_keys = {}
         self._authorizations = {}
         self._sessions = {}
         self._intents = {}
+        self._order_books = {}
         self._used_nonces = set()
         self._legs = {}
         self._holder_index = {}
@@ -144,20 +158,35 @@ class Exchange:
 
     # ---------------------------------------------------------------- receipts
 
-    def mint(self, receipt):
+    def mint(self, receipt, specification=None):
         """Record one whole receipt as exactly one NFT.
 
         Minting is a technical record. It asserts no legal right, and a second
         receipt may not map to an NFT that is already mapped.
         """
         require(isinstance(receipt, WarehouseReceipt), "EX_RECEIPT_REFUSED", "receipt type")
+        require(receipt.allowed_price_currencies and receipt.nft0_currency_reference is not None,
+                "EX_NFT0_CURRENCY_REQUIRED",
+                "NFT0 must specify one or more fixed currencies and original schema reference")
+        require(isinstance(specification, MintSpecification), "EX_MINT_DECLARATION_REQUIRED",
+                "a bare WarehouseReceipt is not a complete mint declaration")
+        require(specification.receipt == receipt, "EX_MINT_DECLARATION_BINDING_REFUSED",
+                "declaration and original receipt differ")
+        require(self._mint_book is not None, "EX_MINT_VERIFIER_REQUIRED",
+                "existing schema, controlled-storage and privacy verification is required")
         require(receipt.receipt_id not in self._receipts, "EX_RECEIPT_DUPLICATE_REFUSED", receipt.receipt_id)
         existing = self._asset_keys.get(receipt.asset.key)
         require(existing is None, "EX_ASSET_DUPLICATE_REFUSED",
                 f"{receipt.asset.key} already maps to receipt {existing}")
+        declaration = self._mint_book.admit(specification)
+        self._mint_declarations[receipt.receipt_id] = deepcopy(declaration)
+        self._nft0_currency_sets[receipt.receipt_id] = (receipt.allowed_price_currencies,
+                                                       receipt.nft0_currency_reference)
         self._receipts[receipt.receipt_id] = receipt
         self._asset_keys[receipt.asset.key] = receipt.receipt_id
         self._legs[receipt.receipt_id] = []
+        self._active_legs[receipt.receipt_id] = []
+        self._rollback_history[receipt.receipt_id] = []
         self._holder_index[receipt.receipt_id] = 0
         self._requests_by_leg[receipt.receipt_id] = {}
         self._deferred[receipt.receipt_id] = {}
@@ -247,10 +276,48 @@ class Exchange:
         require(isinstance(intent, TradeIntent), "EX_INTENT_REFUSED", "intent type")
         previous = self._intents.get(intent.intent_id)
         if previous is not None:
+            if previous.digest != intent.digest:
+                original_receipt = self._asset_keys.get(previous.asset.key)
+                if original_receipt is not None:
+                    self._record(original_receipt, "intent-refused", {
+                        "intentId": previous.intent_id, "signedTermsDigest": previous.digest,
+                        "attemptedTermsDigest": intent.digest, "reasonCodes": ["EX_INTENT_CONFLICT"],
+                        "decisionScope": "conflicting-submission", "executionAuthorized": False,
+                        "tradeFormed": False, "financialEffects": False, "observedAt": self._now(None)})
             require(previous.digest == intent.digest, "EX_INTENT_CONFLICT",
                     f"intent {intent.intent_id} was already submitted with different signed terms")
+            # A prior durable admission may have failed or returned UNKNOWN
+            # after the immutable intent was retained. Reconcile the same
+            # original order through its store; never issue a new identity,
+            # client timestamp, funding call or execution here.
+            if (previous.counterparty is None
+                    and self.validate_intent(previous.intent_id)["executable"]):
+                self.enter_order(previous.intent_id)
             return previous
         self._intents[intent.intent_id] = intent
+        report = self.validate_intent(intent.intent_id)
+        receipt_id = self._asset_keys.get(intent.asset.key)
+        if receipt_id is not None:
+            decision = {"intentId": intent.intent_id, "signedTermsDigest": intent.digest,
+                        "signer": intent.signer, "nonce": intent.nonce,
+                        "authorizationId": intent.authorization_id,
+                        "currency": intent.quote_asset, "reasonCodes": list(report["reasons"]),
+                        "decisionScope": "current-intent-scope-validation-only",
+                        "executionAuthorized": False, "tradeFormed": False,
+                        "financialEffects": False, "observedAt": report["observedAt"]}
+            if report["executable"]:
+                self._record(receipt_id, "intent-accepted", decision)
+            else:
+                self._record(receipt_id, "intent-refused", decision)
+                for code in report["reasons"]:
+                    if code.startswith("EX_NFT0_CURRENCY_"):
+                        self._record_admission_refusal(receipt_id,
+                            DomainError(code, "Original NFT0 currency declaration refused"),
+                            {"action": "submit-intent", "operationReference": intent.intent_id,
+                             "signedTermsDigest": intent.digest, "currency": intent.quote_asset,
+                             "observedAt": report["observedAt"]})
+        if intent.counterparty is None and report["executable"]:
+            self.enter_order(intent.intent_id)
         return intent
 
     def intent(self, intent_id):
@@ -269,6 +336,14 @@ class Exchange:
         if receipt is None:
             reasons.append("EX_ASSET_UNKNOWN")
         else:
+            try:
+                allowed, reference = self._check_nft0_currencies(receipt_id)
+                if intent.quote_asset not in allowed:
+                    reasons.append("EX_NFT0_CURRENCY_MISMATCH")
+                if intent.currency_set_reference != reference:
+                    reasons.append("EX_NFT0_CURRENCY_REFERENCE_REFUSED")
+            except DomainError as error:
+                reasons.append(error.code)
             if now >= receipt.trade_stop_at:
                 reasons.append("EX_TRADE_WINDOW_CLOSED")
             if self._returned_to[receipt_id] is not None:
@@ -302,8 +377,8 @@ class Exchange:
                 reasons.append("EX_AUTH_AMOUNT_REFUSED")
             if auth.quote_asset != intent.quote_asset:
                 reasons.append("EX_AUTH_QUOTE_ASSET_REFUSED")
-            if auth.counterparties and (intent.counterparty is None
-                                        or intent.counterparty not in auth.counterparties):
+            if auth.counterparties and intent.counterparty is not None and (
+                    intent.counterparty not in auth.counterparties):
                 reasons.append("EX_AUTH_COUNTERPARTY_REFUSED")
         ordered = tuple(dict.fromkeys(reasons))
         return {"intentId": intent.intent_id, "side": intent.side, "signer": intent.signer,
@@ -311,32 +386,77 @@ class Exchange:
                 "executable": ordered == (), "reasons": ordered,
                 "authorization": auth_state, "observedAt": now}
 
-    def match_intents(self, sell_intent_id, buy_intent_id, now=None):
-        """Deterministically pair two explicitly paired intents.
+    def enter_order(self, intent_id):
+        """Accept into the existing price/time book with server sequence only."""
+        intent = self.intent(intent_id)
+        receipt_id = self._asset_keys.get(intent.asset.key)
+        require(receipt_id is not None, "EX_ASSET_UNKNOWN", str(intent.asset.key))
+        key = (receipt_id, intent.quote_asset)
+        if key not in self._order_books:
+            self._order_books[key] = PriorityBook(self, receipt_id, intent.quote_asset, self._clock,
+                sequence_store=self._priority_store, generation=len(self._rollback_history[receipt_id]))
+        try:
+            return self._order_books[key].enter(intent_id)
+        except PriorityRefused as error:
+            raise DomainError("EX_ORDER_REFUSED", str(error)) from None
 
-        This is the Stage 1 demonstration fixture, not a decision about the final
-        matching algorithm. It never changes a signed limit or condition.
+    def match_intents(self, sell_intent_id, buy_intent_id, now=None):
+        """Match the best executable pair, preserving limits and server FIFO.
+
+        For crossing orders, execution uses the older accepted order's limit:
+        an arriving buyer gets the best eligible resting ask; an arriving seller
+        gets the best eligible resting bid. A caller cannot name a worse pair.
         """
         now = self._now(now)
         sell, buy = self.intent(sell_intent_id), self.intent(buy_intent_id)
         require(sell.side == "sell" and buy.side == "buy", "EX_MATCH_SIDE_REFUSED",
                 "one sell and one buy are required")
-        require(sell.asset.key == buy.asset.key, "EX_MATCH_ASSET_REFUSED", "both sides must name one asset")
-        require(sell.quote_asset == buy.quote_asset, "EX_MATCH_QUOTE_ASSET_REFUSED", "quote assets must agree")
+        require(sell.asset.key == buy.asset.key, "EX_MATCH_ASSET_REFUSED",
+                "both sides must name one asset")
+        require(sell.quote_asset == buy.quote_asset, "EX_MATCH_QUOTE_ASSET_REFUSED",
+                "quote assets must agree")
         require(sell.units == buy.units == WHOLE_RECEIPT_UNITS, "EX_WHOLE_RECEIPT_REFUSED",
-                "a match covers exactly one whole receipt")
-        require(sell.counterparty == buy.signer and buy.counterparty == sell.signer,
-                "EX_MATCH_PAIRING_REFUSED", "this fixture requires an explicit, mutual pairing")
-        for report in (self.validate_intent(sell.intent_id, now), self.validate_intent(buy.intent_id, now)):
-            require(report["executable"], "EX_MATCH_UNEXECUTABLE",
-                    f"{report['intentId']}: {','.join(report['reasons'])}")
-        require(buy.limit_price >= sell.limit_price, "EX_MATCH_PRICE_REFUSED",
-                "the buy limit does not reach the sell limit")
-        price = sell.limit_price
-        basis = {"rule": "explicit-pairing-limit-fixture", "sellLimit": str(sell.limit_price),
-                 "buyLimit": str(buy.limit_price), "executionPrice": str(price),
-                 "quoteAsset": sell.quote_asset, "units": sell.units,
-                 "sellIntentId": sell.intent_id, "buyIntentId": buy.intent_id,
+                "one whole receipt is required")
+        receipt_id = self._asset_keys.get(sell.asset.key)
+        require(receipt_id is not None, "EX_ASSET_UNKNOWN", str(sell.asset.key))
+        book = self._order_books.get((receipt_id, sell.quote_asset))
+        require(book is not None, "EX_ORDER_NOT_ACCEPTED", "server book acceptance is required")
+        require(now == book._now(), "EX_ORDER_OBSERVATION_REFUSED",
+                "matching uses the current trusted server observation")
+        proposal = book.proposal()
+        chosen = None
+        for ask_id in proposal["askPriority"]:
+            ask = self.intent(ask_id)
+            ask_grant = self.authorization(ask.authorization_id)
+            for bid_id in proposal["bidPriority"]:
+                bid = self.intent(bid_id)
+                if bid.limit_price < ask.limit_price:
+                    break
+                bid_grant = self.authorization(bid.authorization_id)
+                if ask_grant.counterparties and bid.signer not in ask_grant.counterparties:
+                    continue
+                if bid_grant.counterparties and ask.signer not in bid_grant.counterparties:
+                    continue
+                ask_seq = book._entries[ask_id][1]
+                bid_seq = book._entries[bid_id][1]
+                execution_price = ask.limit_price if ask_seq < bid_seq else bid.limit_price
+                if execution_price > ask_grant.max_amount or execution_price > bid_grant.max_amount:
+                    continue
+                chosen = (ask_id, bid_id)
+                break
+            if chosen:
+                break
+        require(chosen is not None, "EX_MATCH_UNEXECUTABLE", "no executable crossing pair")
+        require(chosen == (sell.intent_id, buy.intent_id), "EX_MATCH_PRIORITY_REFUSED",
+                "caller-selected pair is not the best executable server-priority pair")
+        ask_sequence = book._entries[sell.intent_id][1]
+        bid_sequence = book._entries[buy.intent_id][1]
+        price = sell.limit_price if ask_sequence < bid_sequence else buy.limit_price
+        basis = {"rule": "price-time-resting-order-limit",
+                 "sellLimit": str(sell.limit_price), "buyLimit": str(buy.limit_price),
+                 "executionPrice": str(price), "quoteAsset": sell.quote_asset,
+                 "units": sell.units, "sellIntentId": sell.intent_id, "buyIntentId": buy.intent_id,
+                 "askSequence": ask_sequence, "bidSequence": bid_sequence,
                  "registrationAndSettlement": "not-performed-by-matching"}
         return MatchResult(sell_intent_digest=sell.digest, buy_intent_digest=buy.digest,
                            seller=sell.signer, buyer=buy.signer, asset=sell.asset, price=price,
@@ -348,7 +468,7 @@ class Exchange:
         buy = self._intent_by_digest(match.buy_intent_digest)
         canonical = self.match_intents(sell.intent_id, buy.intent_id, now)
         require(all(getattr(match, name) == getattr(canonical, name)
-                    for name in ("seller", "buyer", "asset", "price", "quote_asset", "units")),
+                    for name in ("seller", "buyer", "asset", "price", "quote_asset", "units", "basis")),
                 "EX_MATCH_BINDING_REFUSED", "match terms differ from the signed pairing")
         return canonical
 
@@ -364,6 +484,96 @@ class Exchange:
 
     # ------------------------------------------------------------- transfers
 
+    def active_leg_indices(self, receipt_id):
+        """Stable global leg IDs in the current chain, including protected prefix."""
+        self.receipt(receipt_id)
+        return tuple(self._active_legs[receipt_id])
+
+    def _next_registration_index(self, receipt_id):
+        for index in self._active_legs[receipt_id]:
+            if self.leg(receipt_id, index).registration_status != "confirmed":
+                return index
+        return len(self._legs[receipt_id])
+
+    def resume_trading(self, receipt_id, now=None):
+        """Open a fresh chain only after complete recovery and current validity.
+
+        The configured original verifier must attest current asset validity for
+        this binding. No validity is inferred from a return, CI or an old mint.
+        Global leg IDs, consumed nonces, escrow/gas references and old evidence
+        stay unique; only the executable path drops the withdrawn suffix.
+        """
+        now = self._now(now)
+        receipt = self.receipt(receipt_id)
+        require(now == self._now(None), "EX_RECOVERY_OBSERVATION_REFUSED",
+                "recovery uses the current trusted observation")
+        state = self._rollbacks[receipt_id]
+        require(state is not None and state["state"] == "complete"
+                and all(step.status == "done" for step in state["steps"]),
+                "EX_RECOVERY_INCOMPLETE", "all refund and asset-return steps need their own result")
+        require(self._returned_to[receipt_id] == (state["boundaryIndex"], state["boundaryAccount"]),
+                "EX_RECOVERY_POSITION_REFUSED", "recorded return does not match the recovery boundary")
+        require(self.owner_index(receipt_id) == self.holder_index(receipt_id)
+                and self.owner_of(receipt_id) == self.holder_of(receipt_id),
+                "EX_RECOVERY_POSITION_REFUSED", "recovery must start at effective holder")
+        require(self._exits[receipt_id] is None, "EX_RECOVERY_LEGACY_OUTCOME_UNRESOLVED",
+                "a historical physical-operation outcome must be reconciled without resuming it")
+        require(now < receipt.trade_stop_at, "EX_TRADE_WINDOW_CLOSED",
+                "completed rollback cannot reopen an expired asset")
+        binding = {"receiptId": receipt_id, "asset": list(receipt.asset.key),
+                   "mintDeclarationDigest": self._mint_declarations[receipt_id]["declarationDigest"],
+                   "owner": self.owner_of(receipt_id), "holder": self.holder_of(receipt_id),
+                   "boundaryIndex": state["boundaryIndex"], "observedAt": now}
+        binding_digest = digest(binding)
+        try:
+            valid = self._mint_book.verify("current-asset-validity", binding)
+        except Exception:
+            raise DomainError("EX_ASSET_VALIDITY_NOT_VERIFIED",
+                              "current asset validity verifier failed") from None
+        require(valid is True and digest(binding) == binding_digest,
+                "EX_ASSET_VALIDITY_NOT_VERIFIED", "current validity and unchanged binding required")
+        require(self._rollbacks[receipt_id] is state
+                and self.owner_of(receipt_id) == self.holder_of(receipt_id) == state["boundaryAccount"]
+                and self.owner_index(receipt_id) == self.holder_index(receipt_id) == state["boundaryIndex"],
+                "EX_RECOVERY_POSITION_REFUSED", "recovery position changed during verification")
+        require(self._now(None) < receipt.trade_stop_at, "EX_TRADE_WINDOW_CLOSED",
+                "deadline passed during current validity verification")
+        withdrawn = frozenset(state["affectedLegs"])
+        survivors = [i for i in self._active_legs[receipt_id] if i not in withdrawn]
+        require(all(self.leg(receipt_id, i).registration_status == "confirmed" for i in survivors),
+                "EX_RECOVERY_POSITION_REFUSED", "the surviving path must be the registered prefix")
+        report = deepcopy(self.rollback_report(receipt_id, now))
+        report["historical"] = True
+        withdrawn_deferred = {i: deepcopy(e) for i, e in self._deferred[receipt_id].items()
+                              if i not in survivors}
+        old_orders = tuple({"quoteAsset": key[1], "intentId": order.intent_id,
+                            "digest": order.digest, "sequence": sequence}
+                           for key, book in self._order_books.items() if key[0] == receipt_id
+                           for order, sequence in book._entries.values())
+        self._rollback_history[receipt_id].append({
+            "state": deepcopy(state), "report": report,
+            "withdrawnDeferredEvidence": withdrawn_deferred, "retiredOrders": old_orders})
+        self._active_legs[receipt_id] = survivors
+        self._deferred[receipt_id] = {i: e for i, e in self._deferred[receipt_id].items()
+                                      if i in survivors}
+        self._rollbacks[receipt_id] = None
+        self._returned_to[receipt_id] = None
+        self._order_books = {key: book for key, book in self._order_books.items()
+                             if key[0] != receipt_id}
+        self._record(receipt_id, "trading-resumed", {
+            "generation": len(self._rollback_history[receipt_id]),
+            "boundaryIndex": state["boundaryIndex"], "account": state["boundaryAccount"],
+            "withdrawnLegs": list(state["affectedLegs"]), "activeLegs": list(survivors),
+            "nextGlobalLegIndex": len(self._legs[receipt_id]), "oldOrdersReadmitted": False,
+            "historyPreserved": True})
+        return {"receiptId": receipt_id, "resumed": True, "account": self.owner_of(receipt_id),
+                "activeLegs": tuple(survivors), "nextGlobalLegIndex": len(self._legs[receipt_id]),
+                "generation": len(self._rollback_history[receipt_id]), "observedAt": now}
+
+    def historical_rollbacks(self, receipt_id):
+        self.receipt(receipt_id)
+        return tuple(deepcopy(item["report"]) for item in self._rollback_history[receipt_id])
+
     def owner_index(self, receipt_id):
         """The position the asset is actually at now.
 
@@ -373,10 +583,14 @@ class Exchange:
         """
         self.receipt(receipt_id)
         returned = self._returned_to[receipt_id]
-        return returned[0] if returned is not None else len(self._legs[receipt_id])
+        active = self._active_legs[receipt_id]
+        return returned[0] if returned is not None else (active[-1] + 1 if active else 0)
 
     def holder_index(self, receipt_id):
-        """How many legs the registrar has confirmed, always a prefix."""
+        """Stable global position of the last registered active leg, or zero.
+
+        Withdrawn IDs are never reused; use registeredPrefixLegs for the count.
+        """
         self.receipt(receipt_id)
         return self._holder_index[receipt_id]
 
@@ -386,7 +600,8 @@ class Exchange:
         if returned is not None:
             return returned[1]
         legs = self._legs[receipt_id]
-        return legs[-1].buyer if legs else receipt.origin_account
+        active = self._active_legs[receipt_id]
+        return legs[active[-1]].buyer if active else receipt.origin_account
 
     def recorded_legs(self, receipt_id):
         """How many legs the history holds, whatever the asset's position is."""
@@ -430,6 +645,7 @@ class Exchange:
                     f"{report['intentId']}: {','.join(report['reasons'])}")
         match = self._check_match_binding(match, now)
         require(transfer_id not in self._transfer_ids(), "EX_TRANSFER_DUPLICATE_REFUSED", transfer_id)
+        self._check_trade_funds(match, escrow_id, now, "execute-transfer", transfer_id)
         funding_status, rollback_status = "not-modelled", "none"
         if self.funding_required or escrow_id is not None:
             require(escrow_id is not None, "EX_SEGMENT_NOT_FUNDED",
@@ -446,12 +662,14 @@ class Exchange:
             funding_status, rollback_status = "locked", "available"
         leg = Transfer(transfer_id=identifier(transfer_id, "EX_TRANSFER_REFUSED"), receipt_id=receipt_id,
                        leg_index=len(legs), seller=match.seller, buyer=match.buyer,
-                       predecessor_transfer_id=legs[-1].transfer_id if legs else None,
+                       predecessor_transfer_id=legs[self._active_legs[receipt_id][-1]].transfer_id
+                       if self._active_legs[receipt_id] else None,
                        price=amount(match.price, "EX_TRANSFER_REFUSED"), quote_asset=match.quote_asset,
                        sell_intent_digest=match.sell_intent_digest, buy_intent_digest=match.buy_intent_digest,
                        sell_authorization_id=sell.authorization_id, buy_authorization_id=buy.authorization_id,
                        executed_at=now, funding_status=funding_status, rollback_status=rollback_status)
         legs.append(leg)
+        self._active_legs[receipt_id].append(leg.leg_index)
         self._used_nonces.add((sell.signer, sell.nonce))
         self._used_nonces.add((buy.signer, buy.nonce))
         self._record(receipt_id, "transfer-executed", {
@@ -461,6 +679,60 @@ class Exchange:
             "registrationStatus": leg.registration_status, "fundingStatus": leg.funding_status,
             "escrowId": escrow_id})
         return leg
+
+    def _check_nft0_currencies(self, receipt_id):
+        receipt = self.receipt(receipt_id)
+        current = (receipt.allowed_price_currencies, receipt.nft0_currency_reference)
+        stored = self._nft0_currency_sets.get(receipt_id)
+        require(stored is not None and current == stored and stored[0] and stored[1],
+                "EX_NFT0_CURRENCY_IMMUTABILITY_REFUSED",
+                "NFT0 currency set or reference is absent or differs from immutable mint")
+        declaration = self._mint_declarations[receipt_id]["canonicalDeclaration"]["receipt"]
+        require(tuple(declaration.get("allowed_price_currencies", ())) == stored[0]
+                and declaration.get("nft0_currency_reference") == stored[1],
+                "EX_NFT0_CURRENCY_IMMUTABILITY_REFUSED",
+                "currency set differs from the verified original mint declaration")
+        return stored
+
+    def _check_trade_funds(self, match, escrow_id, now, action="funds-check", operation_ref=None):
+        try:
+            require(isinstance(self._eth_gas_gate, ETHTradeGasGate),
+                    "EX_ETH_GAS_UNVERIFIED",
+                    "Warning: authenticated ETH gas balance is unavailable; trading is disabled")
+            gas_admission = self._eth_gas_gate.admit(match, now, escrow_id)
+            require(gas_admission["allowed"], gas_admission["code"], gas_admission["warning"])
+            return self._check_price_balance(match, escrow_id, now, gas_admission)
+        except DomainError as error:
+            self._record_admission_refusal(self._asset_keys.get(match.asset.key), error,
+                {"action": action, "operationReference": operation_ref,
+                 "sellIntentDigest": match.sell_intent_digest, "buyIntentDigest": match.buy_intent_digest,
+                 "currency": match.quote_asset, "escrowId": escrow_id, "observedAt": now})
+            raise
+
+    def _record_admission_refusal(self, receipt_id, error, context):
+        if receipt_id not in self._receipts:
+            return
+        detail = dict(context, code=error.code, warning=error.detail,
+                      tradeFormed=False, financialEffects=False,
+                      nativeFinancialOutcome="not-asserted")
+        if error.code == "EX_ETH_COMBINED_BALANCE_INSUFFICIENT":
+            self._record(receipt_id, "combined-eth-admission-refused", detail)
+        elif error.code.startswith("EX_ETH_GAS_"):
+            self._record(receipt_id, "eth-gas-admission-refused", detail)
+        elif error.code.startswith(("EX_NFT0_CURRENCY_", "EX_PRICE_BALANCE_")):
+            self._record(receipt_id, "price-currency-admission-refused", detail)
+
+    def _check_price_balance(self, match, escrow_id, now, gas_admission):
+        receipt_id = self._asset_keys.get(match.asset.key)
+        receipt = self.receipt(receipt_id)
+        allowed, reference = self._check_nft0_currencies(receipt_id)
+        require(match.quote_asset in allowed, "EX_NFT0_CURRENCY_MISMATCH",
+                "trade price must use the explicitly selected NFT0 allowed currency")
+        require(isinstance(self._price_balance_gate, NFT0PriceBalanceGate),
+                "EX_PRICE_BALANCE_UNVERIFIED",
+                "NFT0 currency balance is unverified; trading is disabled")
+        report = self._price_balance_gate.admit(match, match.quote_asset, escrow_id, now, gas_admission)
+        require(report["allowed"], report["code"], report["warning"])
 
     def _transfer_ids(self):
         return {leg.transfer_id for legs in self._legs.values() for leg in legs}
@@ -492,6 +764,8 @@ class Exchange:
         now = self._now(now)
         receipt = self.receipt(receipt_id)
         leg = self.leg(receipt_id, leg_index)
+        require(leg_index in self._active_legs[receipt_id], "EX_WITHDRAWN_LEG_REFUSED",
+                "withdrawn history cannot start another registration request")
         require(isinstance(commitment_window, int) and not isinstance(commitment_window, bool)
                 and commitment_window > 0, "EX_REGISTRATION_REQUEST_REFUSED",
                 "the commitment window must be a positive number of seconds")
@@ -556,9 +830,10 @@ class Exchange:
                     "legIndex": evidence.leg_index, "holderIndex": self._holder_index[evidence.receipt_id],
                     "appliedAt": previous["appliedAt"]}
         receipt_id = evidence.receipt_id
-        expected = self._holder_index[receipt_id]
+        expected = self._next_registration_index(receipt_id)
         rollback = self._rollbacks[receipt_id]
-        if rollback is not None and evidence.leg_index in rollback["affectedLegs"]:
+        if ((rollback is not None and evidence.leg_index in rollback["affectedLegs"])
+                or self.leg(receipt_id, evidence.leg_index).rollback_status == "returned"):
             # The suffix is frozen or unwound. A late success cannot revive the leg
             # or release money again; it is kept as conflict evidence.
             outcome = self.record_late_registration_conflict(receipt_id, evidence)
@@ -606,7 +881,7 @@ class Exchange:
         """Apply buffered results that the filled gap has now made contiguous."""
         buffered = self._deferred[receipt_id]
         while True:
-            nxt = self._holder_index[receipt_id]
+            nxt = self._next_registration_index(receipt_id)
             rollback = self._rollbacks[receipt_id]
             if rollback is not None and nxt in rollback["affectedLegs"]:
                 return
@@ -645,13 +920,13 @@ class Exchange:
     def escrow(self, escrow_id):
         found = self._escrows.get(identifier(escrow_id, "EX_ESCROW_REFUSED"))
         require(found is not None, "EX_ESCROW_UNKNOWN", escrow_id)
-        return found
+        return deepcopy(found)
 
     def escrow_for_leg(self, receipt_id, leg_index):
         self.receipt(receipt_id)
         found = self._escrow_by_leg[receipt_id].get(leg_index)
         require(found is not None, "EX_ESCROW_UNKNOWN", f"leg {leg_index}")
-        return self._escrows[found]
+        return deepcopy(self._escrows[found])
 
     def lock_escrow(self, match, escrow_id, now=None):
         """Put this leg's buyer's own money in its own position.
@@ -671,6 +946,7 @@ class Exchange:
         require(leg_index not in self._escrow_by_leg[receipt_id], "EX_ESCROW_DUPLICATE_REFUSED",
                 f"leg {leg_index} is already funded")
         require(escrow_id not in self._escrows, "EX_ESCROW_DUPLICATE_REFUSED", escrow_id)
+        self._check_trade_funds(match, None, now, "lock-escrow", escrow_id)
         position = EscrowPosition(escrow_id=escrow_id, receipt_id=receipt_id, leg_index=leg_index,
                                   payer=match.buyer, payee=match.seller,
                                   quote_asset=match.quote_asset, principal=match.price,
@@ -699,6 +975,8 @@ class Exchange:
         leg = self.leg(receipt_id, leg_index)
         owner_index, holder_index = self.owner_index(receipt_id), self._holder_index[receipt_id]
         reasons = []
+        if leg_index not in self._active_legs[receipt_id]:
+            reasons.append("EX_WITHDRAWN_LEG_REFUSED")
         if owner_index < leg_index + 1:
             reasons.append("EX_OWNER_POSITION_NOT_REACHED")
         if holder_index < leg_index + 1:
@@ -837,7 +1115,7 @@ class Exchange:
         now = self._now(now)
         self.receipt(receipt_id)
         outcomes = []
-        for leg_index in range(self.owner_index(receipt_id)):
+        for leg_index in self._active_legs[receipt_id]:
             state = self.segment_release_state(receipt_id, leg_index, now)
             if not state["eligible"]:
                 outcomes.append({"legIndex": leg_index, "released": False,
@@ -896,7 +1174,8 @@ class Exchange:
                 "secondPaymentSent": False})
         return tuple(resumed)
 
-    def record_gas(self, receipt_id, leg_index, kind, spent, shared_with=(), note=None):
+    def record_gas(self, receipt_id, leg_index, kind, spent, shared_with=(), note=None,
+                   *, transaction_hash=None):
         """Record actual gas this leg's buyer bore.
 
         The product rule is settled: each leg's buyer bears that leg's trade,
@@ -905,6 +1184,16 @@ class Exchange:
         a fee is actually deducted, are still open, so this records the shared
         set and refuses to charge a shared operation to every leg at full
         amount. No apportionment formula is treated here as approved.
+
+        An original transaction hash provides replay identity, not receipt
+        authenticity. The installed original observer must verify actual fees
+        and the segment binding first. Distinct retry transactions can incur
+        distinct actual fees; repeating one transaction cannot charge again.
+        Replay identity is chain-wide within this ledger, not per receipt.
+        A batch spanning receipts cannot be charged in full to each receipt;
+        no cross-receipt allocation rule is inferred from the transaction hash.
+        Legacy identity-free simulation records retain their conservative
+        shared-operation guard and are not authoritative native fee evidence.
         """
         self.receipt(receipt_id)
         leg = self.leg(receipt_id, leg_index)
@@ -915,24 +1204,41 @@ class Exchange:
         for other in shared:
             self.leg(receipt_id, other)
         entry = {"kind": kind, "legIndex": leg_index, "bearer": escrow.payer,
+                 "asset": "ETH", "unit": "wei",
+                 "chainId": self.receipt(receipt_id).asset.chain_id,
                  "amount": spent, "sharedWith": shared,
                  "sharedOperation": len(shared) > 1,
                  "apportionment": "undecided" if len(shared) > 1 else "single-leg",
                  "note": note}
+        if transaction_hash is not None:
+            require(type(transaction_hash) is str
+                    and re.fullmatch(r"0x[0-9a-f]{64}", transaction_hash) is not None,
+                    "EX_GAS_TRANSACTION_REFUSED", "canonical original transaction hash required")
+            entry["transactionHash"] = transaction_hash
+            for recorded_receipt, by_leg in self._gas.items():
+                for records in by_leg.values():
+                    for previous in records:
+                        if (previous.get("transactionHash") == transaction_hash
+                                and previous.get("chainId") == entry["chainId"]):
+                            require(recorded_receipt == receipt_id and previous == entry,
+                                    "EX_GAS_TRANSACTION_CONFLICT",
+                                    "same chain transaction cannot change receipt, fees or segment responsibility")
+                            return deepcopy(previous)
         if len(shared) > 1:
             # A shared operation is recorded once against the leg that is paying
             # for it here. Charging every sharer the full amount is exactly what
             # the requirement forbids, and the split rule is not ours to invent.
             already = [e for index in shared for e in self._gas[receipt_id].get(index, ())
-                       if e["kind"] == kind and e["sharedWith"] == shared]
+                       if e["kind"] == kind and e["sharedWith"] == shared
+                       and (transaction_hash is None or e.get("transactionHash") is None)]
             require(already == [], "EX_GAS_DOUBLE_CHARGE_REFUSED",
                     f"the shared {kind} operation for legs {shared} is already recorded once")
         self._gas[receipt_id].setdefault(leg_index, [])
-        self._gas[receipt_id][leg_index].append(entry)
+        self._gas[receipt_id][leg_index].append(deepcopy(entry))
         self._update_escrow(escrow.escrow_id,
-                            gas_record=tuple(self._escrows[escrow.escrow_id].gas_record) + (entry,))
+                            gas_record=tuple(self._escrows[escrow.escrow_id].gas_record) + (deepcopy(entry),))
         self._record(receipt_id, "gas-recorded", dict(entry, amount=str(spent)))
-        return entry
+        return deepcopy(entry)
 
     def reconciliation(self, receipt_id, now=None):
         """Per-segment principal, gas and net, with no figure merged.
@@ -947,12 +1253,13 @@ class Exchange:
         for leg in self._legs[receipt_id]:
             escrow_id = self._escrow_by_leg[receipt_id].get(leg.leg_index)
             escrow = self._escrows.get(escrow_id) if escrow_id else None
-            gas = tuple(self._gas[receipt_id].get(leg.leg_index, ()))
+            gas = deepcopy(tuple(self._gas[receipt_id].get(leg.leg_index, ())))
             gas_total = sum(entry["amount"] for entry in gas)
             segments.append({
                 "legIndex": leg.leg_index, "transferId": leg.transfer_id,
                 "seller": leg.seller, "buyer": leg.buyer,
                 "principal": str(leg.price), "quoteAsset": leg.quote_asset,
+                "principalAsset": leg.quote_asset, "principalUnit": "base-units",
                 "escrowId": escrow_id,
                 "escrowStatus": escrow.status if escrow else "not-funded",
                 "paymentStatus": escrow.payment_status if escrow else None,
@@ -963,6 +1270,7 @@ class Exchange:
                 "rollbackStatus": leg.rollback_status,
                 "gasEntries": gas,
                 "gasBorneBy": leg.buyer,
+                "gasAsset": "ETH", "gasUnit": "wei",
                 "gasTotal": str(gas_total),
                 "netToPayee": str(leg.price) if escrow and escrow.status == "released" else "0",
                 "netToPayer": str(leg.price) if escrow and escrow.status == "refunded" else "0",
@@ -983,13 +1291,16 @@ class Exchange:
         receipt = self.receipt(receipt_id)
         legs = self._legs[receipt_id]
         boundary_index, boundary_account = 0, receipt.origin_account
-        for leg in legs:
+        for active_index in self._active_legs[receipt_id]:
+            leg = legs[active_index]
             if leg.registration_status == "confirmed" and leg.leg_index < self._holder_index[receipt_id]:
                 boundary_index, boundary_account = leg.leg_index + 1, leg.buyer
             else:
                 break
         return {"boundaryIndex": boundary_index, "boundaryAccount": boundary_account,
-                "finalizedPrefixLegs": boundary_index}
+                "finalizedPrefixLegs": sum(
+                    self.leg(receipt_id, i).registration_status == "confirmed"
+                    for i in self._active_legs[receipt_id])}
 
     def deadline_boundary(self, receipt_id):
         """Where a post-deadline return stops: the last confirmed holder.
@@ -1003,7 +1314,9 @@ class Exchange:
         require(index >= settled, "EX_ROLLBACK_PREFIX_IMMUTABLE",
                 "the confirmed holder is behind the settled prefix")
         return {"boundaryIndex": index, "boundaryAccount": self.holder_of(receipt_id),
-                "finalizedPrefixLegs": index}
+                "finalizedPrefixLegs": sum(
+                    self.leg(receipt_id, i).registration_status == "confirmed"
+                    for i in self._active_legs[receipt_id])}
 
     def rollback_interval(self, receipt_id, refused_leg_index):
         """The legs a refusal at ``refused_leg_index`` may unwind.
@@ -1014,10 +1327,13 @@ class Exchange:
         """
         self.receipt(receipt_id)
         self.leg(receipt_id, refused_leg_index)
+        require(refused_leg_index in self._active_legs[receipt_id], "EX_WITHDRAWN_LEG_REFUSED",
+                "a prior withdrawn leg cannot trigger a new rollback")
         boundary = self.rollback_boundary(receipt_id)
         require(refused_leg_index >= boundary["boundaryIndex"], "EX_ROLLBACK_PREFIX_IMMUTABLE",
                 f"leg {refused_leg_index} is inside the finalized prefix")
-        affected = tuple(range(boundary["boundaryIndex"], self.owner_index(receipt_id)))
+        affected = tuple(i for i in self._active_legs[receipt_id]
+                         if i >= boundary["boundaryIndex"])
         return {"affectedLegs": affected, **boundary}
 
     def _check_rollback_authority(self, receipt_id, refused_leg_index, authority, interval):
@@ -1063,12 +1379,12 @@ class Exchange:
             require(now >= receipt_record.trade_stop_at, "EX_ROLLBACK_TRIGGER_REFUSED",
                     "the trading deadline has not passed")
             boundary = self.deadline_boundary(receipt_id)
-            interval = {"affectedLegs": tuple(range(boundary["boundaryIndex"],
-                                                    self.owner_index(receipt_id))),
+            interval = {"affectedLegs": tuple(i for i in self._active_legs[receipt_id]
+                                               if i >= boundary["boundaryIndex"]),
                         **boundary}
             require(interval["affectedLegs"] != (), "EX_ROLLBACK_TRIGGER_REFUSED",
                     "owner and the last confirmed holder agree; there is nothing unfinished")
-            refused_leg_index = interval["boundaryIndex"]
+            refused_leg_index = interval["affectedLegs"][0]
         self._check_rollback_authority(receipt_id, refused_leg_index, authority, interval)
         steps = []
         for index in interval["affectedLegs"]:
@@ -1098,6 +1414,7 @@ class Exchange:
             "triggerKind": trigger,
             "boundaryIndex": interval["boundaryIndex"],
             "boundaryAccount": interval["boundaryAccount"],
+            "finalizedPrefixLegs": interval["finalizedPrefixLegs"],
             "affectedLegs": interval["affectedLegs"], "steps": steps,
             "state": "in-progress", "openedAt": now, "conflicts": []}
         self._record(receipt_id, "rollback-opened", {
@@ -1263,6 +1580,11 @@ class Exchange:
         conflicting evidence is kept and the matter goes to investigation.
         """
         state = self._rollbacks[self.receipt(receipt_id).receipt_id]
+        archived = None
+        if state is None or evidence.leg_index not in state["affectedLegs"]:
+            archived = next((item for item in reversed(self._rollback_history[receipt_id])
+                             if evidence.leg_index in item["state"]["affectedLegs"]), None)
+            state = archived["state"] if archived is not None else None
         require(state is not None, "EX_ROLLBACK_NOT_OPEN", receipt_id)
         state["conflicts"].append({"resultId": evidence.result_id, "legIndex": evidence.leg_index,
                                    "outcome": evidence.outcome, "observedAt": evidence.observed_at})
@@ -1270,6 +1592,8 @@ class Exchange:
             "resultId": evidence.result_id, "legIndex": evidence.leg_index,
             "outcome": evidence.outcome, "legRevived": False, "fundsReleasedAgain": False,
             "disposition": "retained as conflict evidence for investigation"})
+        if archived is not None:
+            archived["report"]["conflicts"] = tuple(deepcopy(state["conflicts"]))
         return {"legRevived": False, "fundsReleasedAgain": False,
                 "conflicts": tuple(state["conflicts"])}
 
@@ -1292,11 +1616,15 @@ class Exchange:
             gas_total = sum(entry["amount"] for entry in gas)
             funds.append({"legIndex": index, "originalBuyer": leg.buyer,
                           "principal": str(leg.price),
+                          "principalAsset": leg.quote_asset, "principalUnit": "base-units",
                           "escrowStatus": escrow.status if escrow else "not-funded",
                           "paymentStatus": escrow.payment_status if escrow else None,
                           "refundedToOriginalBuyer": bool(escrow and escrow.status == "refunded"),
                           "gasBorneBy": leg.buyer, "gasTotal": str(gas_total),
-                          "netToOriginalBuyer": str(leg.price - gas_total)
+                          "gasAsset": "ETH", "gasUnit": "wei",
+                          # Principal and gas are different assets. Consumed ETH
+                          # remains charged separately; it cannot reduce a token refund.
+                          "netToOriginalBuyer": str(leg.price)
                           if escrow and escrow.status == "refunded" else "0",
                           "rollbackStatus": leg.rollback_status})
         outstanding = [{"stepId": step.step_id, "kind": step.kind, "legIndex": step.leg_index,
@@ -1309,7 +1637,7 @@ class Exchange:
             "trigger": state["trigger"], "refusedLegIndex": state["refusedLegIndex"],
             "authorityId": state["authorityId"], "source": state["source"],
             "affectedLegs": state["affectedLegs"],
-            "finalizedPrefixLegs": state["boundaryIndex"],
+            "finalizedPrefixLegs": state["finalizedPrefixLegs"],
             "lastFinalizedPosition": state["boundaryIndex"],
             "returnBoundaryAccount": state["boundaryAccount"],
             "funds": tuple(funds), "assetControl": asset,
@@ -1320,186 +1648,97 @@ class Exchange:
             "conflicts": tuple(state["conflicts"]),
             "observedAt": now}
 
-    # -------------------------------------------- deadline, exit and burn
+    # ------------------------------------ deadline and historical exit enquiry
 
     def evaluate_deadline(self, receipt_id, now=None):
-        """Whether new trades stop, what is still in flight, and what is undefined.
+        """Report fixed v1.2 rules and the original authority still needed.
 
-        The mint-time stop instant is preserved exactly as recorded. After it
-        passes, new trades are refused while in-flight registration, settlement
-        and rollback continue under their own rules.
-
-        The precedence between a registration timeout, this deadline and an
-        in-flight result is still open in the requirements, so where two of them
-        are live at once this reports the conflict instead of ranking them.
+        A local clock is enough to stop new trades. It cannot prove whether
+        registration became effective within mint conditions; that decision
+        needs the single authoritative Oracle state, never a grace receipt.
+        This read method does not issue refunds, returns or holder writes.
         """
         now = self._now(now)
         receipt = self.receipt(receipt_id)
         overdue = self.overdue_requests(receipt_id, now)
         past = now >= receipt.trade_stop_at
-        in_flight = tuple(leg.leg_index for leg in self._legs[receipt_id]
-                          if leg.registration_status == "pending")
-        undefined = []
-        if past and overdue:
-            undefined.append("D-03: a registration timeout and the trading deadline are both "
-                             "live; their precedence is not defined in the requirements")
-        if past and self.deferred_legs(receipt_id):
-            undefined.append("D-03: a deferred in-flight result and the trading deadline are "
-                             "both live; their precedence is not defined in the requirements")
+        active = self._active_legs[receipt_id]
+        in_flight = tuple(i for i in active
+                          if self.leg(receipt_id, i).registration_status == "pending")
+        deferred = self.deferred_legs(receipt_id)
+        blockers = []
+        if not receipt.minted_at <= now < receipt.trade_stop_at:
+            blockers.append("EX_TRADE_WINDOW_CLOSED")
+        if self._rollbacks[receipt_id] is not None:
+            blockers.append("EX_TRADE_ROLLBACK_OPEN")
+        if self._returned_to[receipt_id] is not None:
+            blockers.append("EX_RECOVERY_REQUIRED")
+        if self._exits[receipt_id] is not None:
+            blockers.append("EX_RECOVERY_LEGACY_OUTCOME_UNRESOLVED")
         return {"receiptId": receipt_id, "tradeStopAt": receipt.trade_stop_at,
                 "observedAt": now, "pastDeadline": past,
-                "newTradesAccepted": not past,
+                "newTradesAccepted": not blockers, "tradeBlockingReasons": tuple(blockers),
                 "inFlightRegistrationLegs": in_flight,
-                "overdueRequests": tuple(entry["legIndex"] for entry in overdue),
-                "deferredLegs": self.deferred_legs(receipt_id),
+                "overdueRequests": tuple(entry["legIndex"] for entry in overdue
+                                         if entry["legIndex"] in active),
+                "deferredLegs": deferred,
                 "ownerIndex": self.owner_index(receipt_id),
                 "holderIndex": self._holder_index[receipt_id],
                 "unfinishedSuffixReturnsTo": self.holder_of(receipt_id)
                 if self.owner_index(receipt_id) != self._holder_index[receipt_id] else None,
-                "undefinedOrdering": tuple(undefined)}
+                "undefinedOrdering": (),
+                "requiresAuthoritativeReconciliation": bool(past and
+                    self.owner_index(receipt_id) != self.holder_index(receipt_id)),
+                "deadlineRule": "preserve effective registered prefix; fail and return only unregistered suffix",
+                "registrationTimeSource": "single authoritative Oracle record under mint conditions",
+                "graceReceiptRequired": False, "recoveryExecutedByReport": False}
+
+    def bill_of_lading_view(self, receipt_id, now=None):
+        """Read existing bill terms and positions without physical fulfillment.
+
+        This is the model's recorded view, not independent chain evidence or an
+        assertion of independent chain or current authorization verification.
+        """
+        view = self.receipt_view(receipt_id, now)
+        return {"prdVersion": "1.3", "receipt": view,
+                "scope": "bill-of-lading-transfer",
+                "physicalFulfillment": "outside-ex-scope",
+                "physicalActions": (), "historyPreserved": True}
 
     def exit_eligibility(self, receipt_id, requester, authorization_id=None, verified_checks=(),
                          now=None):
-        """Every exit condition, each reported separately.
-
-        ``owner == holder`` is necessary and never sufficient. A check this layer
-        cannot establish must arrive as a verified fact; an unsupplied check
-        counts as not met.
-        """
-        now = self._now(now)
-        view = self.receipt_view(receipt_id, now)
-        address(requester, "EX_REDEMPTION_REFUSED")
-        supplied = frozenset(verified_checks)
-        reasons = []
-        if not view["ownerEqualsHolder"]:
-            reasons.append("EX_OWNER_HOLDER_DIVERGED")
-        if view["owner"]["account"] != requester or view["holder"]["account"] != requester:
-            reasons.append("EX_REDEMPTION_REQUESTER_REFUSED")
-        if authorization_id is None:
-            reasons.append("EX_REDEMPTION_AUTHORIZATION_MISSING")
-        else:
-            state = self.authorization_state(authorization_id, now)
-            reasons.extend(state["reasons"])
-            grant = self.authorization(authorization_id)
-            if grant.account != requester:
-                reasons.append("EX_AUTH_ACCOUNT_REFUSED")
-            if "redeem" not in grant.allowed_actions:
-                reasons.append("EX_AUTH_ACTION_REFUSED")
-            if grant.asset.key != self.receipt(receipt_id).asset.key:
-                reasons.append("EX_AUTH_ASSET_REFUSED")
-        existing = self._exits[receipt_id]
-        if existing is not None:
-            reasons.append("EX_REDEMPTION_ALREADY_REQUESTED")
-        missing = tuple(check for check in REQUIRED_OTHER_CHECKS if check not in supplied)
-        if missing:
-            reasons.append("EX_REDEMPTION_CHECKS_NOT_VERIFIED")
-        ordered = tuple(dict.fromkeys(reasons))
-        return {"receiptId": receipt_id, "requester": requester,
-                "ownerEqualsHolder": view["ownerEqualsHolder"],
-                "necessaryConditionMet": view["ownerEqualsHolder"],
-                "eligible": ordered == (), "reasons": ordered,
-                "verifiedChecks": tuple(sorted(supplied)), "missingChecks": missing,
-                "ownerEqualsHolderIsNotSufficient": True, "observedAt": now}
+        """Compatibility report for a retired operation; no fulfillment gate."""
+        view = self.bill_of_lading_view(receipt_id, now)
+        return {"receiptId": receipt_id, "requester": requester, "eligible": False,
+                "reasons": ("EX_PHYSICAL_FULFILLMENT_RETIRED",),
+                "prdVersion": "1.3", "scope": view["scope"],
+                "physicalActions": (), "observedAt": view["receipt"]["observedAt"]}
 
     def request_redemption(self, receipt_id, requester, authorization_id, request_id,
                            verified_checks=(), now=None):
-        """Open an exit, or refuse with every reason it is not available."""
-        now = self._now(now)
-        eligibility = self.exit_eligibility(receipt_id, requester, authorization_id,
-                                            verified_checks, now)
-        require(eligibility["eligible"], "EX_REDEMPTION_REFUSED", ",".join(eligibility["reasons"]))
-        require(self.voucher_desk is not None, "EX_VOUCHER_DESK_REQUIRED",
-                "an exit needs the simulated collection desk to be configured")
-        request = RedemptionRequest(request_id=request_id, receipt_id=receipt_id,
-                                    requester=requester, authorization_id=authorization_id,
-                                    requested_at=now)
-        self._exits[receipt_id] = {
-            "request": request, "state": "requested",
-            "steps": [ExitStep(name=name, key=exit_step_key(name, receipt_id, request_id)) for name in EXIT_STEPS],
-            "verifiedChecks": eligibility["verifiedChecks"], "openedAt": now}
-        self._record(receipt_id, "redemption-requested", {
-            "requestId": request_id, "requester": requester,
-            "authorizationId": authorization_id,
-            "verifiedChecks": list(eligibility["verifiedChecks"]),
-            "ownerEqualsHolderIsNotSufficient": True,
-            "plannedSteps": list(EXIT_STEPS)})
-        return self._exits[receipt_id]
+        """Never create a new retired physical operation, even with a grant."""
+        require(False, "EX_PHYSICAL_FULFILLMENT_RETIRED",
+                "EX v1.3 transfers the bill of lading; physical fulfillment is outside scope")
 
     def advance_exit(self, receipt_id, through=None, now=None):
-        """Run the exit steps in order, one act at a time.
-
-        ``through`` stops after that step, because the confirmation and recovery
-        order inside the hand-over and burn pair is still open: a later step is
-        never completed from an earlier one, and the physical hand-over and the
-        on-chain burn record their own instants.
-        """
-        now = self._now(now)
-        state = self._exits[self.receipt(receipt_id).receipt_id]
-        require(state is not None, "EX_REDEMPTION_NOT_OPEN", receipt_id)
-        if state["state"] == "complete":
-            return self.exit_report(receipt_id, now)
-        request = state["request"]
-        require(self.owner_of(receipt_id) == self.holder_of(receipt_id) == request.requester
-                and self.owner_index(receipt_id) == self.holder_index(receipt_id),
-                "EX_REDEMPTION_REFUSED", "the exit's entitled position changed")
-        auth = self.authorization_state(request.authorization_id, now)
-        grant = self.authorization(request.authorization_id)
-        require(not auth["reasons"] and grant.account == request.requester
-                and grant.asset.key == self.receipt(receipt_id).asset.key
-                and "redeem" in grant.allowed_actions,
-                "EX_REDEMPTION_REFUSED", "the exit's authorization no longer applies")
-        if through is not None:
-            require(through in EXIT_STEPS, "EX_EXIT_STEP_REFUSED", through)
-        limit = EXIT_STEPS.index(through) if through is not None else len(EXIT_STEPS) - 1
-        updated = list(state["steps"])
-        for position, step in enumerate(updated):
-            if position > limit:
-                break
-            if step.status == "done":
-                continue
-            record = self.voucher_desk.lookup(step.key)
-            if record is not None:
-                require(record.get("key") == step.key and record.get("step") == step.name
-                        and record.get("receiptId") == receipt_id
-                        and record.get("account") == state["request"].requester,
-                        "EX_VOUCHER_SUBSTITUTION_REFUSED", "lookup returned another exit's record")
-            if record is None or record["status"] == "failed":
-                record = self.voucher_desk.act(step.key, step.name, receipt_id,
-                                               state["request"].requester)
-            if record["status"] != "done":
-                updated[position] = replace(step, status="blocked",
-                                            detail=(("voucherStatus", record["status"]),))
-                self._record(receipt_id, "exit-step-blocked", {
-                    "step": step.name, "status": record["status"], "secondActSent": False})
-                break
-            updated[position] = replace(step, status="done", completed_at=record["observedAt"],
-                                        detail=(("reference", record["reference"]),))
-            self._record(receipt_id, "exit-step-done", {
-                "step": step.name, "completedAt": record["observedAt"],
-                "reference": record["reference"], "simulated": True,
-                "atomicWithOtherSteps": False})
-            if step.name == "burn":
-                self._replace_leg_free_burn(receipt_id)
-        state["steps"] = updated
-        outstanding = [step for step in updated if step.status != "done"]
-        blocked = [step for step in updated if step.status == "blocked"]
-        state["state"] = ("complete" if not outstanding else
-                          "blocked" if blocked else "in-progress")
-        return self.exit_report(receipt_id, now)
+        """Preserve old records for enquiry; never resume their physical acts."""
+        require(False, "EX_PHYSICAL_FULFILLMENT_RETIRED",
+                "query historical exit evidence without executing a retired step")
 
     def _replace_leg_free_burn(self, receipt_id):
-        """Mark the receipt burned while keeping its whole history readable."""
-        self._record(receipt_id, "receipt-burned", {
-            "historyPreserved": True,
-            "assetLink": "retained", "registrationOrder": "retained",
-            "fundsRecord": "retained", "collectionRecord": "retained"})
+        """Retired private entry must not manufacture a destruction event."""
+        require(False, "EX_PHYSICAL_FULFILLMENT_RETIRED",
+                "collection-driven destruction is outside EX v1.3")
 
     def exit_report(self, receipt_id, now=None):
-        """Each exit step with its own instant, and what is still open."""
+        """Read retained historical evidence without making it executable."""
         now = self._now(now)
         state = self._exits[self.receipt(receipt_id).receipt_id]
         if state is None:
             return {"receiptId": receipt_id, "open": False, "state": None, "complete": False,
+                    "burned": False, "steps": (), "historyPreserved": True,
+                    "distinctCompletionInstants": (), "physicalAndOnChainAreAtomic": False,
+                    "retiredOperation": True, "executable": False, "prdVersion": "1.3",
                     "observedAt": now}
         steps = tuple({"step": step.name, "status": step.status,
                        "completedAt": step.completed_at, "detail": dict(step.detail)}
@@ -1516,10 +1755,9 @@ class Exchange:
                 "physicalAndOnChainAreAtomic": False,
                 "distinctCompletionInstants": tuple(instants),
                 "completionInstantsDiffer": len(instants) > 1,
-                "undefinedOrdering": (
-                    ("D-07: the exact confirmation and recovery order for the voucher hand-over "
-                     "and the burn is not defined in the requirements; no step is completed from "
-                     "a neighbour",)),
+                "undefinedOrdering": (),
+                "retiredOperation": True, "executable": False,
+                "prdVersion": "1.3",
                 "historyPreserved": True,
                 "observedAt": now}
 
@@ -1533,6 +1771,11 @@ class Exchange:
         owner_index, holder_index = self.owner_index(receipt_id), self._holder_index[receipt_id]
         return {
             "receiptId": receipt.receipt_id,
+            "allowedPriceCurrencies": receipt.allowed_price_currencies,
+            "nft0CurrencyReference": receipt.nft0_currency_reference,
+            "currencySource": "NFT0", "conversionAvailable": False,
+            "gasCurrency": "ETH",
+            "mintDeclaration": deepcopy(self._mint_declarations[receipt_id]),
             "asset": {"chainId": receipt.asset.chain_id, "contract": receipt.asset.contract,
                       "tokenId": receipt.asset.token_id},
             "commodity": {"name": receipt.commodity_name, "quantity": receipt.commodity_quantity,
@@ -1545,8 +1788,16 @@ class Exchange:
             "holder": {"account": self.holder_of(receipt_id), "position": holder_index,
                        "meaning": "registration-confirmed position"},
             "ownerEqualsHolder": owner_index == holder_index,
-            "registeredPrefixLegs": holder_index,
-            "outstandingLegs": owner_index - holder_index,
+            "registeredPrefixLegs": sum(
+                self.leg(receipt_id, i).registration_status == "confirmed"
+                for i in self._active_legs[receipt_id]),
+            "activeLegIndices": tuple(self._active_legs[receipt_id]),
+            "historicalWithdrawnLegIndices": tuple(i for i in range(len(legs))
+                                                     if i not in self._active_legs[receipt_id]),
+            "chainGeneration": len(self._rollback_history[receipt_id]),
+            "outstandingLegs": sum(
+                self.leg(receipt_id, i).registration_status != "confirmed"
+                for i in self._active_legs[receipt_id]),
             "deferredLegs": self.deferred_legs(receipt_id),
             "rejectedLegs": tuple(e.leg_index for e in self._rejections[receipt_id]),
             "registrationPath": receipt.registration_path,
@@ -1565,38 +1816,20 @@ class Exchange:
         }
 
     def redemption_readiness(self, receipt_id, requester, now=None):
-        """Whether the necessary condition holds, and what is still unchecked.
-
-        ``owner == holder`` is necessary and never sufficient. This returns the
-        remaining checks by name instead of a verdict; Stage 4 implements the
-        exit flow itself.
-        """
-        now = self._now(now)
-        view = self.receipt_view(receipt_id, now)
-        address(requester, "EX_REDEMPTION_REFUSED")
-        blocking = []
-        if not view["ownerEqualsHolder"]:
-            blocking.append("EX_OWNER_HOLDER_DIVERGED")
-        if view["owner"]["account"] != requester or view["holder"]["account"] != requester:
-            blocking.append("EX_REDEMPTION_REQUESTER_REFUSED")
-        return {"receiptId": receipt_id, "requester": requester,
-                "ownerEqualsHolder": view["ownerEqualsHolder"],
-                "necessaryConditionMet": blocking == [],
-                "blockingReasons": tuple(blocking),
-                "furtherChecksNotPerformedHere": ("rights-holder-verification", "asset-validity",
-                                                  "other-eligibility", "voucher-handover", "burn"),
-                "redeemable": False,
-                "redeemableMeaning": "Stage 1 performs no redemption; this is a readiness report only",
-                "observedAt": now}
+        """Legacy read route reports retirement, not a new acceptance checklist."""
+        return self.exit_eligibility(receipt_id, requester, now=now)
 
     def receipt_timeline(self, receipt_id):
         """Trade, registration, funding and rollback records in one order."""
         self.receipt(receipt_id)
-        return tuple(self._events[receipt_id])
+        return tuple(deepcopy(self._events[receipt_id]))
 
     def _record(self, receipt_id, kind, detail):
         self._events[receipt_id].append({"sequence": len(self._events[receipt_id]), "kind": kind,
-                                         "receiptId": receipt_id, "detail": detail})
+                                         "receiptId": receipt_id, "detail": deepcopy(detail)})
 
     def _now(self, now):
         return instant(self._clock() if now is None else now, "EX_INSTANT_REFUSED")
+
+
+

@@ -199,6 +199,81 @@ _LOCALE_TOKEN = re.compile(
     r"|(?P<word>[A-Za-z_$][A-Za-z0-9_$]*)|(?P<symbol>[{}\[\]:,])")
 
 
+# Only literal product display resources are language data. Credential and
+# private-content scanning still uses every original byte, including literals.
+PYTHON_DISPLAY_TABLES = {
+    "exchange/collateral_scenario.py": ("WORDS",),
+    "exchange/authorization_page.py": ("TEXT",),
+    "exchange/evidence_page.py": ("_TEXT", "LANGUAGES", "UNVERIFIED"),
+    "exchange/gap_projection.py": ("GAP_LABELS",),
+    "exchange/gas_disclosure_locales.py": ("WORDS", "TRANSPORT", "AVAILABILITY"),
+    "exchange/market_page.py": ("BASE_UNITS", "WORDS", "STATES", "EMPTY_MODE"),
+    "exchange/nft_detail_page.py": ("LOCALES", "QUOTE_LABELS"),
+    "exchange/queue_status_page.py": ("TEXT", "CONTROL_TEXT"),
+    "exchange/reference_provenance_page.py": ("LABELS", "VALUES"),
+    "exchange/register_projection_page.py": ("BLOCK_TIME", "LABELS"),
+    "exchange/registration_source_locales.py": ("WORDS",),
+    "exchange/remint_draft_workbench.py": ("WORDS",),
+    "exchange/remint_review.py": ("WORDS",),
+    "exchange/rollback_page.py": ("TEXT", "HISTORY"),
+    "exchange/settlement_record_page.py": ("TEXT",),
+    "exchange/timeline_page.py": ("TEXT", "SIMULATION"),
+}
+
+
+def _python_display_spans(name, text):
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError):
+        return []
+    lines = text.splitlines(keepends=True)
+    starts, total = [], 0
+    for line in lines:
+        starts.append(total)
+        total += len(line)
+
+    def offset(line, column):
+        prefix = lines[line - 1].encode("utf-8")[:column].decode("utf-8")
+        return starts[line - 1] + len(prefix)
+
+    def display_values(value):
+        if isinstance(value, str):
+            return True
+        if isinstance(value, (tuple, list)):
+            return bool(value) and all(display_values(item) for item in value)
+        if isinstance(value, dict):
+            return bool(value) and all(isinstance(key, str) and key.isascii()
+                                       and display_values(item) for key, item in value.items())
+        return False
+
+    spans = []
+    for statement in tree.body:
+        if not isinstance(statement, ast.Assign) or len(statement.targets) != 1:
+            continue
+        target = statement.targets[0]
+        if not isinstance(target, ast.Name) or target.id not in PYTHON_DISPLAY_TABLES[name]:
+            continue
+        try:
+            value = ast.literal_eval(statement.value)
+            if target.id == "LANGUAGES":
+                valid = (isinstance(value, (tuple, list)) and len(value) == len(DISPLAY_LOCALES)
+                         and all(isinstance(pair, tuple) and len(pair) == 2
+                                 and isinstance(pair[0], str) and isinstance(pair[1], str) for pair in value)
+                         and {pair[0] for pair in value} == DISPLAY_LOCALES)
+            else:
+                valid = (isinstance(value, dict) and set(value) == DISPLAY_LOCALES
+                         and all(display_values(item) for item in value.values()))
+            if not valid:
+                continue
+            for node in ast.walk(statement.value):
+                if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                    spans.append((offset(node.lineno, node.col_offset),
+                                  offset(node.end_lineno, node.end_col_offset)))
+        except (ValueError, TypeError, UnicodeError):
+            continue
+    return spans
+
+
 def _localized_language_view(name, text):
     spans = []
     if name == "ui/commodity-market/locales.js":
@@ -263,6 +338,8 @@ def _localized_language_view(name, text):
                 if option.group(2) in DISPLAY_LOCALES:
                     spans.append((select.start(2) + option.start(3),
                                   select.start(2) + option.end(3)))
+    elif name in PYTHON_DISPLAY_TABLES:
+        spans = _python_display_spans(name, text)
     else:
         return text
     view = list(text)

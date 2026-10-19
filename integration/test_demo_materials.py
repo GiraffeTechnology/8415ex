@@ -5,7 +5,7 @@ import io
 import json
 import unittest
 import zipfile
-from exchange import demo_materials
+from exchange import demo_materials, demo_public
 from exchange.demo_ui import DemoServer
 from scenarios.demos import DEMOS
 
@@ -37,6 +37,24 @@ class DemoMaterialContracts(unittest.TestCase):
             self.assertTrue(archive.read("captions.vtt").startswith(b"WEBVTT\n"))
             self.assertIn("not a rendered film", archive.read("README.md").decode())
             self.assertIn("Rendered PPTX", manifest["notRun"])
+
+    def test_typed_public_projection_exports_without_reintroducing_original_setup(self):
+        records = [demo_public.run_record(record) for record in self.records]
+        data, _ = demo_materials.build(records)
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            for record in records:
+                name = record["report"]["scenarios"][0]["scenarioId"]
+                captured = json.loads(archive.read("evidence/" + name + ".json"))
+                self.assertEqual(captured, record)
+                self.assertNotIn("accounts", captured["report"]["scenarios"][0]["setup"])
+        broken = copy.deepcopy(records)
+        broken[0]["schema"] = "untyped-projection"
+        with self.assertRaises(ValueError):
+            demo_materials.build(broken)
+        broken = copy.deepcopy(records)
+        broken[0]["report"]["scenarios"][0]["counts"]["passed"] += 1
+        with self.assertRaises(ValueError):
+            demo_materials.build(broken)
 
     def test_same_captured_records_produce_identical_archive_bytes(self):
         self.assertEqual(demo_materials.build(self.records)[0], demo_materials.build(copy.deepcopy(self.records))[0])

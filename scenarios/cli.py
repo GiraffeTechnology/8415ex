@@ -613,6 +613,20 @@ def main(argv=None):
         parser.error("%s publish JSON to stdout only; capture stdout externally"
                      % ", ".join(sorted(STDOUT_ONLY)))
 
+    # Resolve current requirements before a scenario-derived report.
+    from . import current_prd
+    try:
+        current_prd.load(arguments.root)
+        if arguments.command in ("matrix", "stages", "decisions", "handoff", "sections"):
+            print(canonical_json(current_prd.report(arguments.command, arguments.root)))
+            return 0
+        # Scenario bodies carry an exact migrated revision and are checked by
+        # Scenario.run. Other reports consume those actual observations; none
+        # promotes the historical public baseline to complete current acceptance.
+    except (OSError, ValueError, KeyError, TypeError) as problem:
+        print(canonical_json({"status": "PRD_PIN_ERROR", "executed": False, "error": str(problem)}))
+        return 2
+
     if arguments.command == "scenarios":
         report = run_all(list(DEMOS))
         print(canonical_json(report) if arguments.json else report_text(report))

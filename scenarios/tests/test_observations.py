@@ -550,3 +550,42 @@ class WorkloadBaseline(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PythonLocalizedUIClassification(unittest.TestCase):
+    _scan = LocalizedUIClassification._scan
+    @staticmethod
+    def _python_source(value=None):
+        value = value if value is not None else chr(0x4E2D)
+        return "TEXT = " + repr({key: (value,) for key in sorted(observations.DISPLAY_LOCALES)}) + "\n"
+
+    def test_python_display_values_are_scanned_data(self):
+        scan = self._scan({"exchange/authorization_page.py": self._python_source()})
+        self.assertTrue(scan["clean"], scan["findings"])
+        self.assertEqual(scan["coverage"]["scanned"], 1)
+
+    def test_python_comments_and_other_assignments_are_not_translation_data(self):
+        for suffix in ("# " + chr(0x4E2D), "other = " + repr(chr(0x4E2D))):
+            with self.subTest(suffix=suffix):
+                scan = self._scan({"exchange/authorization_page.py": self._python_source() + suffix})
+                self.assertFalse(scan["clean"])
+                self.assertTrue(any(item["kind"] == "non-english" for item in scan["findings"]))
+
+    def test_python_code_and_incomplete_tables_are_not_exempt(self):
+        for source in (self._python_source().replace("'ja':", "'other':"),
+                       "TEXT = make(" + repr(chr(0x4E2D)) + ")\n"):
+            with self.subTest(source=source):
+                scan = self._scan({"exchange/authorization_page.py": source})
+                self.assertFalse(scan["clean"])
+
+    def test_python_translation_filename_elsewhere_has_no_exemption(self):
+        scan = self._scan({"docs/authorization_page.py": self._python_source()})
+        self.assertFalse(scan["clean"])
+
+    def test_all_secret_patterns_still_read_python_translations(self):
+        for label, _ in observations.SECRET_PATTERNS + observations.PRIVATE_CONTENT_PATTERNS:
+            with self.subTest(pattern=label):
+                source = self._python_source(chr(0x4E2D) + " " + _sample(label))
+                scan = self._scan({"exchange/authorization_page.py": source})
+                self.assertFalse(scan["clean"])
+                self.assertIn(label, {item["pattern"] for item in scan["findings"]})

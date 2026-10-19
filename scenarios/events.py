@@ -82,11 +82,29 @@ AUDIT_GROUPS = (
         "evidence": "recorded",
     },
     {
-        "group": "redemption",
-        "requires": "a redemption requested, and each exit step's result",
-        "kinds": ("redemption-requested", "exit-step-done", "exit-step-blocked",
-                  "receipt-burned"),
+        "group": "trading-recovery",
+        "requires": "trading eligibility after rollback, preserving withdrawn history",
+        "kinds": ("trading-resumed",),
         "evidence": "recorded",
+    },
+    {
+        "group": "currency-admission",
+        "requires": "NFT0 missing, mismatched or insufficient selected-currency refusal",
+        "kinds": ("price-currency-admission-refused", "combined-eth-admission-refused"),
+        "evidence": "recorded",
+    },
+    {
+        "group": "eth-gas-admission",
+        "requires": "zero or insufficient ETH warning and refusal before execution",
+        "kinds": ("eth-gas-admission-refused", "combined-eth-admission-refused"),
+        "evidence": "recorded",
+    },
+    {
+        "group": "remint",
+        "requires": "holder remint request/refusal, old/new links and atomic burn/mint result",
+        "kinds": (),
+        "evidence": "interface-gap",
+        "whyNotLocal": "original remint journal and chain evidence are not yet joined to this timeline",
     },
     {
         "group": "reorg-recovery",
@@ -117,10 +135,15 @@ CHAIN_ONLY_KINDS = (
             "conflict is a different fact"},
 )
 
+# Known historical physical-operation evidence remains readable. These are not
+# required active events, and recording one in current domain source is a gap.
+RETIRED_PHYSICAL_KINDS = ("exit-step-blocked", "exit-step-done",
+                          "receipt-burned", "redemption-requested")
+
 #: Every kind this contract names.
-DECLARED_KINDS = tuple(sorted(
+DECLARED_KINDS = tuple(sorted(set(
     [kind for group in AUDIT_GROUPS for kind in group["kinds"]]
-    + [entry["kind"] for entry in ANCILLARY_KINDS]))
+    + [entry["kind"] for entry in ANCILLARY_KINDS])))
 
 #: Kinds whose record is a movement that definitely happened. An attempt is not
 #: a movement: where an attempt has its own completed counterpart - a refund
@@ -129,10 +152,10 @@ DECLARED_KINDS = tuple(sorted(
 MOVEMENT_KINDS = {
     "transfer-executed": "asset",
     "asset-returned": "asset",
-    "receipt-burned": "asset",
     "escrow-locked": "fund",
     "segment-refunded": "fund",
 }
+HISTORICAL_MOVEMENT_KINDS = {"receipt-burned": "asset"}
 
 #: The one kind with no completed counterpart: a release records its attempt
 #: whether the money moved or not, and its own escrow status says which. A
@@ -169,14 +192,33 @@ CORRELATION_SOURCES = {
 #: the next step. Each is a dependency, not a defect and not a local failure.
 INTERFACE_GAPS = (
     {
-        "gap": "no event is recorded when an intent is accepted or refused",
-        "neededFor": "the intent-decision audit group",
-        "whyNotLocal": "recording it means writing to the recorder, which is the "
-                       "domain and ledger surface",
-        "owner": "the domain and ledger owner",
-        "nextStep": "record the decision where an intent is acted on, keeping "
-                    "validation a read that appends nothing, so a refreshing view "
-                    "does not grow the trail",
+        "gap": "native financial currency admission runtime is not independently accepted",
+        "neededFor": "actual native financial acceptance beyond recorded domain refusals",
+        "whyNotLocal": "a recorded domain refusal does not prove a live native balance or atomic writer",
+        "owner": "EX admission and original native financial integration owners",
+        "nextStep": "bind original native source and atomic financial gate; keep refused trades unsigned and undispatched",
+    },
+    {
+        "gap": "native ETH gas admission runtime is not independently accepted",
+        "neededFor": "actual ETH source and fee reservation acceptance beyond domain refusal records",
+        "whyNotLocal": "a recorded domain warning is not proof of a native balance, freeze or transaction",
+        "owner": "EX gas admission and original native financial integration owners",
+        "nextStep": "verify original native ETH source and atomic reservation binding without inventing results",
+    },
+    {
+        "gap": "original atomic remint evidence is not joined to the timeline",
+        "neededFor": "the remint audit group",
+        "whyNotLocal": "a mint record or historical collection burn is not atomic remint evidence",
+        "owner": "EX remint and original native journal integration owners",
+        "nextStep": "join the exact original request, old/new token binding and verified atomic result",
+    },
+    {
+        "gap": "malformed or unknown-asset submissions have no receipt-correlated event",
+        "neededFor": "unbound intent-decision intake auditing",
+        "whyNotLocal": "no verified receipt exists to attach those submissions to",
+        "owner": "the authenticated EX intake boundary owner",
+        "nextStep": "retain refusal evidence at the original intake boundary without inventing a receipt, "
+                    "while keeping validation and page reads free of new events",
     },
     {
         "gap": "the event shape carries no run identity",
@@ -242,12 +284,16 @@ def conformance(root="."):
     unrecorded = sorted(declared - chain_only - set(recorded["kinds"]))
     return {
         "schema": "8415ex-event-conformance/1",
+        "prdVersion": "1.3",
         "domain": recorded,
         "declaredKinds": list(DECLARED_KINDS),
         "declaredKindCount": len(DECLARED_KINDS),
         "chainOnlyKinds": [dict(entry) for entry in CHAIN_ONLY_KINDS],
         "undeclaredKindsRecorded": undeclared,
         "declaredKindsNotRecorded": unrecorded,
+        "retiredPhysicalKindsRecorded": sorted(set(recorded["kinds"]) & set(RETIRED_PHYSICAL_KINDS)),
+        "requiredUnmappedAuditGroups": [group["group"] for group in AUDIT_GROUPS
+                                       if group["evidence"] == "interface-gap"],
         "accountedFor": recorded["readable"] and not undeclared,
         "interfaceGaps": [dict(entry) for entry in INTERFACE_GAPS],
         "interfaceGapCount": len(INTERFACE_GAPS),
@@ -340,7 +386,9 @@ def coverage(timeline):
         # with a chain-only kind is awaiting that observation however complete
         # its local half is: calling it recorded would be the exact conflation
         # this report exists to prevent.
-        if needs_chain:
+        if group["evidence"] == "interface-gap":
+            status = "not-recorded-interface-gap"
+        elif needs_chain:
             status = "awaiting-chain-observation"
         elif group["evidence"] == "derived":
             status = "derived" if any_observed else "not-observed"
@@ -366,9 +414,10 @@ def coverage(timeline):
             "derivedValue": derived_prefix,
             "derivedFrom": list(group.get("derivedFrom", ())),
             "derivedBy": group.get("derivedBy"),
-            "whyNotLocal": "; ".join(chain_only[kind] for kind in needs_chain) or None,
+            "whyNotLocal": group.get("whyNotLocal") or
+                           "; ".join(chain_only[kind] for kind in needs_chain) or None,
         })
-    undeclared = sorted(set(counts) - set(DECLARED_KINDS))
+    undeclared = sorted(set(counts) - set(DECLARED_KINDS) - set(RETIRED_PHYSICAL_KINDS))
     return {
         "schema": "8415ex-event-coverage/2",
         "groups": groups,
@@ -389,6 +438,7 @@ def coverage(timeline):
             if entry["status"] == "awaiting-chain-observation"),
         "statusesAreExclusive": True,
         "undeclaredKindsObserved": undeclared,
+        "retiredPhysicalKindsObserved": sorted(set(counts) & set(RETIRED_PHYSICAL_KINDS)),
         "eventCount": len(timeline),
         "isNot": [
             "not a chain observation: a locally produced record is never evidence "
@@ -418,6 +468,7 @@ def replay(timeline, run_id=None, asset_key=None):
         "fundMovements": [],
         "attemptsThatMovedNothing": [],
         "undeclaredKinds": [],
+        "retiredPhysicalKinds": [],
         "finalPrefix": None,
         "byTransfer": {},
         "byRequest": {},
@@ -433,7 +484,10 @@ def replay(timeline, run_id=None, asset_key=None):
             state["duplicatesIgnored"] += 1
             continue
         seen.add(identity)
-        if kind not in DECLARED_KINDS:
+        if kind in RETIRED_PHYSICAL_KINDS:
+            state["retiredPhysicalKinds"].append({"kind": kind, "sequence": event["sequence"],
+                                                   "executable": False})
+        elif kind not in DECLARED_KINDS:
             # Reported, not refused: this layer reads a trail it does not write,
             # and refusing would make an unaccounted kind look like a crash.
             state["undeclaredKinds"].append({"kind": kind,
@@ -443,7 +497,7 @@ def replay(timeline, run_id=None, asset_key=None):
         highest = max(highest, event["sequence"])
         state["consumed"] += 1
         state["kindCounts"][kind] = state["kindCounts"].get(kind, 0) + 1
-        moves = MOVEMENT_KINDS.get(kind)
+        moves = MOVEMENT_KINDS.get(kind) or HISTORICAL_MOVEMENT_KINDS.get(kind)
         rule = CONDITIONAL_MOVEMENT_KINDS.get(kind)
         if rule is not None:
             observed = (event.get("detail") or {}).get(rule["key"])
@@ -510,6 +564,8 @@ def contract():
                         derivedFrom=list(group.get("derivedFrom", ())))
                    for group in AUDIT_GROUPS],
         "ancillaryKinds": [dict(entry) for entry in ANCILLARY_KINDS],
+        "prdVersion": "1.3",
+        "retiredPhysicalKinds": list(RETIRED_PHYSICAL_KINDS),
         "chainOnlyKinds": [dict(entry) for entry in CHAIN_ONLY_KINDS],
         "declaredKinds": list(DECLARED_KINDS),
         "declaredKindCount": len(DECLARED_KINDS),
@@ -534,6 +590,7 @@ def contract():
             "groups": [[group["group"], list(group["kinds"]), group["evidence"]]
                        for group in AUDIT_GROUPS],
             "kinds": list(DECLARED_KINDS),
+            "retiredPhysicalKinds": list(RETIRED_PHYSICAL_KINDS),
             "movement": MOVEMENT_KINDS,
             "conditional": CONDITIONAL_MOVEMENT_KINDS,
             "correlation": list(CORRELATION_KEYS),
@@ -585,3 +642,4 @@ def build(exchange=None, receipt_id=None, root=".", run_id=None):
     report["replay"] = replay(timeline, run_id, asset_key)
     report["rebuild"] = rebuilt_identically(timeline, run_id, asset_key)
     return report
+

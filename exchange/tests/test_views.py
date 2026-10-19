@@ -37,24 +37,29 @@ class EveryPageRenders(unittest.TestCase):
             with self.subTest(page=name):
                 html = self._page(name)
                 self.assertTrue(html.startswith("<!doctype html>"))
-                self.assertIn("8415ex", html)
+                self.assertIn("NFT transfer details" if name == "receipt" else "8415ex", html)
 
     def test_the_receipt_page_labels_both_positions_separately(self):
         html = self._page("receipt")
-        self.assertIn("Owner (on-chain trade position)", html)
-        self.assertIn("Holder (registration-confirmed position)", html)
-        self.assertIn("1 NFT = 1 whole warehouse receipt", html)
-        self.assertIn("Registered prefix", html)
+        self.assertIn("On-chain Owner position", html)
+        self.assertIn("Registered Holder position", html)
+        self.assertIn("Current position", html)
+        self.assertIn("Original terms not provided", html)
+        for account in (F.A, F.B, F.C, F.D):
+            self.assertNotIn(account, html)
 
     def test_the_receipt_page_never_shows_one_unexplained_holder(self):
         html = self._page("receipt")
         self.assertNotIn("<th>Holder</th>", html)
         self.assertNotIn("<th>Owner</th>", html)
 
-    def test_the_receipt_page_states_that_owner_equals_holder_is_not_enough(self):
+    def test_the_receipt_page_separates_ordinary_transfer_from_holder_remint(self):
         exchange, _ = F.minted()
         html = views.page(exchange, "rcpt-8415-0001", "receipt")
-        self.assertIn("not sufficient", html)
+        self.assertIn("openGapOF=YES does not block normal continuous trading", html)
+        self.assertIn("Unknown", html)
+        self.assertNotIn("redeem", html.lower())
+        self.assertNotIn("necessary condition", html)
 
     def test_the_authorization_page_denies_that_connecting_authorizes(self):
         html = self._page("authorization")
@@ -102,20 +107,26 @@ class EveryPageRenders(unittest.TestCase):
 
     def test_the_evidence_page_binds_this_run_and_claims_nothing_more(self):
         html = self._page("evidence")
-        self.assertIn("test-run", html)
-        self.assertIn("none - Stage 1 sends no transaction", html)
+        self.assertIn("private run reference", html)
+        self.assertNotIn("test-run", html)
+        self.assertIn("no verified transaction hash supplied", html)
         self.assertIn("no earlier run&#x27;s output is reused here", html)
 
     def test_every_page_carries_the_scope_banner(self):
         for name in views.PAGES:
             with self.subTest(page=name):
                 html = self._page(name)
-                self.assertIn("Not a deployment or an acceptance record", html)
-                self.assertIn("Registration is simulated", html)
+                if name == "receipt":
+                    self.assertIn("Original terms not provided; completeness cannot be verified", html)
+                    self.assertIn("Not provided", html)
+                else:
+                    self.assertIn("Not a deployment or an acceptance record", html)
+                    self.assertIn("Registration is simulated", html)
 
     def test_an_unfunded_stage_says_no_payment_is_modelled(self):
-        html = self._page("receipt")
+        html = self._page("timeline")
         self.assertIn("No payment is modelled at this stage", html)
+        self.assertIn("Original terms not provided", self._page("receipt"))
 
     def test_an_unknown_page_is_refused(self):
         with self.assertRaises(KeyError):
@@ -158,12 +169,12 @@ class ConsoleIsReadOnly(unittest.TestCase):
             with self.subTest(page=name):
                 status, body = self._request("GET", f"/{name}")
                 self.assertEqual(status, 200)
-                self.assertIn("8415ex", body)
+                self.assertIn("NFT transfer details" if name == "receipt" else "8415ex", body)
 
     def test_the_root_serves_the_receipt_page(self):
         status, body = self._request("GET", "/")
         self.assertEqual(status, 200)
-        self.assertIn("Receipt detail", body)
+        self.assertIn("NFT transfer details", body)
 
     def test_an_unknown_path_is_404(self):
         status, _ = self._request("GET", "/nope")
@@ -179,3 +190,4 @@ class ConsoleIsReadOnly(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

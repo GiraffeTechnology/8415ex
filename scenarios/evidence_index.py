@@ -197,7 +197,7 @@ def build(scenario_report=None, path_report=None, root=".", run_identity=None,
             "scenarioProblems": row["scenarioProblems"],
             "partiallyLocal": row["partiallyLocal"],
             "remainingRealEvidence": row["remainingRealEvidence"],
-            "remainingOwner": (checklist["owner"] if row["remainingRealEvidence"]
+            "remainingOwner": ("integration acceptance" if row["remainingRealEvidence"]
                                else None),
             "artifactReferences": _artifact_references(position, slots),
         })
