@@ -55,10 +55,19 @@ class RemintDraftEditTests(unittest.TestCase):
     def test_original_template_and_deadline_validation_remain_in_force(self):
         for updates in ({"specification": {"public_attributes": ()}},
                         {"specification": {"registration_comparison": "UNKNOWN"}},
-                        {"specification": {"registration_deadline": 999}},
+                        {"specification": {"registration_deadline": self.old.receipt.minted_at}},
                         {"specification": {"bill_terms": ""}}):
             with self.subTest(updates=updates), self.assertRaises(MintSpecificationRefused):
                 self.edit(updates)
+
+    def test_declared_registration_deadline_keeps_original_trade_cutoff(self):
+        result = self.edit({"specification": {"registration_deadline": 999}})
+        proposed = result["specification"]
+        self.assertEqual(proposed.registration_deadline, 999)
+        self.assertTrue(proposed.registration_time_eligible(proposed.receipt.trade_stop_at))
+        self.assertFalse(proposed.registration_time_eligible(proposed.receipt.trade_stop_at + 1))
+        self.assertFalse(proposed.trade_eligible_at(proposed.receipt.trade_stop_at))
+        self.assertEqual(self.old.registration_deadline, 180)
 
     def test_draft_does_not_call_verifier_or_present_fact_hash_as_signature(self):
         with patch.object(MintSpecification, "metadata", side_effect=AssertionError("must not verify")):

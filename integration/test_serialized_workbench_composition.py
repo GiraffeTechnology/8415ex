@@ -20,7 +20,7 @@ class SerializedWorkbenchCompositionTests(unittest.TestCase):
         self.exchange = Exchange(lambda: 20, mint_verifier=lambda kind, evidence: True)
         first = specification()
         second = replace(first, receipt=replace(first.receipt, receipt_id="receipt-2",
-            asset=replace(first.receipt.asset, token_id=8)), bill_of_lading_number="bill-2",
+            receipt_number="warehouse-2", asset=replace(first.receipt.asset, token_id=8)), bill_of_lading_number="bill-2",
             original_document_mapping="document-map-2", controlled_access_mapping="controlled-map-2")
         self.exchange.mint(first.receipt, first)
         self.exchange.mint(second.receipt, second)
