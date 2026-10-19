@@ -17,7 +17,9 @@ class EmptyCatalogueServer(HTTPServer):
     """Loopback origin for an operator's existing proxy, without trading inputs."""
 
     def __init__(self, *, port, commit, tree, reference_feed=None,
-                 collateral_selection=False):
+                 collateral_selection=False, scenario_selection=False):
+        if type(scenario_selection) is not bool:
+            raise ValueError("explicit scenario selection option required")
         if type(collateral_selection) is not bool:
             raise ValueError("explicit collateral selection option required")
         if commit is None or tree is None:
@@ -37,6 +39,14 @@ class EmptyCatalogueServer(HTTPServer):
             try:
                 from .collateral_workbench import mount_collateral_selection
                 mount_collateral_selection(self, allow_empty_catalogue=True)
+            except Exception:
+                self.server_close()
+                raise
+
+        if scenario_selection:
+            try:
+                from .market_scenario_workbench import mount_market_scenarios
+                mount_market_scenarios(self, allow_empty_catalogue=True)
             except Exception:
                 self.server_close()
                 raise
@@ -136,9 +146,12 @@ def main(argv=None):
     parser.add_argument("--tree", required=True)
     parser.add_argument("--collateral-selection", action="store_true",
                         help="mount the read-only scenario selector on this empty catalogue")
+    parser.add_argument("--scenario-selection", action="store_true",
+                        help="mount the read-only market scenario context selector")
     args = parser.parse_args(argv)
     server = EmptyCatalogueServer(port=args.port, commit=args.commit, tree=args.tree,
-                                  collateral_selection=args.collateral_selection)
+                                  collateral_selection=args.collateral_selection,
+                                  scenario_selection=args.scenario_selection)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
