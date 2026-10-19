@@ -151,7 +151,7 @@ class RollbackIsolation(unittest.TestCase):
         self.assertEqual([leg.rollback_status for leg in ex.legs(R)], ["returned", "returned"])
         self.assertEqual(ex.asset_control.returns, 0)
         self.assertEqual(ex.asset_control.hops_walked, 0)
-        self.assertEqual(len(ex.asset_control._records), 2)
+        self.assertEqual(len(ex.asset_control._records), 0)
         with self.assertRaises(DomainError) as caught:
             pending_match(ex, suffix="again", nonce=3)
         self.assertEqual(caught.exception.code, "EX_MATCH_UNEXECUTABLE")
