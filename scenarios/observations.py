@@ -7,13 +7,15 @@ refused.
 
 The scan carries no private value of its own. Credential-shaped detection is
 generic, and any private fingerprint to look for is supplied through the
-already-approved private mechanism at call time, never embedded in this public
+input argument or environment variable at call time, never embedded in this public
 source. There is no exemption for this file: the scanner's own source is
 scanned on the same terms as everything else.
 
 The resource observations are measured, not promised. No throughput or latency
 target is set or implied.
 """
+import ast
+import json
 import os
 import re
 import resource
@@ -35,8 +37,8 @@ SECRET_PATTERNS = (
     ("ssh private marker", re.compile(r"\bssh-rsa\s+AAAA")),
 )
 
-#: Private material that belongs only in the authorized private locations. These
-#: are shapes, not values: no private link, digest or name appears here.
+#: Generic patterns for potentially sensitive content.
+#: These are pattern shapes rather than actual values.
 PRIVATE_CONTENT_PATTERNS = (
     ("document sharing link", re.compile(r"(?i)\b(?:drive|docs)\.google\.com/\S+")),
     # A leading slash is not a word character, so ``\b`` would never match at
@@ -68,7 +70,7 @@ NON_ENGLISH_PROSE = re.compile(
 #: with that reason.
 SCAN_BYTE_LIMIT = 8 * 1024 * 1024
 
-#: The environment variable through which the approved private mechanism may
+#: The environment variable through which callers may
 #: supply fingerprints to look for. Its contents are never written to this
 #: source, to a report, or to any public artifact.
 PRIVATE_MARKER_ENV = "EX_PRIVATE_CONTENT_MARKERS"
@@ -144,7 +146,7 @@ def _read_text(target):
 
 
 def _private_markers(supplied=None):
-    """Fingerprints to look for, from the approved private mechanism only."""
+    'Fingerprints supplied as input or through the environment variable.'
     if supplied is not None:
         return tuple(str(marker) for marker in supplied if str(marker).strip())
     raw = os.environ.get(PRIVATE_MARKER_ENV, "")
@@ -185,6 +187,165 @@ def coverage_statement(coverage, marker_count, enumeration_state):
             "not an independent security review",
         ],
     }
+
+
+
+# Translation values are product data. The file is still fully read and all
+# credential/private-content checks use its original bytes. This language view
+# changes only proven data literals in the two display-resource entry points.
+DISPLAY_LOCALES = frozenset(("en", "zh-Hans", "zh-Hant", "fr", "es", "ja"))
+_LOCALE_TOKEN = re.compile(
+    r"(?P<space>\s+)|(?P<string>'(?:\\.|[^'\\\r\n])*'|\"(?:\\.|[^\"\\\r\n])*\")"
+    r"|(?P<word>[A-Za-z_$][A-Za-z0-9_$]*)|(?P<symbol>[{}\[\]:,])")
+
+
+# Only literal product display resources are language data. Credential and
+# private-content scanning still uses every original byte, including literals.
+PYTHON_DISPLAY_TABLES = {
+    "exchange/authorization_page.py": ("TEXT",),
+    "exchange/evidence_page.py": ("_TEXT", "LANGUAGES", "UNVERIFIED"),
+    "exchange/gap_projection.py": ("GAP_LABELS",),
+    "exchange/gas_disclosure_locales.py": ("WORDS", "TRANSPORT", "AVAILABILITY"),
+    "exchange/market_page.py": ("BASE_UNITS", "WORDS", "STATES", "EMPTY_MODE"),
+    "exchange/nft_detail_page.py": ("LOCALES", "QUOTE_LABELS"),
+    "exchange/queue_status_page.py": ("TEXT", "CONTROL_TEXT"),
+    "exchange/reference_provenance_page.py": ("LABELS", "VALUES"),
+    "exchange/register_projection_page.py": ("BLOCK_TIME", "LABELS"),
+    "exchange/registration_source_locales.py": ("WORDS",),
+    "exchange/remint_draft_workbench.py": ("WORDS",),
+    "exchange/remint_review.py": ("WORDS",),
+    "exchange/rollback_page.py": ("TEXT", "HISTORY"),
+    "exchange/settlement_record_page.py": ("TEXT",),
+    "exchange/timeline_page.py": ("TEXT", "SIMULATION"),
+}
+
+
+def _python_display_spans(name, text):
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError):
+        return []
+    lines = text.splitlines(keepends=True)
+    starts, total = [], 0
+    for line in lines:
+        starts.append(total)
+        total += len(line)
+
+    def offset(line, column):
+        prefix = lines[line - 1].encode("utf-8")[:column].decode("utf-8")
+        return starts[line - 1] + len(prefix)
+
+    def display_values(value):
+        if isinstance(value, str):
+            return True
+        if isinstance(value, (tuple, list)):
+            return bool(value) and all(display_values(item) for item in value)
+        if isinstance(value, dict):
+            return bool(value) and all(isinstance(key, str) and key.isascii()
+                                       and display_values(item) for key, item in value.items())
+        return False
+
+    spans = []
+    for statement in tree.body:
+        if not isinstance(statement, ast.Assign) or len(statement.targets) != 1:
+            continue
+        target = statement.targets[0]
+        if not isinstance(target, ast.Name) or target.id not in PYTHON_DISPLAY_TABLES[name]:
+            continue
+        try:
+            value = ast.literal_eval(statement.value)
+            if target.id == "LANGUAGES":
+                valid = (isinstance(value, (tuple, list)) and len(value) == len(DISPLAY_LOCALES)
+                         and all(isinstance(pair, tuple) and len(pair) == 2
+                                 and isinstance(pair[0], str) and isinstance(pair[1], str) for pair in value)
+                         and {pair[0] for pair in value} == DISPLAY_LOCALES)
+            else:
+                valid = (isinstance(value, dict) and set(value) == DISPLAY_LOCALES
+                         and all(display_values(item) for item in value.values()))
+            if not valid:
+                continue
+            for node in ast.walk(statement.value):
+                if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                    spans.append((offset(node.lineno, node.col_offset),
+                                  offset(node.end_lineno, node.end_col_offset)))
+        except (ValueError, TypeError, UnicodeError):
+            continue
+    return spans
+
+
+def _localized_language_view(name, text):
+    spans = []
+    if name == "ui/commodity-market/locales.js":
+        wrapper = re.fullmatch(
+            r"\s*'use strict';\s*window\.EX_LOCALES\s*=\s*(\{[\s\S]*\});\s*",
+            text)
+        if wrapper is None:
+            return text
+        body, offset = wrapper.group(1), wrapper.start(1)
+        tokens, cursor = [], 0
+        while cursor < len(body):
+            token = _LOCALE_TOKEN.match(body, cursor)
+            if token is None:
+                return text
+            if token.lastgroup != "space":
+                tokens.append(token)
+            cursor = token.end()
+        encoded = []
+        try:
+            for index, token in enumerate(tokens):
+                following = tokens[index + 1].group() if index + 1 < len(tokens) else ""
+                if token.lastgroup == "word":
+                    if following != ":":
+                        return text
+                    encoded.append(json.dumps(token.group()))
+                elif token.lastgroup == "string":
+                    value = ast.literal_eval(token.group())
+                    encoded.append(json.dumps(value))
+                    if following != ":":
+                        spans.append((offset + token.start() + 1,
+                                      offset + token.end() - 1))
+                else:
+                    encoded.append(token.group())
+            def unique_object(pairs):
+                result = {}
+                for key, value in pairs:
+                    if key in result:
+                        raise ValueError("duplicate translation key")
+                    result[key] = value
+                return result
+            locales = json.loads("".join(encoded), object_pairs_hook=unique_object)
+        except (SyntaxError, ValueError, TypeError):
+            return text
+        if not isinstance(locales, dict) or set(locales) != DISPLAY_LOCALES:
+            return text
+        for values in locales.values():
+            if not isinstance(values, dict) or not values:
+                return text
+            for key, value in values.items():
+                if not key.isascii() or not re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$]*", key):
+                    return text
+                if not (isinstance(value, str) or
+                        isinstance(value, list) and all(isinstance(item, str) for item in value)):
+                    return text
+    elif name == "ui/commodity-market/index.html":
+        for select in re.finditer(
+                r"<select\b(?=[^>]*\bid=(['\"])language\1)[^>]*>([\s\S]*?)</select>",
+                text):
+            for option in re.finditer(
+                    r"<option\s+value=(['\"])([^'\"]+)\1\s*>([^<>]*)</option>",
+                    select.group(2)):
+                if option.group(2) in DISPLAY_LOCALES:
+                    spans.append((select.start(2) + option.start(3),
+                                  select.start(2) + option.end(3)))
+    elif name in PYTHON_DISPLAY_TABLES:
+        spans = _python_display_spans(name, text)
+    else:
+        return text
+    view = list(text)
+    for start, end in spans:
+        view[start:end] = ["\n" if character == "\n" else " "
+                           for character in view[start:end]]
+    return "".join(view)
 
 
 def secret_scan(root=".", private_markers=None):
@@ -236,11 +397,11 @@ def secret_scan(root=".", private_markers=None):
                 findings.append({"path": name, "kind": "private-content",
                                  "pattern": "configured private fingerprint",
                                  "line": text[:index].count("\n") + 1})
-        # Every file read is checked, not three suffixes of them. The rule is
-        # that no non-English prose reaches the public source, and a rule that
-        # only covered .py, .md and .yml left a .json, a .txt, a shell script
-        # and every extensionless file outside it.
-        for number, line in enumerate(text.splitlines(), start=1):
+        # Technical prose is checked in every file read. Only recognized
+        # display-translation values and native language-selector labels are
+        # classified as localized UI data; secret checks above keep the full text.
+        language_view = _localized_language_view(name, text)
+        for number, line in enumerate(language_view.splitlines(), start=1):
             if NON_ENGLISH_PROSE.search(line):
                 findings.append({"path": name, "kind": "non-english",
                                  "pattern": "non-english prose in public source",

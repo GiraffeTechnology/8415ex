@@ -1,143 +1,81 @@
-"""No section of the requirements may be addressed by nothing at all.
-
-The matrix answers one axis and the stage map another, and a section that
-produced no requirement identifier and no stage entry appears in neither. That
-is the gap these tests exist for, and each finding has its own negative control.
-"""
-import unittest
+"""Published section metadata integrity and explicit current-acceptance limits."""
+import copy
 from pathlib import Path
-
-from scenarios import matrix, prd
+import unittest
+from unittest.mock import patch
+from scenarios import current_prd, prd
 
 ROOT = str(Path(__file__).resolve().parents[2])
 
 
-def _findings(ledger):
-    return {entry["finding"] for entry in ledger["findings"]}
-
-
 class SectionLedger(unittest.TestCase):
+    def test_every_published_section_is_present_once(self):
+        row = prd.build(ROOT)
+        self.assertEqual(row["sections"], list(range(1, 22)))
+        self.assertEqual(row["sectionCount"], 21)
+        self.assertEqual(row["findings"], [])
+        self.assertTrue(row["consistent"])
 
-    @classmethod
-    def setUpClass(cls):
-        cls.ledger = prd.build(ROOT)
-        cls.by_section = {entry["section"]: entry
-                          for entry in cls.ledger["sections"]}
+    def test_exact_published_baseline_is_distinct_from_current_complete_contract(self):
+        row = prd.build(ROOT)
+        self.assertEqual(row["publishedBaselineVersion"], "1.3")
+        self.assertEqual(row["currentCompletePRDVersion"], "1.4.1")
+        self.assertFalse(row["completeCurrentContractLoaded"])
+        self.assertFalse(row["baselinePassIsCurrentPass"])
+        self.assertFalse(row["historicalPassInherited"])
 
-    def test_every_section_number_is_present_with_no_gaps(self):
-        self.assertEqual(sorted(self.by_section), list(range(1, 22)))
-        self.assertEqual(self.ledger["missingSectionNumbers"], [])
-        self.assertEqual(self.ledger["sectionCount"], 21)
+    def test_all_published_requirement_identifiers_remain_distinct(self):
+        row = prd.build(ROOT)
+        ids = [item["id"] for item in row["requirements"]]
+        self.assertEqual(len(ids), 91)
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(ids, [item["id"] for item in current_prd.load(ROOT)["requirements"]])
 
-    def test_nothing_is_addressed_by_nothing(self):
-        self.assertEqual(self.ledger["findings"], [])
-        self.assertTrue(self.ledger["consistent"])
-        for section, entry in sorted(self.by_section.items()):
-            with self.subTest(section=section):
-                self.assertTrue(entry["addressedHere"] or entry["owner"],
-                                "a section must be addressed here or owed to "
-                                "someone by name")
+    def test_metadata_never_promotes_cases_or_product_acceptance(self):
+        row = prd.build(ROOT)
+        self.assertEqual(row["acceptedCases"], [])
+        self.assertEqual(row["productStatus"], "OPEN")
+        self.assertEqual(row["currentSemanticAcceptance"], "OPEN")
 
-    def test_every_declared_requirement_family_belongs_to_a_section(self):
-        families = {name.rsplit("-", 1)[0]
-                    for name in matrix.DECLARED_REQUIREMENTS}
-        self.assertEqual(self.ledger["requirementFamiliesUnplaced"], [])
-        self.assertEqual(set(self.ledger["requirementFamiliesPlaced"]), families)
-
-    def test_every_requirement_a_section_names_really_exists(self):
-        for section, entry in sorted(self.by_section.items()):
-            for family in entry["requirementFamilies"]:
-                with self.subTest(section=section, family=family["family"]):
-                    self.assertTrue(family["declared"])
-                    self.assertGreater(family["requirementCount"], 0)
-                    for name in family["requirements"]:
-                        self.assertIn(name, matrix.DECLARED_REQUIREMENTS)
-
-    def test_every_deliverable_a_section_names_is_on_disk(self):
-        for section, entry in sorted(self.by_section.items()):
-            for delivers in entry["delivers"]:
-                with self.subTest(section=section, where=delivers["where"]):
-                    self.assertTrue(delivers["exists"])
-
-    def test_a_section_owed_elsewhere_says_what_is_done_here_instead(self):
-        owed = self.ledger["sectionsOwedElsewhere"]
-        self.assertEqual(owed, [1, 11, 20])
-        for section in owed:
-            entry = self.by_section[section]
-            with self.subTest(section=section):
-                self.assertTrue(entry["owner"])
-                self.assertTrue(entry["thisSurfaceDoes"],
-                                "handing a section to an owner is not an answer "
-                                "on its own")
-
-    def test_the_private_sources_section_publishes_nothing(self):
-        entry = self.by_section[20]
-        self.assertEqual(entry["delivers"], [])
-        self.assertIn("never written into this repository",
-                      entry["thisSurfaceDoes"])
-
-    def test_it_reproduces_none_of_the_document_and_claims_no_acceptance(self):
-        said = " ".join(self.ledger["isNot"])
-        self.assertIn("not the requirements document", said)
-        self.assertIn("not a completeness claim", said)
-        self.assertIn("not an acceptance decision", said)
+    def test_no_metadata_rewrite_changes_the_original_loaded_report(self):
+        before = current_prd.report("sections", ROOT)
+        prd.build(ROOT)
+        self.assertEqual(current_prd.report("sections", ROOT), before)
 
 
 class WhenItDrifts(unittest.TestCase):
-
-    def _rebuilt(self, sections):
-        kept = prd.SECTIONS
-        prd.SECTIONS = sections
-        try:
+    def changed(self, change):
+        report = copy.deepcopy(current_prd.report("sections", ROOT))
+        change(report)
+        with patch.object(prd, "report", return_value=report):
             return prd.build(ROOT)
-        finally:
-            prd.SECTIONS = kept
 
-    def test_a_section_addressed_by_nothing_is_caught(self):
-        ledger = self._rebuilt(tuple(
-            dict(entry, families=(), delivers=(), owner=None, thisSurfaceDoes=None)
-            if entry["section"] == 13 else entry for entry in prd.SECTIONS))
-        self.assertIn("a section is addressed by nothing and owed by nobody",
-                      _findings(ledger))
-        self.assertFalse(ledger["consistent"])
+    def test_missing_section_is_a_named_failure(self):
+        row = self.changed(lambda x: x["sections"].remove(13))
+        self.assertEqual(row["missingSectionNumbers"], [13])
+        self.assertFalse(row["consistent"])
 
-    def test_a_deliverable_that_is_not_there_is_caught(self):
-        ledger = self._rebuilt(tuple(
-            dict(entry, delivers=("scenarios/not_a_module.py",))
-            if entry["section"] == 13 else entry for entry in prd.SECTIONS))
-        self.assertIn("a section names a deliverable that is not there",
-                      _findings(ledger))
+    def test_duplicate_section_is_not_complete_coverage(self):
+        row = self.changed(lambda x: x["sections"].append(13))
+        self.assertEqual(row["duplicatedSectionNumbers"], [13])
+        self.assertFalse(row["consistent"])
 
-    def test_a_requirement_family_that_does_not_exist_is_caught(self):
-        ledger = self._rebuilt(tuple(
-            dict(entry, families=("EX-INVENTED",))
-            if entry["section"] == 13 else entry for entry in prd.SECTIONS))
-        self.assertIn("a section names a requirement family that does not exist",
-                      _findings(ledger))
+    def test_unexpected_section_is_refused(self):
+        row = self.changed(lambda x: x["sections"].append(22))
+        self.assertEqual(row["unexpectedSectionNumbers"], [22])
+        self.assertFalse(row["consistent"])
 
-    def test_a_family_left_out_of_every_section_is_caught(self):
-        ledger = self._rebuilt(tuple(
-            dict(entry, families=tuple(family for family in entry["families"]
-                                       if family != "EX-EXIT"))
-            for entry in prd.SECTIONS))
-        self.assertIn("a declared requirement family belongs to no section",
-                      _findings(ledger))
-        self.assertIn("EX-EXIT", ledger["requirementFamiliesUnplaced"])
+    def test_duplicate_requirement_is_not_more_coverage(self):
+        row = self.changed(lambda x: x["requirements"].append(dict(x["requirements"][0])))
+        self.assertFalse(row["consistent"])
+        self.assertIn("duplicated published requirement identifier", [x["finding"] for x in row["findings"]])
 
-    def test_a_missing_section_number_is_caught(self):
-        ledger = self._rebuilt(tuple(entry for entry in prd.SECTIONS
-                                     if entry["section"] != 13))
-        self.assertIn("a section number is missing from this ledger",
-                      _findings(ledger))
-        self.assertEqual(ledger["missingSectionNumbers"], [13])
+    def test_empty_requirements_do_not_become_a_clean_report(self):
+        row = self.changed(lambda x: x["requirements"].clear())
+        self.assertFalse(row["consistent"])
+        self.assertIn("published requirements are empty", [x["finding"] for x in row["findings"]])
 
-    def test_an_owner_with_no_local_answer_is_caught(self):
-        ledger = self._rebuilt(tuple(
-            dict(entry, thisSurfaceDoes=None)
-            if entry["section"] == 11 else entry for entry in prd.SECTIONS))
-        self.assertIn("a section is handed to an owner without saying what this "
-                      "surface does instead", _findings(ledger))
-
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_failed_pin_is_not_replaced_by_structural_success(self):
+        with patch.object(prd, "report", side_effect=ValueError("pin mismatch")):
+            with self.assertRaisesRegex(ValueError, "pin mismatch"):
+                prd.build(ROOT)

@@ -94,7 +94,7 @@ class WhenTheyDrift(unittest.TestCase):
 
     def test_a_documented_command_that_does_not_exist_is_caught(self):
         with _Copy() as root:
-            guide = root / "scenarios/README.md"
+            guide = root / "docs/scenario-commands.md"
             guide.write_text(guide.read_text(encoding="utf-8")
                              + "\n```sh\npython3 -B -m scenarios.cli invented\n```\n",
                              encoding="utf-8")
@@ -106,7 +106,7 @@ class WhenTheyDrift(unittest.TestCase):
 
     def test_a_command_no_guide_mentions_is_caught(self):
         with _Copy() as root:
-            for guide in ("README.md", "scenarios/README.md"):
+            for guide in docs.guides(str(root))["read"]:
                 path = root / guide
                 path.write_text(
                     path.read_text(encoding="utf-8").replace(
@@ -326,7 +326,7 @@ class WhenOptionsDrift(unittest.TestCase):
 
     def test_an_option_the_command_line_does_not_accept_is_caught(self):
         with _Copy() as directory:
-            guide = directory / "scenarios/README.md"
+            guide = directory / "docs/scenario-commands.md"
             guide.write_text(
                 guide.read_text(encoding="utf-8").replace(
                     "python3 -B -m scenarios.cli run-all --execute-suites",
@@ -362,7 +362,7 @@ class WhenOptionsDrift(unittest.TestCase):
 
     def test_an_option_outside_an_invocation_is_not_attributed_to_a_tool(self):
         with _Copy() as directory:
-            guide = directory / "scenarios/README.md"
+            guide = directory / "docs/scenario-commands.md"
             guide.write_text(
                 guide.read_text(encoding="utf-8")
                 + "\n\nProse mentioning --not-an-option on its own line.\n",

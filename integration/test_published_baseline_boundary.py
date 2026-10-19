@@ -11,7 +11,7 @@ class PublishedBaselineBoundary(unittest.TestCase):
             row = current_prd.report("matrix")
         self.assertEqual(row["version"], "1.3")
         self.assertEqual(row["publishedBaselineVersion"], "1.3")
-        self.assertEqual(row["currentCompletePRDVersion"], "1.4")
+        self.assertEqual(row["currentCompletePRDVersion"], "1.4.1")
         self.assertFalse(row["completeCurrentContractLoaded"])
         self.assertFalse(row["baselinePassIsCurrentPass"])
         self.assertEqual(row["acceptedCases"], [])
@@ -27,7 +27,7 @@ class PublishedBaselineBoundary(unittest.TestCase):
     def test_legacy_command_remains_unexecuted_without_global_stop_or_old_pass(self):
         with patch.object(current_prd, "load", return_value={"retiredRequirements": []}):
             row = current_prd.blocked("demo")
-        self.assertEqual(row["version"], "1.4")
+        self.assertEqual(row["version"], "1.4.1")
         self.assertEqual(row["publishedBaselineVersion"], "1.3")
         self.assertEqual(row["status"], "PRD_MIGRATION_REQUIRED")
         self.assertFalse(row["executed"])

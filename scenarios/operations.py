@@ -127,7 +127,8 @@ OPERATIONS = (
 #: that the list was complete, so a new read would have been exempt from the one
 #: rule in the section that can actually be demonstrated.
 READS = (
-    "asset_position_after_rollback", "authorization", "authorization_state",
+    "active_leg_indices", "asset_position_after_rollback", "authorization", "authorization_state",
+    "bill_of_lading_view", "historical_rollbacks",
     "deadline_boundary", "deferred_legs", "escrow", "escrow_for_leg",
     "evaluate_deadline", "exit_eligibility", "exit_report", "holder_index",
     "holder_of", "intent", "leg", "legs", "overdue_requests", "owner_index",
@@ -143,10 +144,10 @@ READS = (
 #: exemption.
 CHANGES = (
     "advance_exit", "advance_rollback", "apply_registration_result",
-    "begin_rollback", "connect_wallet", "disconnect_wallet", "execute_transfer",
+    "begin_rollback", "connect_wallet", "disconnect_wallet", "enter_order", "execute_transfer",
     "lock_escrow", "match_intents", "mint", "record_gas",
     "record_late_registration_conflict", "register_authorization",
-    "release_segment", "request_redemption", "resume_payments",
+    "release_segment", "request_redemption", "resume_payments", "resume_trading",
     "revoke_authorization", "settle_eligible_segments", "submit_intent",
     "submit_registration", "switch_account",
 )
@@ -286,7 +287,10 @@ def _call_read(exchange, name, receipt_id):
     """
     owner = exchange.owner_of(receipt_id)
     arguments = {
+        "active_leg_indices": (receipt_id,),
         "asset_position_after_rollback": (receipt_id,),
+        "bill_of_lading_view": (receipt_id,),
+        "historical_rollbacks": (receipt_id,),
         "authorization": ("auth-sell-ab",),
         "authorization_state": ("auth-sell-ab",),
         "deadline_boundary": (receipt_id,),

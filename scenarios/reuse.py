@@ -521,9 +521,9 @@ def build(scenario_report=None, root=".", *, path_report=None, guarantee_report=
     non_simulated = {role: labels for role, labels in non_simulated.items() if labels}
     all_simulated = (not undeclared_roles and not non_simulated
                      and all(entry["simulated"] for entry in ADAPTER_ROLES))
-    register = {entry["id"]: entry for entry in decisions.OPEN_DECISIONS}
+    register = {entry["id"]: entry for entry in decisions.register()["decisions"]}
     unlocated = [dict(entry,
-                      decision=register.get(entry["trackedBy"], {}).get("undecided"),
+                      decision=register.get(entry["trackedBy"], {}).get("rule"),
                       blocks=register.get(entry["trackedBy"], {}).get("blocks"))
                  for entry in UNLOCATED_INTERFACES]
     domain = observed_domain_modules()

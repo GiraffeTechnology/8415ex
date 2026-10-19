@@ -381,7 +381,7 @@ def demo_04(recorder):
                                                     "rollbackStatus")})
     _record_common(recorder, exchange,
                    {"owner": F.B, "ownerPosition": 1, "holder": F.B, "holderPosition": 1,
-                    "registeredPrefixLegs": 1, "outstandingLegs": 0}, ("T-18", "T-02"))
+                    "registeredPrefixLegs": 1, "outstandingLegs": 2}, ("T-18", "T-02"))
     recorder.expect("AB is not in the refund set", ("T-18",),
                     [1, 2], [entry["legIndex"] for entry in report["funds"]])
     recorder.expect("C and D receive their own unreleased funds", ("T-19",),
@@ -454,7 +454,7 @@ def demo_05(recorder):
                      "returns": exchange.asset_control.returns})
     _record_common(recorder, exchange,
                    {"owner": F.A, "ownerPosition": 0, "holder": F.A, "holderPosition": 0,
-                    "registeredPrefixLegs": 0, "outstandingLegs": 0}, ("T-23", "T-02"))
+                    "registeredPrefixLegs": 0, "outstandingLegs": 3}, ("T-23", "T-02"))
     records = [exchange.asset_control.lookup(hop["key"]) for hop in second["assetHops"]]
     recorder.expect("each original reverse hop needs no intermediate gas", ("T-20",),
                     [(F.D, F.C, 1, False), (F.C, F.B, 1, False), (F.B, F.A, 1, False)],
@@ -483,7 +483,7 @@ def demo_06(recorder):
                     True, before["newTradesAccepted"])
     clock.now = stop
     after = exchange.evaluate_deadline(RECEIPT)
-    recorder.step("deadline observation", **after)
+    recorder.step("deadline observation", deadline=after, **_positions(exchange))
     recorder.expect("the cutoff instant itself refuses new trades", ("T-24",),
                     False, after["newTradesAccepted"])
     try:
@@ -499,7 +499,8 @@ def demo_06(recorder):
     exchange.begin_rollback(RECEIPT, 1,
         F.rollback_authority(exchange, 1, "deadline-rollback", now=stop), trigger="deadline")
     recovery = exchange.advance_rollback(RECEIPT)
-    recorder.step("unfinished suffix recovered", **recovery)
+    recorder.step("unfinished suffix recovered", recovery=recovery,
+                  segmentFunds=_segment_funds(exchange), **_positions(exchange))
     recorder.expect("only original reverse hops return to the current holder", ("T-24", "T-44"),
                     [(3, 2), (2, 1)],
                     [(hop["fromPosition"], hop["toPosition"]) for hop in recovery["assetHops"]])

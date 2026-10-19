@@ -620,9 +620,9 @@ def main(argv=None):
         if arguments.command in ("matrix", "stages", "decisions", "handoff", "sections"):
             print(canonical_json(current_prd.report(arguments.command, arguments.root)))
             return 0
-        if arguments.command not in ("manifest", "validate-config", "observations", "usage"):
-            print(canonical_json(current_prd.blocked(arguments.command, arguments.root)))
-            return 2
+        # Scenario bodies carry an exact migrated revision and are checked by
+        # Scenario.run. Other reports consume those actual observations; none
+        # promotes the historical public baseline to complete current acceptance.
     except (OSError, ValueError, KeyError, TypeError) as problem:
         print(canonical_json({"status": "PRD_PIN_ERROR", "executed": False, "error": str(problem)}))
         return 2

@@ -37,7 +37,9 @@ def build(matrix=None):
     current["existingOwnerDependencies"] = list(EXISTING_OWNER_DEPENDENCIES)
     current["remainingObligations"] = [entry["id"] for entry in load()["cases"]]
     current["scenarios"] = [
-        dict(entry, steps=[entry["setup"], entry["expected"]],
+        dict(entry, scenarioId=entry["id"],
+             mainPath=entry["source"].replace("-", "_"),
+             steps=[entry["setup"], entry["expected"]],
              evidence={name: NOT_RUN for name, _ in EVIDENCE_SLOTS},
              localResult="NOT_VERIFIED against version 1.2")
         for entry in load()["demonstrations"]
