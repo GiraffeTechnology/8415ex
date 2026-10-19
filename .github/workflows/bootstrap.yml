@@ -18,6 +18,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Prepare explicit output paths and source identity
+        id: prepare
         shell: bash
         run: |
           set -euo pipefail
@@ -34,26 +35,31 @@ jobs:
           git rev-parse HEAD^{tree} > "$root/evidence/tree.txt"
           python3 --version > "$root/evidence/python.txt"
       - name: Run standard-library tests
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
           python3 -B -m unittest discover -s ci/tests -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/unit-tests.log"
       - name: Run Stage 1 domain tests
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
           python3 -B -m unittest discover -s exchange/tests -t . -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/stage1-tests.log"
       - name: Run local Stage 5 preparation tests
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
           python3 -B -m unittest discover -s scenarios/tests -t . -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/stage5-preparation-tests.log"
       - name: Run joined Stage 5 integration tests
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
           python3 -B -m unittest discover -s integration -t . -v 2>&1 | tee "$BOOTSTRAP_ROOT/evidence/stage5-integration-tests.log"
       - name: Run the six local scenarios and the three route contracts
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -89,6 +95,7 @@ jobs:
           PYCODE
           cat "$BOOTSTRAP_ROOT/evidence/stage5-scenarios.log"
       - name: Verify deliberate failure and successful smoke
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
