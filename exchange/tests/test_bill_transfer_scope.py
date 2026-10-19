@@ -1,4 +1,4 @@
-"""v1.2 T-25/T-32/T-33: bill terms remain; physical operations are retired.
+"""T-25/T-32/T-33: bill terms remain; physical operations are retired.
 
 These are local model regressions, not chain or complete Stage 4 acceptance.
 """
@@ -21,7 +21,7 @@ class BillTransferScope(unittest.TestCase):
         timeline = copy.deepcopy(self.exchange.receipt_timeline(RECEIPT))
         view = self.exchange.bill_of_lading_view(RECEIPT)
         self.assertEqual(view["receipt"], original)
-        self.assertEqual(view["prdVersion"], "1.2")
+        self.assertEqual(view["prdVersion"], "1.3")
         self.assertEqual(view["scope"], "bill-of-lading-transfer")
         self.assertEqual(view["physicalActions"], ())
         self.assertTrue(view["historyPreserved"])

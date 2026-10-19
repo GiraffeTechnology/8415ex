@@ -39,15 +39,17 @@ class WholeReceiptScope(unittest.TestCase):
                                      commodity_name="Second claim", commodity_quantity=1,
                                      commodity_unit="piece", receipt_number="WR-8415-0002",
                                      registration_path="REG_DIRECT", trade_stop_at=1_700_900_000,
-                                     origin_account=F.B, minted_at=1_699_000_000)
+                                     origin_account=F.B, minted_at=1_699_000_000,
+                                     allowed_price_currencies=(F.QUOTE_ASSET,),
+                                     nft0_currency_reference=F.NFT0_CURRENCY_SET_REF)
         with self.assertRaises(DomainError) as caught:
-            exchange.mint(duplicate)
+            exchange.mint(duplicate, specification=F.mint_specification(duplicate))
         self.assertEqual(caught.exception.code, "EX_ASSET_DUPLICATE_REFUSED")
 
     def test_the_same_receipt_id_cannot_be_minted_twice(self):
         exchange, _ = F.minted()
         with self.assertRaises(DomainError) as caught:
-            exchange.mint(F.receipt())
+            exchange.mint(F.receipt(), specification=F.mint_specification(F.receipt()))
         self.assertEqual(caught.exception.code, "EX_RECEIPT_DUPLICATE_REFUSED")
 
 
@@ -72,20 +74,41 @@ class DualTrack(unittest.TestCase):
         self.assertFalse(view["ownerEqualsHolder"])
         self.assertEqual(view["outstandingLegs"], 3)
 
-    def test_owner_equals_holder_is_necessary_but_never_sufficient(self):
+    def test_equal_tracks_do_not_reactivate_retired_physical_fulfillment(self):
         exchange, _ = F.minted()
-        readiness = exchange.redemption_readiness("rcpt-8415-0001", F.A)
-        self.assertTrue(readiness["ownerEqualsHolder"])
-        self.assertTrue(readiness["necessaryConditionMet"])
-        self.assertFalse(readiness["redeemable"], "Stage 1 never reports a receipt as redeemable")
-        self.assertIn("rights-holder-verification", readiness["furtherChecksNotPerformedHere"])
+        receipt_id = "rcpt-8415-0001"
+        before = exchange.receipt_timeline(receipt_id)
+        view = exchange.receipt_view(receipt_id)
+        self.assertTrue(view["ownerEqualsHolder"])
+        self.assertEqual(view["owner"]["account"], F.A)
+        self.assertEqual(view["holder"]["account"], F.A)
+        readiness = exchange.redemption_readiness(receipt_id, F.A)
+        self.assertFalse(readiness["eligible"])
+        self.assertEqual(readiness["reasons"], ("EX_PHYSICAL_FULFILLMENT_RETIRED",))
+        self.assertEqual(readiness["physicalActions"], ())
+        self.assertNotIn("necessaryConditionMet", readiness)
+        self.assertNotIn("furtherChecksNotPerformedHere", readiness)
+        self.assertEqual(exchange.receipt_timeline(receipt_id), before)
+        self.assertIsNone(exchange._exits[receipt_id])
 
-    def test_divergence_blocks_the_necessary_condition(self):
+    def test_divergent_tracks_remain_readable_without_a_physical_checklist(self):
         exchange, _ = F.chain_to_d()
-        readiness = exchange.redemption_readiness("rcpt-8415-0001", F.D)
-        self.assertFalse(readiness["ownerEqualsHolder"])
-        self.assertIn("EX_OWNER_HOLDER_DIVERGED", readiness["blockingReasons"])
-
+        receipt_id = "rcpt-8415-0001"
+        before = exchange.receipt_timeline(receipt_id)
+        view = exchange.receipt_view(receipt_id)
+        self.assertFalse(view["ownerEqualsHolder"])
+        self.assertEqual(view["owner"]["account"], F.D)
+        self.assertEqual(view["holder"]["account"], F.A)
+        for requester in (F.A, F.D):
+            with self.subTest(requester=requester):
+                readiness = exchange.redemption_readiness(receipt_id, requester)
+                self.assertFalse(readiness["eligible"])
+                self.assertEqual(readiness["reasons"], ("EX_PHYSICAL_FULFILLMENT_RETIRED",))
+                self.assertEqual(readiness["physicalActions"], ())
+                self.assertNotIn("necessaryConditionMet", readiness)
+                self.assertNotIn("furtherChecksNotPerformedHere", readiness)
+        self.assertEqual(exchange.receipt_timeline(receipt_id), before)
+        self.assertIsNone(exchange._exits[receipt_id])
 
 class NoCollapsedStatus(unittest.TestCase):
     """T-26: simulated vs real, pending vs complete, owner vs holder stay distinct."""
