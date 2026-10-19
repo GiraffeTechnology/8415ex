@@ -1,0 +1,10 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="288" height="32" viewBox="0 0 288 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Quote sparkline / SIMULATED" clip-path="url(#clip0_0_75)">
+<path id="Vector" d="M0 23L24 21.8L48 24L72 15.4L96 16.6L120 11.5L144 13.8L168 13.4L192 6.4L216 9.6L240 5.1L264 7L288 4.2" stroke-width="2" stroke="#C4EE8B"/>
+</g>
+<defs>
+<clipPath id="clip0_0_75">
+<rect width="288" height="32" fill="white"/>
+</clipPath>
+</defs>
+</svg>
