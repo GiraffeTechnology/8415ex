@@ -1,5 +1,5 @@
 """Atomic storage of one receipt's declared fact collections, without execution."""
-from .aggregate_checkpoint import AggregateCheckpointStore, CheckpointRefused
+from .aggregate_checkpoint import AggregateCheckpointStore, CheckpointComponentConflict
 from .ledger import Transfer
 from .model import Asset, WarehouseReceipt
 from .operational_facts_codec import encode_operational_facts, decode_operational_facts
@@ -113,9 +113,13 @@ class ReceiptFactCheckpoint:
         except (TypeError, ValueError, KeyError, AttributeError):
             raise ReceiptFactCheckpointRefused("receipt checkpoint facts conflict") from None
         # CommitUnknown deliberately propagates unchanged. Never retry here.
-        return self.store.save(original.receipt_id,
-                               {"declaration": declaration, "operations": operations},
-                               expected_generation=expected_generation)
+        try:
+            return self.store.save(original.receipt_id,
+                                   {"declaration": declaration, "operations": operations},
+                                   expected_generation=expected_generation,
+                                   immutable_components=("declaration",))
+        except CheckpointComponentConflict:
+            raise ReceiptFactCheckpointRefused("original immutable receipt declaration differs") from None
 
     def read(self, receipt_id, *, expected_asset):
         self._contract()
