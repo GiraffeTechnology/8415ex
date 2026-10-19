@@ -43,6 +43,17 @@ class DirectReturnCheckpointTests(unittest.TestCase):
         self.checkpoint = self.adapter(self.db)
         self.bridge = DirectReturnCheckpoint(self.access, self.checkpoint, SCOPE)
 
+    def test_original_conflict_checkpoint_subclass_composes_with_direct_return(self):
+        from exchange.closed_rollback_conflict_checkpoint import ClosedRollbackConflictCheckpoint
+        checkpoint = ClosedRollbackConflictCheckpoint(self.checkpoint.store)
+        bridge = DirectReturnCheckpoint(self.access, checkpoint, SCOPE)
+        result = bridge.advance(RECEIPT, expected_generation=0)
+        self.assertTrue(result["report"]["complete"])
+        self.assertEqual(result["afterCheckpoint"]["generation"], 2)
+        self.assertEqual(self.exchange.asset_control.returns, 1)
+        self.assertEqual(self.exchange.asset_control.hops_walked, 0)
+        self.assertEqual(self.exchange.payments.movements, 3)
+
     def test_one_direct_asset_return_and_three_refunds_survive_database_reopen(self):
         result = self.bridge.advance(RECEIPT, expected_generation=0)
         row = self.adapter(self.connect()).read(SCOPE)
