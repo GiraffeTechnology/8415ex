@@ -162,12 +162,15 @@ class FrozenIntentViews(unittest.TestCase):
         with self.assertRaises(DomainError) as caught:
             ex.match_intents("sell-bc", "buy-bc")
         self.assertEqual(caught.exception.code, "EX_MATCH_UNEXECUTABLE")
-        for operation in (lambda: ex.lock_escrow(match, "escrow-bc"),
-                          lambda: ex.execute_transfer(match, "transfer-bc")):
-            with self.assertRaises(DomainError) as caught:
-                operation()
-            self.assertEqual(caught.exception.code, "EX_TRADE_EXIT_OPEN")
-        self.assertEqual((ex._legs, ex._escrows, ex._used_nonces, ex._exits, ex._events), before)
+        for operation, expected in (
+                (lambda: ex.lock_escrow(match, "escrow-bc"), "EX_MATCH_UNEXECUTABLE"),
+                (lambda: ex.execute_transfer(match, "transfer-bc"), "EX_TRADE_EXIT_OPEN")):
+            with self.subTest(expected=expected):
+                with self.assertRaises(DomainError) as caught:
+                    operation()
+                self.assertEqual(caught.exception.code, expected)
+                self.assertEqual(
+                    (ex._legs, ex._escrows, ex._used_nonces, ex._exits, ex._events), before)
 
     def test_rollback_and_return_freezes_are_visible_to_validation_and_matching(self):
         ex, _ = F.rollback_chain_to_d()
