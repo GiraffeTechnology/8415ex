@@ -1,12 +1,12 @@
 # Repository instructions
 
 ## Current authority
-Read [PRD.md](PRD.md) v1.4 in full before implementation: 111 EX requirements, T-01..84, six stages and six demonstrations. Earlier v1.3 loaders/locks/plans, source reports and subdirectory guides are historical wherever they conflict and cannot certify revised requirements. Read this file, README, applicable directory instructions and existing approved operational records on reconnect. Preserve concurrent valid changes and exact base/head identity; reuse existing infrastructure and authorized storage.
+Read [PRD.md](PRD.md) v1.4 in full before implementation: 111 EX requirements, T-01..84, six stages and six demonstrations. Earlier v1.3 loaders/locks/plans, source reports and subdirectory guides are historical wherever they conflict and cannot certify revised requirements. Read this file, README and applicable directory instructions before changes. Preserve concurrent valid changes and exact base/head identity; reuse existing infrastructure and configured storage.
 
-## P0 and execution
-CI is allowed in GitHub Actions, including applicable automated tests, syntax/type checks and builds. Other product testing/execution uses the existing approved non-Windows Linux environments. No local, Windows, WSL, assistant-workspace or other unapproved execution fallback. Document editing and document-byte/hash review are not product tests.
+## Execution
+CI is allowed in GitHub Actions, including applicable automated tests, syntax/type checks and builds. Runtime and integration acceptance use the project-supported Linux configuration. Document editing and document-byte/hash review are not product tests.
 
-The private execution policy identifies hosts prohibited from on-chain activity; that prohibition remains fully effective. Authorized chain execution uses only an existing approved path. GitHub CI permission does not authorize chain broadcasts or deployment. EX remains Ethereum Sepolia 11155111 with test ETH gas and verified designated test PYUSD explicitly permitted by fixture NFT0 and selected by each order; do not substitute Wallet Hoodi. A document creates no new credentials, security changes, infrastructure, permissions, deployment, chain-write or real-value authority and restores no cancelled/refused action.
+GitHub CI results do not establish deployment or live-chain acceptance. EX remains Ethereum Sepolia 11155111 with test ETH gas and verified designated test PYUSD explicitly permitted by fixture NFT0 and selected by each order; do not substitute Wallet Hoodi.
 
 ## Required semantics
 - One NFT is one whole receipt. EX is a commodity spot-intermediary infrastructure DEMO; physical collection, transport and warehouse exit are excluded.
@@ -25,11 +25,8 @@ The private execution policy identifies hosts prohibited from on-chain activity;
 - Show all business conditions as a complete identity-excluding projection without summaries/altered obligations. Keep unchanged originals private for hash/signature verification. Six candidate locales are en, zh-Hans, zh-Hant, fr, es, ja; preserve protocol identifiers and original terms. Exclude wallet-management pages while retaining EX authority/balance/fee checks.
 
 ## Delivery
-After a stage PR continue independent authorized next-stage work while review/CI proceeds. Preserve dependencies and exact base/head; only assigned authorized actors perform consequential repository actions. Use the existing CI workflow. Record actual runner, head/base and tested commit; synthetic merge tree is not head tree. Absent checks are not green. GitHub Actions results are valid CI evidence for the exact checks actually run, but are not deployment or live-chain acceptance. Historical results do not certify revised assertions.
+Preserve dependencies and exact base/head. Use the existing CI workflow. Record actual runner, head/base and tested commit; synthetic merge tree is not head tree. Absent checks are not green. GitHub Actions results are valid CI evidence for the exact checks actually run, but are not deployment or live-chain acceptance. Historical results do not certify revised assertions.
 
-Map applicable requirements to exact source/config/run/artifacts and actual evidence. Separate design/models/simulations/implementation/browser/deployment/chain verdicts; missing evidence remains NOT_RUN/NOT_VERIFIED. Undefined feed/locale/interface/commercial matters block only dependent paths. Public content is English and product-only; keep private originals/source locators, internal assignments, topology, paths, logs and secrets private.
+Map applicable requirements to exact source/config/run/artifacts and actual evidence. Separate design/models/simulations/implementation/browser/deployment/chain verdicts; missing evidence remains NOT_RUN/NOT_VERIFIED. Undefined feed/locale/interface/commercial matters block only dependent paths. Product documentation is in English.
 
-Published product baseline file integrity: PRD.md SHA-256 `ea535c29ac5184d6eafcf8411b532428bc1800c2f8f37274bda92e444514f81d`. This identifies document bytes, not a runtime acceptance result.
-
-## Public-repository privacy
-Never publish real usernames, account identities, wallet addresses, server names, IP addresses, private paths/links, credentials or other private information in GitHub documents, source, commit messages, issues, comments, logs or artifacts. Use non-identifying placeholders and configuration references where needed; retain necessary real values only in existing authorized private operations records. Do not copy private records into public evidence.
+Published product baseline file integrity: PRD.md SHA-256 `b3989a91f1d3f7a1de6812fa05777d0dfdf84a4eee4a7909bdda77d1196032ce`. This identifies document bytes, not a runtime acceptance result.

@@ -1,6 +1,6 @@
 # Exchange domain
 
-This package implements the staged scope of the private requirements document.
+This package implements staged domain models; current requirements are in [PRD.md](../PRD.md).
 
 **Stage 1**: warehouse-receipt domain state, the owner/holder dual track, the
 serial registration contract with three simulated registrar adapters,
@@ -20,9 +20,7 @@ control operation, and records each leg's buyer's own gas.
 return to the last confirmed holder, exit eligibility, and the stop-resale,
 voucher and burn records as separate non-atomic acts.
 
-Execute according to the private requirements document. That document, the full
-task text and any internal path, endpoint or credential stay out of this
-repository.
+Follow the current [PRD.md](../PRD.md) for product and acceptance requirements.
 
 ## What this is not
 
@@ -133,7 +131,7 @@ serves on belongs in that environment's deployment document, not here.
 
 ## Requirement and test traceability
 
-Requirement identifiers follow the private document. This table records which
+Requirement identifiers follow [PRD.md](../PRD.md). This table records which
 tests cover each Stage 1 case; it names no requirement text.
 
 | Case | Covered by | Notes |
@@ -190,7 +188,6 @@ returned it is also not a defined order, so it is refused with
 where an order is undefined; it does not assume an answer. A shared operation is
 recorded once and is never charged in full to every leg.
 
-Private artifact storage, the external document sync target and the designated
-test-network token address are later-stage inputs. They are not configured in
+Artifact storage and the designated test-network token address are integration inputs. They are not configured in
 this repository and are not guessed or substituted here. Stage 1 runs entirely
 on local fixtures.

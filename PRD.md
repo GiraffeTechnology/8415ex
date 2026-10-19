@@ -1,18 +1,18 @@
 # 8415ex Product Requirements
 
 Version: 1.4 (product baseline revised 2026-10-18; publication synchronization 2026-10-18 UTC)
-Edition: complete sanitized English product and acceptance contract
+Edition: complete English product and acceptance contract
 Status: OPEN; requirements are not implementation or acceptance evidence.
 
-This English edition carries the complete product and acceptance scope of v1.4: 111 EX requirements, 84 acceptance cases, six stages and six core demonstrations. Private operational records and private source locators are excluded. Publication does not imply implementation or acceptance. It supersedes conflicting earlier requirement editions and execution checklists. Private operational details are excluded; all product stages, requirement IDs, acceptance cases and decisions remain represented.
+This English edition carries the complete product and acceptance scope of v1.4: 111 EX requirements, 84 acceptance cases, six stages and six core demonstrations. Publication does not imply implementation or acceptance. It supersedes conflicting earlier requirement editions and execution checklists. All product stages, requirement IDs, acceptance cases and decisions remain represented.
 
 ## 1. Execution conclusion
 
 Build a commodity spot-intermediary Web3 infrastructure DEMO with a cryptocurrency/commodity-market frontend, BTC/ETH and soybean/iron-ore scenarios, two collateral asset classes, live public reference data and simulated NFT orders kept distinct. Undefined financing, valuation ratios, liquidation and revenue parameters block only dependent mechanisms, never independent confirmed delivery.
 
-Implement the confirmed whole-receipt trading, Oracle registration, segment settlement and suffix rollback model, then Linux integration and Sepolia demonstrations. Commercial pricing, legal advice and real-asset admission remain local later decisions. Six stages are development and acceptance scopes, not a serial CI waiting queue. After a stage PR, continue the next independent authorized stage immediately. CI and exact-head acceptance are verified separately before merge. Existing approved environments and grants remain controlling; this document creates no new infrastructure, credentials or funds authority. A source file, HTTP 200 or CI success alone is not delivery.
+Implement the confirmed whole-receipt trading, Oracle registration, segment settlement and suffix rollback model, then Linux integration and Sepolia demonstrations. Commercial pricing, legal advice and real-asset admission remain local later decisions. Six stages define development and acceptance scopes. CI and exact-head acceptance are verified separately before merge. A source file, HTTP 200 or CI success alone is not delivery.
 
-Execution boundary: GitHub Actions is permitted for CI and its automated checks. Other product execution uses the existing approved non-Windows Linux paths. On-chain operations must obey the restricted-host prohibitions in the private execution policy and use only an already authorized chain-execution path. Sepolia remains the EX demonstration network. CI permission creates no deployment, credential, permission-expansion, real-value or chain-broadcast authority. Server identities and network addresses remain private.
+Execution boundary: GitHub Actions is permitted for CI and its automated checks. Runtime and integration acceptance use the project-supported Linux configuration. Sepolia remains the EX demonstration network. CI results do not establish deployment or live-chain acceptance.
 
 ## 2. Requirement states and change control
 
@@ -52,7 +52,7 @@ BTC scenarios do not authorize a Bitcoin bridge, wrapped asset, custody service 
 
 ## 4. Baseline and factual limits
 
-Resolve current full source commit/tree and actual repository content before work or acceptance. Historical dependency-free bootstrap tests and old PR/CI records are source-bound history, not current product capability. Historical cancelled license publication or explicitly refused operations remain cancelled. Stage 0 must independently resolve current main, branch ancestry and exact diff. T-35 through T-38 require actual current-round deployment and chain evidence; this edition supplies requirements, never a passing certificate. Document publication is separate from a deployment, merge, schedule or private-server synchronization.
+Resolve current full source commit/tree and actual repository content before work or acceptance. Historical dependency-free bootstrap tests and old PR/CI records are source-bound history, not current product capability. Stage 0 must independently resolve current main, branch ancestry and exact diff. T-35 through T-38 require actual current-round deployment and chain evidence; this edition supplies requirements, never a passing certificate. Document publication does not establish deployment or runtime acceptance.
 
 ## 5. Participants and trust boundaries
 
@@ -60,7 +60,7 @@ Humans choose assets and sign allowed intent terms; Agent cannot fill in an unsi
 
 EX validates conditions, records the chain, coordinates frozen-principal release/rollback and derives business projections from Oracle chain authority. EX does not ingest raw off-chain vouchers, invent another business receipt or treat its database as authoritative. Registrars form the mint-declared voucher; Oracle adapters alone ingest/verify/bind it and write the authoritative chain record. Holder follows that record, never an independent asynchronous write. Contracts enforce agreed escrow/control without arbitrary confiscation or finalized-prefix rewrite. Operators investigate and retry through the same permissions, never by manually marking success.
 
-Development continues across stage PRs. Existing review, QA, integration and merge owners retain their exact responsibilities; this product edition does not delegate permissions between projects. Run receipts are engineering evidence and not new registration receipts.
+Run receipts are engineering evidence and not new registration receipts.
 
 ## 6. Domain model and complete mint contract
 
@@ -298,13 +298,13 @@ Do not add an EX About page or copy wallet marketing claims. Existing authored E
 
 ### 11.4 Design versus implementation
 
-Use the existing approved independent EX design, not a wallet design. Its six-language desktop/mobile screens, state gallery and prototype routes are design evidence only. Static NFT/position examples and placeholder terms do not prove a live feed, actual routing/data/authority, complete original terms, browser execution or chain acceptance. Preserve design identities privately and bind implementation evidence separately.
+Use the existing approved independent EX design, not a wallet design. Its six-language desktop/mobile screens, state gallery and prototype routes are design evidence only. Static NFT/position examples and placeholder terms do not prove a live feed, actual routing/data/authority, complete original terms, browser execution or chain acceptance. Bind design and implementation evidence separately.
 
 ## 12. Non-functional and security requirements
 
 | ID | Requirement |
 | --- | --- |
-| EX-NFR-01 | CI and its applicable automated unit/model/fixture/integration/UI/API/EVM simulation, syntax/type, build and package checks may run in GitHub Actions. Other product tests/execution use existing approved non-Windows Linux environments. No local, Windows, WSL, assistant-workspace or unapproved execution fallback. Record exact source, configuration and run evidence. Chain work follows the separate private restricted-host policy and existing authority; CI permission is not chain/deployment permission. |
+| EX-NFR-01 | CI and its applicable automated unit/model/fixture/integration/UI/API/EVM simulation, syntax/type, build and package checks may run in GitHub Actions. Runtime and integration acceptance use the project-supported Linux configuration. Record exact source, configuration and run evidence. Deployment and live-chain acceptance require separate execution evidence. |
 | EX-NFR-02 | Prevent funds/asset reentry and replay with authority and state preconditions. |
 | EX-NFR-03 | Safely recover reorg, duplicate logs, RPC timeout and unknown results. |
 | EX-NFR-04 | Restart and duplicate queue consumption preserve correlations and never duplicate settlement. |
@@ -312,11 +312,11 @@ Use the existing approved independent EX design, not a wallet design. Its six-la
 | EX-NFR-06 | Keep secrets out of code, public artifacts, logs, chain and metadata; encrypted receipt-access storage is separate from wallet-key custody. |
 | EX-NFR-07 | Explicit network, chain, contracts, units, confirmation and timeout parameters enter configuration digest. |
 | EX-NFR-08 | Measure load, duration, backlog and failure rate; do not invent throughput/latency SLAs. |
-| EX-NFR-09 | Public repository text is English and sanitized. Do not publish real usernames, account identities, wallet addresses, server names, IP addresses, private links, operational topology, credentials or other private information in documents, source, commits, comments, logs or artifacts. Retain necessary private values only in the existing authorized private channel. |
+| EX-NFR-09 | Product documentation is in English. |
 | EX-NFR-11 | Trace reference-source timing and UI projections; do not expose wallet identities, private records, signing secrets or raw authorization material. Data failure and locale changes cannot rewrite signed content. |
 | EX-NFR-10 | Upgrade, pause and recovery cannot bypass ownership or finalized-prefix boundaries. |
 
-Choose reproducible confirmation/reorg windows, retry intervals and resource limits from the existing approved environment and record them as test configuration, not production SLA. Permission/security changes require their existing approval. Keep raw operational records private while public artifacts contain sanitized traceable results.
+Choose reproducible confirmation/reorg windows, retry intervals and resource limits from the project-supported environment and record them as test configuration, not production SLA.
 
 ## 13. Reuse, dependencies and whole-artwork alignment
 
@@ -393,7 +393,7 @@ Cases: T-24, T-25, T-32, T-33, T-44.
 
 | ID | Requirement |
 | --- | --- |
-| EX-DEMO-01 | Use the original approved Ethereum Sepolia chain 11155111 test path. The designated Sepolia PYUSD fixture must be a member of fixture NFT0 mint-time currencies and explicitly selected by scenario orders; gas is test ETH. Do not borrow the separate Wallet Hoodi configuration or make PYUSD a universal product currency. |
+| EX-DEMO-01 | Use Ethereum Sepolia chain 11155111 for the demonstration test path. The designated Sepolia PYUSD fixture must be a member of fixture NFT0 mint-time currencies and explicitly selected by scenario orders; gas is test ETH. Do not borrow the separate Wallet Hoodi configuration or make PYUSD a universal product currency. |
 | EX-DEMO-02 | Deliver all six revised scenarios with actual steps, state assertions and execution evidence. |
 | EX-DEMO-03 | Deliver an operable trading demo, editable PPT proposal and playable film, clearly labelling real test-chain activity, simulated registrars and animation. |
 
@@ -403,22 +403,22 @@ Each scenario records whole receipt/account setup, mint fields/format, order seq
 
 ### Stage 0: Baseline and evidence alignment
 
-Entry: Read current instructions, source, CI handoff and approved Linux execution references; separate bootstrap, fixtures, application and deployment.
+Entry: Verify current source, CI evidence and Linux execution configuration; separate bootstrap, fixtures, application and deployment.
 
-- Resolve full branch/commit/tree and actual diff; do not recover cancelled actions from history.
+- Resolve full branch/commit/tree and actual diff.
 - Inventory existing wallet, orders, Oracle, journal, settlement and UI reuse interfaces and precise missing bindings.
 - Map ArtFi whole-artwork contracts, the three source middleware routes and their actual frontend entrypoints.
-- Trace requirement to test to exact source to run to artifact; preserve private operational records separately.
+- Trace requirement to test to exact source to run to artifact.
 
 Deliverables: Baseline identity, interface map, requirement/test map and current PRD pin.
 
 Acceptance: Independent source/evidence identity; no assertion that CI means product acceptance.
 
-Develop next independent stage after this stage PR without waiting for CI. An exit condition defines acceptance, not a global development stop.
+An exit condition defines the evidence required for stage acceptance.
 
 ### Stage 1: Domain state and basic interaction
 
-Entry: Use verified source and approved Linux path; label fixtures wherever a real integration is absent.
+Entry: Use verified source and supported Linux configuration; label fixtures wherever a real integration is absent.
 
 - Implement complete mint declaration, whole NFT, encrypted off-chain mapping, both deadlines and voucher format; ordered owner/holder positions.
 - Independent bids/asks; price/FIFO/best-price matching and replayable trusted book sequence.
@@ -431,7 +431,7 @@ Deliverables: Domain model, samples, adapter contracts, operable UI and Linux un
 
 Acceptance: All applicable Stage 1 cases including T-41..43,45..51; real freeze is never inferred from model.
 
-Develop next independent stage after this stage PR without waiting for CI. An exit condition defines acceptance, not a global development stop.
+An exit condition defines the evidence required for stage acceptance.
 
 ### Stage 2: Segment principal and independent settlement
 
@@ -447,7 +447,7 @@ Deliverables: Segment escrow/settlement implementation, real/simulated binding l
 
 Acceptance: T-11..16,28,31 and applicable T-51; per-segment reconciliation; historical C/current D interpreted correctly.
 
-Develop next independent stage after this stage PR without waiting for CI. An exit condition defines acceptance, not a global development stop.
+An exit condition defines the evidence required for stage acceptance.
 
 ### Stage 3: Suffix rollback and buyer gas
 
@@ -466,7 +466,7 @@ Deliverables: Rollback, fee/reconciliation records, recovery flow and Linux faul
 
 Acceptance: Applicable T-17..23,29,30,43,44,49..51; model evidence and real control/fee evidence remain distinct.
 
-Develop next independent stage after this stage PR without waiting for CI. An exit condition defines acceptance, not a global development stop.
+An exit condition defines the evidence required for stage acceptance.
 
 ### Stage 4: Deadline, bill transfer, restored trading and holder remint
 
@@ -484,13 +484,13 @@ Deliverables: Deadline and suffix recovery model, bill-transfer/scope UI, bounda
 
 Acceptance: T-24,25,32,33,44,45; only applicable branch evidence; no out-of-scope fulfillment in completion.
 
-Develop next independent stage after this stage PR without waiting for CI. An exit condition defines acceptance, not a global development stop.
+An exit condition defines the evidence required for stage acceptance.
 
 ### Stage 5: Sepolia integration and final delivery
 
 Entry: Affected model/integration checks and exact runtime configuration, permissions, asset control and designated test asset are verified for each real path.
 
-- Deploy exact candidate using existing approved Linux process; absent target blocks that deployment only while packaging proceeds.
+- Deploy exact candidate using project-supported Linux process; absent target blocks that deployment only while packaging proceeds.
 - Execute six revised scenarios on Sepolia 11155111 with actual chain records and explicitly simulated registrars, never Hoodi substitution.
 - Cover all three source/Oracle contracts and record each scenario's chosen main source.
 - Verify whole-artwork backend alignment, each middleware route and frontend; join actual Oracle, funds and UI evidence.
@@ -501,7 +501,7 @@ Deliverables: Accessible demo, deployment receipt, six scenario results, three-s
 
 Acceptance: All six scenarios and complete evidence chain; deployment/runtime/chain/product verdicts separate; NOT_RUN for absent operations.
 
-Develop next independent stage after this stage PR without waiting for CI. An exit condition defines acceptance, not a global development stop.
+An exit condition defines the evidence required for stage acceptance.
 
 Stage 4 also includes authorized holder replacement mint: possession plus holder=owner, atomic old burn/new mint, editable new terms, retained old/new history and UNKNOWN/concurrency recovery. No extra cleanup/refund/unfreeze/migration approval gate is introduced. Ordinary transfer remains independent of holder equality, gap closure and current finality. Stage 5 integrates T-52 through T-68 with all source paths and real evidence.
 
@@ -509,7 +509,7 @@ Stage 0 also verifies v1.4 document identity, current design and exact base, pro
 
 Stage 1 additionally implements the full commodity/crypto market, individual quote cards and gap details, complete identity-free signed-business-terms projections, actual independent positions and per-position signature evidence, long-chain interactions, six candidate languages, real reference adapter/freshness states, both collateral choices and ordinary market-maker participation. T-69..84 apply where relevant; actual feed/browser evidence stays NOT_RUN/NOT_VERIFIED until genuinely obtained. A missing feed cannot stop independent trading or registration work.
 
-Stage 5 additionally supplies real UI/data evidence for T-69..84: continuous source reading/refresh/failure recovery, simulation separation, individual gap/terms/positions/signatures/privacy, six-language responsive navigation, market-maker ordering and both collateral scenarios. Undefined financing/liquidation/revenue mechanisms remain honestly open. All chain actions from hosts prohibited by the private execution policy remain prohibited; authorized Sepolia execution uses the existing approved chain-execution path. A model, design or historical loader pass cannot replace these results.
+Stage 5 additionally supplies real UI/data evidence for T-69..84: continuous source reading/refresh/failure recovery, simulation separation, individual gap/terms/positions/signatures/privacy, six-language responsive navigation, market-maker ordering and both collateral scenarios. Undefined financing/liquidation/revenue mechanisms remain honestly open. A model, design or historical loader pass cannot replace these results.
 
 ## 17. Acceptance matrix
 
@@ -543,7 +543,7 @@ The complete matrix retains T-01 through T-68 with revised semantics and extends
 | T-24 | Honor mint time units and boundaries; refuse new trades after cutoff; overdue unregistered suffix fails and owner returns to effective holder; preserve registered and settled prefix. | EX-TIME-01 / EX-TIME-02 / EX-TIME-03 | 4 |
 | T-25 | EX transfers the bill of lading without physical collection, transport, warehouse exit or collection-driven burn. Terms remain readable; owner ahead of holder may resell. Authorized atomic holder remint is separately covered by T63-68. | EX-SCOPE-08 / EX-EXIT-01 / EX-INV-08 / EX-SCOPE-12 | 4 |
 | T-26 | Separate simulated/real, pending/complete, owner/holder, NONE/OPEN/ADMITTED/CANCELLED/SUPERSEDED, historical provisional/final, Oracle application refusal, admission and funds. No protocol REJECTED or overall-complete inference from NO/green. | EX-NFR-05 | 1 |
-| T-27 | Record exact source/config/run/commands/fixtures for GitHub Actions CI or the existing approved non-Windows Linux execution path, as applicable. CI validates only checks actually run; it does not prove deployment or live-chain acceptance. Preserve restricted-host chain prohibitions and keep actual server identities/IPs private. | EX-NFR-01 / EX-NFR-07 | 1 |
+| T-27 | Record exact source/config/run/commands/fixtures for GitHub Actions CI or the project-supported Linux configuration, as applicable. CI validates only checks actually run; it does not prove deployment or live-chain acceptance. | EX-NFR-01 / EX-NFR-07 | 1 |
 | T-28 | On duplicate consumption, restart or unknown freeze/release/refund, query before retry; never duplicate funds or gas actions. | EX-NFR-03 / EX-NFR-04 / EX-SETTLE-05 | 2 |
 | T-29 | Reject rollback without sufficient authority; no arbitrary confiscation or rewriting a finalized prefix. | EX-SCOPE-07 / EX-NFR-10 | 3 |
 | T-30 | Recover reorg, duplicate logs, RPC timeout and reordered events without early or repeated release. | EX-INV-10 / EX-NFR-03 | 3 |
@@ -551,11 +551,11 @@ The complete matrix retains T-01 through T-68 with revised semantics and extends
 | T-32 | Trace bill-of-lading terms, original Oracle registration, holder and funds. Physical collection or collection-driven destruction is not completion; authorized remint separately preserves old/new NFT links and existing evidence. | EX-EXIT-02 / EX-EXIT-03 / EX-SCOPE-09 / EX-REMINT-04 | 4 / 5 |
 | T-33 | Reject duplicate valid mappings, transfer replay and repeated funds actions; failed old segments stay dead, valid NFTs can start a new chain, history remains. | EX-EXIT-03 / EX-ROLLBACK-05 | 4 |
 | T-34 | Agent actions already authorized in the wallet need no extra platform step approval; refuse out-of-scope actions. | EX-AUTH-01 / EX-AUTH-05 | 1 |
-| T-35 | Sepolia 11155111 only; fixture NFT0 immutably permits the verified designated test PYUSD and each scenario order explicitly selects it; gas is test ETH. Refuse wrong chain/asset/NFT0 selection before sending, without currency substitution, conversion or Hoodi. Never send from a host prohibited by the private execution policy. | EX-DEMO-01 / EX-SCOPE-11 / EX-GAS-09 | 5 |
+| T-35 | Sepolia 11155111 only; fixture NFT0 immutably permits the verified designated test PYUSD and each scenario order explicitly selects it; gas is test ETH. Refuse wrong chain/asset/NFT0 selection before sending, without currency substitution, conversion or Hoodi. | EX-DEMO-01 / EX-SCOPE-11 / EX-GAS-09 | 5 |
 | T-36 | All six scenarios have matching actual transactions, simulated registration evidence, UI states and final assertions. | EX-DEMO-02 | 5 |
 | T-37 | Demo, PPT and playable film consistently label real test-chain actions, simulated roles and animation; no implied institutional cooperation. | EX-DEMO-03 | 5 |
 | T-38 | Required CI belongs to exact head; actual deployed commit matches; read back artifact bytes and hashes. | EX-NFR-07 | 5 |
-| T-39 | Public code/logs/artifacts/diffs contain no secrets, private operational records or private source locators. The authorized English product requirements may be public; original private source and operational materials remain private. | EX-NFR-06 / EX-NFR-09 | 0 |
+| T-39 | Verify that receipt-access secrets and wallet private keys are absent from product outputs, logs, chain data and NFT metadata; product documentation is in English. | EX-NFR-06 / EX-NFR-09 | 0 |
 | T-40 | Record real resource and performance baselines and diagnosable errors; no invented production SLA. | EX-NFR-05 / EX-NFR-08 | 0 |
 | T-41 | Mint complete asset-specific receipt data, terms, both cutoffs and time semantics; reject missing required fields; do not copy unrelated commodity rules. | EX-MINT-01 / EX-MINT-02 / EX-MINT-04 / EX-MINT-06 | 1 |
 | T-42 | Encrypt receipt-access secrets only in controlled off-chain storage; NFT has only opaque nonsecret mapping; no wallet private keys held by EX. | EX-MINT-03 / EX-NFR-06 | 1 |
@@ -599,18 +599,18 @@ The complete matrix retains T-01 through T-68 with revised semantics and extends
 | T-80 | All six candidate languages cover markets/cards/terms/timeline/unknown/errors/principal/gas without mixed language or clipping. Preserve protocol identifiers and exact openGapOF=YES/NO with YES red/NO green; unknown stays unknown and original signed language remains unchanged. | EX-SCOPE-18 / EX-I18N-01 / EX-I18N-02 / EX-I18N-03 | 1 / 5 |
 | T-81 | No wallet asset/account/security/validator/Agent-permission-management routes; per-trade authority, balance/freeze and gas confirmation remain enforced. | EX-UI-06 / EX-AUTH-01 / EX-GAS-10 | 1 / 5 |
 | T-82 | Separate external references, simulated NFT quotes/trades and real chain evidence. A per-tonne reference cannot replace whole-receipt price or trigger FX-based cross-currency matching/payment/gas conversion. | EX-PRICE-04 / EX-MATCH-01 / EX-SCOPE-11 | 1 / 5 |
-| T-83 | Documents/design/code/runtime have independent identities. v1.4 cannot inherit a historical loader pass or clickable design as runtime acceptance; preserve T-01..68, six stages/demos and private operations/source-locator confidentiality while publishing the authorized product edition. | EX-NFR-09 / Section 18 | 0 / all |
+| T-83 | Documents/design/code/runtime have independent identities. v1.4 cannot inherit a historical loader pass or clickable design as runtime acceptance; preserve T-01..68, six stages/demos and the current product edition. | EX-NFR-09 / Section 18 | 0 / all |
 | T-84 | Responsive market/details navigation and loading/error/empty/long-chain states recover; all three sources share real states and six-language rules. Missing feed/original terms stays explicit, never overall-complete. | EX-ARCH-03 / EX-UI-01 / EX-UI-04 / EX-PRICE-03 / EX-I18N-02 | 1 / 5 |
 
 ## 18. Engineering delivery and exact-source acceptance
 
-Each candidate records repository/branch/full commit/tree/parent/base and exact diff; PRD edition/digest and requirements; missing implementation and NOT_RUN operations; actual Linux runtime/path/commands/config/run/timestamps/exits; test counts/results and complete private logs; artifact bytes/SHA/source/storage; deployment target/served version/URL/start/health/recovery or explicit not-deployed; actual chain/addresses/tx/EVM receipts/blocks/confirmation/Oracle events; and per-segment principal/gas/owner/holder/recovery reconciliation.
+Each candidate records repository/branch/full commit/tree/parent/base and exact diff; PRD edition/digest and requirements; missing implementation and NOT_RUN operations; actual Linux runtime/path/commands/config/run/timestamps/exits; test counts/results and complete logs; artifact bytes/SHA/source/storage; deployment target/served version/URL/start/health/recovery or explicit not-deployed; actual chain/addresses/tx/EVM receipts/blocks/confirmation/Oracle events; and per-segment principal/gas/owner/holder/recovery reconciliation.
 
 Gas evidence includes original cap/P50 ETH/USD with samples and FX, buyer confirmation/reconfirmation, maximum prefreeze, actual costs and unused unfreeze. Record NFT validity and resumed-trading eligibility. Record whole-artwork backend contract alignment and source-route/Oracle/UI coverage. A candidate's own success is not independent acceptance; preserve trusted controller, exact identity, expiry and artifact/log verification.
 
-After a stage PR continue independent authorized work. Only merge when required checks on exact current head and relevant acceptance meet existing authorization. A changed head needs fresh exact-head verification; historical green, short SHA and screenshots cannot substitute. Preserve cancelled/refused operations; no mainnet, real value, new credentials/resources or expanded security settings from this document. Gate only the affected operation.
+Required checks and relevant acceptance must match the exact current head. A changed head needs fresh exact-head verification; historical green, short SHA and screenshots cannot substitute.
 
-This public edition is English and product-only, published under the later explicit publication instruction. Original private records, source locators, internal paths, topology, credentials and operational handoffs remain private. Any separately required private server synchronization uses its existing approved location and complete byte readback before claimed complete; it is not an automatic new schedule, deployment or prerequisite for independent development.
+This edition is the English product and acceptance contract.
 
 ## 19. Decisions and local gates
 
@@ -630,7 +630,7 @@ Confirmed or removed requirements cannot remain open-choice blockers. Only the s
 | D-10 | PARKED | Agent service-fee mechanism, rate, timing, bearer and refunds. | Commercial charging only; all core stages and fee-free demo proceed. |
 | D-11 | PARKED | Real commercial asset classes, cooperation, registrars and admission. | Later real business expansion only; three simulated sources proceed. |
 | D-12 | PARKED | Commercial pricing, revenue, funding, operations and legal path. | Later commercial or outward commitments only; authorized test development proceeds. |
-| D-13 | EXECUTION_VERIFICATION | Any separately required private server document synchronization needs its approved destination and actual byte readback. | That document synchronization only; never block independent development. |
+| D-13 | RESERVED | No product decision is assigned to this identifier. | No product dependency. |
 
 A funded account is not a gas-policy decision; a token/provider interface is not wallet semantic acceptance. No new device lock, remote-attestation or pre-funded account is presumed. Later valid authorization is retained with its actual scope; a version change alone does not revoke it.
 
@@ -642,20 +642,20 @@ A funded account is not a gas-policy decision; a token/provider interface is not
 
 ## 20. Source and decision traceability
 
-This publication synchronizes the complete v1.4 product baseline, including the 2026-10-18 UI-literal and ERC semantic corrections. Private source locators, internal dispatch messages and operational topology are not reproduced. Original source records remain independently retained for audit. The subsequent publication instruction supersedes the previous private-only product-document destination; it does not authorize disclosure of operational materials. Subsequent execution instructions permit GitHub Actions CI while retaining restricted-host chain prohibitions. Public repository content must not disclose real usernames, wallet addresses, server names, IPs or other private information.
+This edition synchronizes the complete v1.4 product baseline, including the 2026-10-18 UI-literal and ERC semantic corrections. GitHub Actions is permitted for CI.
 
 | Source group | Preserved product scope |
 | --- | --- |
 | SRC-01 / SRC-01B | Original whole-receipt, owner/holder, registration, segment escrow, suffix rollback, gas, deadlines and six demonstrations; the two source formats are not different product versions. |
 | SRC-02 / SRC-04 / SRC-09 | Infrastructure, compatible-wallet, whole-artwork reuse, authority/journal/segment binding and role boundaries. |
-| SRC-03 / SRC-05 / SRC-06 | Historical baseline and source-bound CI evidence only, never current acceptance or restored cancelled actions. |
-| SRC-07 / SRC-10 | Complete staged delivery; continue confirmed independent work; matching, mint, deadlines, gas, original freezes, bill-transfer scope, return to effective holder and Oracle-only receipt. |
-| SRC-08 / SRC-10P | Historical private handling and delivery provenance, superseded only for the currently authorized product publication; operational privacy remains. |
+| SRC-03 / SRC-05 / SRC-06 | Historical baseline and source-bound CI evidence only, never current acceptance. |
+| SRC-07 / SRC-10 | Complete staged delivery; matching, mint, deadlines, gas, original freezes, bill-transfer scope, return to effective holder and Oracle-only receipt. |
+| SRC-08 / SRC-10P | Historical document delivery provenance. |
 | SRC-10B | Whole-artwork backend alignment and direct/electronic/intermediary transaction sources, not new trading modes. |
 | SRC-10C / SRC-10D | Buyer-confirmed cap/P50, maximum prefreeze, actual consumption/unused refund and ETH-only gas with zero/insufficient-ETH refusal. |
-| SRC-10E | Existing approved non-Windows execution and reconnect rules, updated by permission for GitHub Actions CI and the private restricted-host chain policy. No actual host identities are published. |
+| SRC-10E | Non-Windows execution and GitHub Actions CI. |
 | SRC-10F / SRC-10G / SRC-10H | Immutable one/multiple NFT0 currencies, explicit per-order selection, selected-currency shortage refusal and no conversion. |
-| SRC-10I | Separate development and independent QA/CI acceptance; exact-source required checks before merge, without stage development waiting for CI. |
+| SRC-10I | Independent QA/CI acceptance and exact-source required checks. |
 | SRC-10J / SRC-10K / SRC-10L | Authorized holder possession/equality remint, atomic old burn/new mint, editable new terms, no added cleanup/migration/product approval. |
 | SRC-10M | Commodity spot-intermediary DEMO, crypto/commodity styling, BTC/ETH/soybean/iron-ore scenes, both collateral classes and ordinary market makers. |
 | SRC-10N / SRC-10O | Individual NFT states/full terms/independent positions/signatures/privacy, continuous public references, six languages and excluded wallet-management UI. |
@@ -667,11 +667,11 @@ This publication synchronizes the complete v1.4 product baseline, including the 
 | SRC-15 | Public commodity source/service references in section 11.1; access rights and actual integration remain separately verified. |
 | SRC-16 / SRC-17 | Existing design and document/source revision provenance, not code/runtime acceptance; exact current candidates must be independently verified. |
 
-Conflicting old minimum-console-only, no-market-maker, agriculture-later, collateral-placeholder-only, physical-collection/burn, second-payment, second-receipt, late-grace and forced-sale mechanisms are retired. Superseded operational dispatch details do not restore cancelled actions or delegate new powers. Wallet-only ALL ON or generalized multichain defaults are not silently imported into EX.
+Conflicting old minimum-console-only, no-market-maker, agriculture-later, collateral-placeholder-only, physical-collection/burn, second-payment, second-receipt, late-grace and forced-sale mechanisms are retired. Wallet-only ALL ON or generalized multichain defaults are not silently imported into EX.
 
 ## 21. Definition of done
 
-Complete only when all six revised scenarios, all three explicitly simulated Oracle sources, complete whole-receipt mint, price/FIFO matching, per-segment original-funds release, bounded suffix rollback, cutoff/bill-transfer boundary and eligible resumed trading have reproducible evidence. Verify real cap/P50 ETH/USD, samples, buyer confirmation/reconfirmation, maximum gas freeze, actual debit and unused unfreeze within confirmed cap and separate from principal. Match demo/PPT/playable film, exact code/config, actual Linux deployment, Sepolia observations and private execution records. Whole-artwork alignment, operable middleware/frontend for all sources and T-46..48 must pass. Missing applicable evidence keeps delivery OPEN.
+Complete only when all six revised scenarios, all three explicitly simulated Oracle sources, complete whole-receipt mint, price/FIFO matching, per-segment original-funds release, bounded suffix rollback, cutoff/bill-transfer boundary and eligible resumed trading have reproducible evidence. Verify real cap/P50 ETH/USD, samples, buyer confirmation/reconfirmation, maximum gas freeze, actual debit and unused unfreeze within confirmed cap and separate from principal. Match demo/PPT/playable film, exact code/config, actual Linux deployment, Sepolia observations and execution records. Whole-artwork alignment, operable middleware/frontend for all sources and T-46..48 must pass. Missing applicable evidence keeps delivery OPEN.
 
 Physical collection, transport, warehouse exit and collection-driven NFT destruction are not completion conditions. Authorized atomic holder remint, immutable allowed-currency selection and separate ETH gas/price coverage remain required by T-52 through T-68. Completion does not imply real warehouses/institutions admitted, cooperation, licenses, commercial fees, mainnet deployment or acceptance of new human financial/legal obligations. Parked items affect only genuinely dependent later work.
 
@@ -681,4 +681,4 @@ The v1.4 completion scope additionally requires all applicable T-69..84: operabl
 
 Coverage preserves sections 1..21, all six stages/demonstrations, all 111 requirement IDs, T-01..84 and D-01..16. Conflicting old assertions are replaced in their applicable requirements and acceptance cases. Historical machine plans/locks must be reconciled separately and cannot certify this revision; no historical run inherits a revised-case PASS.
 
-This v1.4 edition preserves all 111 EX-* requirement rows, all T-01 through T-84, all D-01 through D-16, sections 1 through 21, Stage 0 through Stage 5 and DEMO-01 through DEMO-06. Private source/dispatch/host details are generalized, not product requirements removed. The publication, CI and restricted-host/privacy changes affect document destination and execution scope only. No product runtime test, deployment or on-chain action is evidenced by this publication.
+This v1.4 edition preserves all 111 EX-* requirement rows, all T-01 through T-84, all D-01 through D-16, sections 1 through 21, Stage 0 through Stage 5 and DEMO-01 through DEMO-06. No product runtime test, deployment or on-chain action is evidenced by this publication.

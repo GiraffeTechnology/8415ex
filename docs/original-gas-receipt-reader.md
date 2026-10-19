@@ -12,4 +12,4 @@ The returned observation is still evidence input for the original settlement coo
 
 Protocol references: [Ethereum JSON-RPC](https://ethereum.org/en/developers/docs/apis/json-rpc/) defines chain ID, transaction receipts, block-by-number and finalized block tags. This module calls only those read methods; no actual provider was queried during initial authoring.
 
-Validation input: eight authored synthetic-sequence unittest methods, NOT_RUN. Proposed validation-owner command: python -m unittest integration.test_original_gas_receipt_reader -v. No product import, compile, test, CI, chain, wallet or deployment acceptance is claimed. This branch stacks on the pinned receipt observer implementation; its helper contract requires joint version review.
+Validation input: eight authored synthetic-sequence unittest methods, NOT_RUN. Validation command: python -m unittest integration.test_original_gas_receipt_reader -v. No product import, compile, test, CI, chain, wallet or deployment acceptance is claimed. This branch stacks on the pinned receipt observer implementation; its helper contract requires joint version review.
