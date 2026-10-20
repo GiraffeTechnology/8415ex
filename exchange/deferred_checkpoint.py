@@ -14,7 +14,7 @@ from .ids import canonical_json
 class DeferredCheckpoint:
     COMPONENT = "deferred-settlement"
     COMMANDS = frozenset({"admit_lock", "reserve", "observe_registration", "credit_escrow",
-                          "deadline", "observe_collateral_remainder", "prepare", "observe_gas_requirement", "mark_dispatched", "confirm"})
+                          "deadline", "observe_liquidation_source", "observe_collateral_remainder", "prepare", "observe_gas_requirement", "mark_dispatched", "confirm"})
 
     def __init__(self, store, scope, profile, verifier):
         if not isinstance(store, AggregateCheckpointStore) or self.COMPONENT not in store.components:

@@ -75,6 +75,10 @@ class DeferredTests(unittest.TestCase):
         return self.fact("liquidation-quote", chain=560048, asset="ETH", location="hoodi-vault",
                          reference=binding, units=50, destination_units=target, at=200)
 
+    def reach_deadline(self, *, registered=False):
+        evidence = self.fact("deadline-registration", units=int(registered), at=200)
+        return self.engine.deadline("ab", now=200, registration_evidence=evidence)
+
     def complete(self, op, *, units=None, chain=None):
         self.engine.mark_dispatched(op.identity)
         raw = self.fact("operation-receipt", chain=op.chain if chain is None else chain,
@@ -115,11 +119,12 @@ class DeferredTests(unittest.TestCase):
     def test_unregistered_deadline_rolls_back_not_waits_for_payment(self):
         self.reserve()
         self.credit(800)
-        self.assertEqual(self.engine.deadline("ab", now=200), "ROLLBACK_REQUIRED")
+        self.assertEqual(self.reach_deadline(), "ROLLBACK_REQUIRED")
         with self.assertRaises(DeferredRefused):
             self.engine.prepare("pay", "ab", kind="seller-payment", now=200)
-        with self.assertRaises(DeferredRefused):
-            self.register()
+        self.register()
+        self.assertTrue(self.engine.obligations["ab"].registered)
+        self.assertFalse(self.engine.obligations["ab"].rollback)
 
     def test_registered_unpaid_debt_never_reopens_nft_rollback(self):
         self.reserve()
@@ -194,7 +199,7 @@ class DeferredTests(unittest.TestCase):
         self.assertFalse(self.engine.obligations["ab"].resolved)
 
     def test_rollback_gas_shortage_uses_separate_destination_eth(self):
-        self.reserve(); self.credit(800); self.engine.deadline("ab", now=200)
+        self.reserve(); self.credit(800); self.reach_deadline()
         with self.assertRaises(DeferredRefused):
             self.engine.prepare("return", "ab", kind="rollback", now=200)
         raw = self.fact("rollback-gas-shortfall", asset="ETH", units=10, at=200)
@@ -230,3 +235,81 @@ class DeferredTests(unittest.TestCase):
         broken = deepcopy(self.engine.snapshot()); broken["locks"]["lock-1"]["reserved"] = 0
         with self.assertRaises(DeferredRefused):
             DeferredSettlement.restore(self.profile, self.verifier, broken)
+
+    def test_missing_local_registration_is_not_rollback_authority(self):
+        self.reserve()
+        self.assertEqual(self.engine.deadline("ab", now=200), "REGISTRATION_RECONCILIATION_REQUIRED")
+        self.assertFalse(self.engine.obligations["ab"].rollback)
+        with self.assertRaises(DeferredRefused):
+            self.engine.prepare("return", "ab", kind="rollback", now=200)
+        self.register(at=150)
+        self.assertEqual(self.engine.deadline("ab", now=200), "DEBT_LIQUIDATION_REQUIRED")
+
+    def test_authoritative_registered_deadline_cut_preserves_prefix(self):
+        self.reserve()
+        self.assertEqual(self.reach_deadline(registered=True), "DEBT_LIQUIDATION_REQUIRED")
+        self.assertTrue(self.engine.obligations["ab"].registered)
+        self.assertFalse(self.engine.obligations["ab"].rollback)
+
+    def test_prepared_unlock_blocks_new_borrowing_before_dispatch(self):
+        self.reserve(); self.credit(800); self.register()
+        self.complete(self.engine.prepare("pay", "ab", kind="seller-payment", now=150))
+        unlock = self.engine.prepare("unlock", "ab", kind="collateral-unlock", now=200)
+        self.assertTrue(self.engine.locks["lock-1"].release_pending)
+        with self.assertRaises(DeferredRefused):
+            self.reserve(identity="new-debt")
+        self.complete(unlock)
+        self.assertTrue(self.engine.locks["lock-1"].released)
+
+    def test_partial_liquidations_reserve_source_caps_until_verified_consumption(self):
+        self.reserve(); self.register()
+        first = self.engine.prepare("sale-1", "ab", kind="debt-liquidation", now=200,
+                                    liquidation_quote=self.quote("debt-liquidation", 800))
+        self.complete(first, units=200)
+        second = self.engine.prepare("sale-2", "ab", kind="debt-liquidation", now=200,
+                                     liquidation_quote=self.quote("debt-liquidation", 600))
+        self.complete(second, units=200)
+        with self.assertRaises(DeferredRefused):
+            self.engine.prepare("sale-3", "ab", kind="debt-liquidation", now=200,
+                                liquidation_quote=self.quote("debt-liquidation", 400))
+        for op in (first, second):
+            proof = self.fact("liquidation-source", chain=560048, asset="ETH", location="hoodi-vault",
+                              reference=op.commitment, units=50, at=200)
+            self.engine.observe_liquidation_source(op.identity, proof, now=200)
+            self.engine.observe_liquidation_source(op.identity, proof, now=200)
+        self.assertEqual(self.engine.locks["lock-1"].units, 0)
+        self.assertEqual(self.engine.obligations["ab"].escrow, 400)
+        self.assertFalse(self.engine.obligations["ab"].resolved)
+        self.assertEqual(self.engine.deadline("ab", now=200), "DEBT_LIQUIDATION_REQUIRED")
+
+    def test_late_timely_cut_cancels_only_unsent_rollback(self):
+        self.reserve(); self.credit(800); self.reach_deadline()
+        gas = self.fact("rollback-gas-shortfall", asset="ETH", units=0, at=200)
+        self.engine.observe_gas_requirement("ab", gas, now=200)
+        op = self.engine.prepare("return", "ab", kind="rollback", now=200)
+        self.register(at=150)
+        self.assertEqual(op.status, "FAILED")
+        with self.assertRaises(DeferredRefused):
+            self.engine.mark_dispatched(op.identity)
+        self.assertFalse(self.engine.obligations["ab"].rollback)
+
+    def test_prepared_unlock_retry_returns_same_operation_without_new_reservation(self):
+        self.reserve(); self.credit(800); self.register()
+        self.complete(self.engine.prepare("pay", "ab", kind="seller-payment", now=150))
+        first = self.engine.prepare("unlock", "ab", kind="collateral-unlock", now=200)
+        second = self.engine.prepare("unlock", "ab", kind="collateral-unlock", now=201)
+        self.assertIs(first, second)
+        with self.assertRaises(DeferredRefused):
+            self.engine.prepare("unlock", "ab", kind="collateral-unlock", now=201, units=99)
+
+    def test_liquidation_retry_excludes_own_reserved_cap_and_rejects_changed_quote(self):
+        self.reserve(); self.register()
+        quote = self.quote("debt-liquidation", 800)
+        original = self.verifier.facts[quote]
+        self.verifier.facts[quote] = replace(original, units=80)
+        first = self.engine.prepare("sale", "ab", kind="debt-liquidation", now=200, liquidation_quote=quote)
+        self.assertIs(self.engine.prepare("sale", "ab", kind="debt-liquidation", now=201,
+                                         liquidation_quote=quote), first)
+        with self.assertRaises(DeferredRefused):
+            self.engine.prepare("sale", "ab", kind="debt-liquidation", now=201,
+                                liquidation_quote=self.quote("debt-liquidation", 800))

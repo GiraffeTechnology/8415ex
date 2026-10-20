@@ -121,6 +121,7 @@ class Operation:
     status: str = "PREPARED"
     collateral_limit: int = 0
     quote: str = ""
+    collateral_spent: int | None = None
 
 
 class DeferredSettlement:
@@ -208,6 +209,7 @@ class DeferredSettlement:
         require((admission.reference, admission.account, admission.chain, admission.asset, admission.location, admission.units) ==
                 (terms, borrower, self.profile.settlement_chain, self.profile.principal_asset,
                  self.profile.escrow, principal + fee), "wallet admission/gas/authority binding mismatch")
+        require(not self._pending_lock(lock_id), "collateral has unresolved operations")
         require(lock.reserved == 0, "lock already secures a live obligation")
         require(principal + fee <= lock.capacity - lock.reserved, "allowance exhausted")
         result = Obligation(obligation_id, lock_id, borrower, seller, principal, fee,
@@ -223,8 +225,18 @@ class DeferredSettlement:
         fact, commitment, duplicate = self._fact(raw, "registration-cut", now)
         require((fact.reference, fact.chain, fact.account) ==
                 (obligation_id, self.profile.settlement_chain, item.borrower), "registration binding mismatch")
-        require(not item.rollback, "rollback reconciliation required before late registration")
         require(fact.observed_at <= item.deadline, "registration cut is after settlement deadline")
+        if item.rollback:
+            involved = [op for op in self.operations.values() if op.obligation == obligation_id
+                        and op.kind in ("rollback", "gas-liquidation")]
+            require(not any(op.status in ("UNKNOWN", "CONFIRMED") for op in involved),
+                    "authoritative registration conflicts with an external recovery; reconcile")
+            for op in involved:
+                if op.status == "PREPARED":
+                    op.status = "FAILED"
+                    if op.kind == "gas-liquidation":
+                        op.collateral_spent = 0
+            item.rollback = False
         if not duplicate:
             item.registered = True
             self._save_fact(fact, commitment)
@@ -249,14 +261,37 @@ class DeferredSettlement:
             self._save_fact(fact, commitment)
         return item.escrow
 
-    def deadline(self, obligation_id, *, now):
+    def deadline(self, obligation_id, *, now, registration_evidence=None):
         item = self.obligations[obligation_id]
         instant(now)
         require(now >= item.deadline and not item.resolved, "deadline not reached or closed")
-        if not item.registered:
-            item.rollback = True
+        if not item.registered and not item.rollback:
+            if registration_evidence is None:
+                return "REGISTRATION_RECONCILIATION_REQUIRED"
+            fact, commitment, duplicate = self._fact(registration_evidence, "deadline-registration", now)
+            require((fact.reference, fact.chain, fact.account, fact.observed_at) ==
+                    (obligation_id, self.profile.settlement_chain, item.borrower, item.deadline)
+                    and fact.units in (0, 1), "exact authoritative deadline cut required")
+            # The verifier authenticates the canonical original Oracle cut as of
+            # the deadline. A missing local event or RPC failure cannot be 0.
+            if fact.units == 1:
+                item.registered = True
+            else:
+                item.rollback = True
+            self._save_fact(fact, commitment)
+        if item.rollback:
             return "ROLLBACK_REQUIRED"
         return "PAYMENT_READY" if item.escrow >= item.due else "DEBT_LIQUIDATION_REQUIRED"
+
+    def _source_pending(self, lock_id):
+        return [op for op in self.operations.values()
+                if self.obligations[op.obligation].lock == lock_id
+                and op.kind in ("debt-liquidation", "gas-liquidation") and op.collateral_spent is None]
+
+    def _pending_lock(self, lock_id):
+        return [op for op in self.operations.values()
+                if self.obligations[op.obligation].lock == lock_id
+                and (op.status not in ("CONFIRMED", "FAILED") or op in self._source_pending(lock_id))]
 
     def _pending(self, obligation_id):
         return [op for op in self.operations.values()
@@ -266,6 +301,25 @@ class DeferredSettlement:
         identifier(operation_id)
         instant(now)
         item = self.obligations[obligation_id]
+        previous = self.operations.get(operation_id)
+        if previous is not None:
+            require(previous.obligation == obligation_id and previous.kind == kind,
+                    "operation identity collision")
+            if units is not None:
+                amount(units)
+                require(units == previous.units, "operation amount mismatch")
+            if kind in ("debt-liquidation", "gas-liquidation"):
+                _, quote_hash, _ = self._fact(liquidation_quote, "liquidation-quote", now)
+                require(quote_hash == previous.quote, "operation quote mismatch")
+            else:
+                require(liquidation_quote is None, "unexpected liquidation quote")
+            expected = digest({"id": operation_id, "obligation": obligation_id, "kind": kind,
+                "units": previous.units, "asset": previous.asset, "chain": previous.chain,
+                "recipient": previous.recipient, "consent": item.consent,
+                "profile": asdict(self.profile), "collateralLimit": previous.collateral_limit,
+                "quote": previous.quote})
+            require(expected == previous.commitment, "stored operation commitment mismatch")
+            return previous
         require(not item.resolved or kind in ("excess-refund", "collateral-unlock"), "closed obligation")
         p = self.profile
         collateral_limit, quote_commitment, quote_fact, quote_duplicate = 0, "", None, False
@@ -298,7 +352,8 @@ class DeferredSettlement:
             lock = self.locks[item.lock]
             require(item.resolved and item.escrow == 0 and lock.reserved == 0,
                     "unresolved collateral obligations")
-            require(not lock.released and not lock.release_pending and lock.remainder_verified,
+            require(not lock.released and not lock.release_pending and lock.remainder_verified
+                    and not self._pending_lock(item.lock),
                     "collateral remainder not confirmed")
             value, asset, chain, recipient = lock.units, p.collateral_asset, p.collateral_chain, item.borrower
         else:
@@ -312,7 +367,9 @@ class DeferredSettlement:
                     quote_fact.account, quote_fact.location) == (quote_terms, p.collateral_chain,
                     p.collateral_asset, item.borrower, p.vault), "invalid liquidation quote binding")
             require(now - quote_fact.observed_at <= p.valuation_max_age and
-                    0 < quote_fact.units <= self.locks[item.lock].units and quote_fact.destination_units >= value,
+                    0 < quote_fact.units <= self.locks[item.lock].units -
+                    sum(op.collateral_limit for op in self._source_pending(item.lock))
+                    and quote_fact.destination_units >= value,
                     "unbounded or stale liquidation quote")
             collateral_limit = quote_fact.units
         if units is not None:
@@ -333,6 +390,8 @@ class DeferredSettlement:
                        recipient, commitment, collateral_limit=collateral_limit, quote=quote_commitment)
         if quote_fact is not None:
             self._save_fact(quote_fact, quote_commitment)
+        if kind == "collateral-unlock":
+            self.locks[item.lock].release_pending = True
         self.operations[operation_id] = op
         return op
 
@@ -352,6 +411,16 @@ class DeferredSettlement:
     def mark_dispatched(self, operation_id):
         op = self.operations[operation_id]
         require(op.status == "PREPARED", "operation is not dispatchable")
+        item = self.obligations[op.obligation]
+        if op.kind == "collateral-unlock":
+            lock = self.locks[item.lock]
+            require(item.resolved and item.escrow == 0 and lock.reserved == 0
+                    and lock.release_pending and lock.remainder_verified
+                    and all(p.identity == operation_id for p in self._pending_lock(item.lock)),
+                    "collateral release precondition changed")
+        if op.kind == "rollback":
+            require(item.rollback and not item.registered and not item.rollback_confirmed,
+                    "rollback authority changed")
         op.status = "UNKNOWN"
         if op.kind in ("debt-liquidation", "gas-liquidation"):
             lock = self.locks[self.obligations[op.obligation].lock]
@@ -406,11 +475,34 @@ class DeferredSettlement:
         self._save_fact(fact, commitment)
         return op
 
+    def observe_liquidation_source(self, operation_id, raw, *, now):
+        op = self.operations[operation_id]
+        require(op.kind in ("debt-liquidation", "gas-liquidation") and
+                op.status in ("UNKNOWN", "CONFIRMED"), "no issued liquidation")
+        item = self.obligations[op.obligation]
+        lock = self.locks[item.lock]
+        fact, commitment, duplicate = self._fact(raw, "liquidation-source", now)
+        p = self.profile
+        require((fact.reference, fact.chain, fact.asset, fact.account, fact.location) ==
+                (op.commitment, p.collateral_chain, p.collateral_asset, item.borrower, p.vault),
+                "source liquidation mismatch")
+        require(fact.units <= op.collateral_limit, "source exceeds approved collateral limit")
+        if op.collateral_spent is not None:
+            require(duplicate and op.collateral_spent == fact.units, "source outcome conflict")
+            return op.collateral_spent
+        require(not duplicate and fact.units <= lock.units, "collateral accounting conflict")
+        # A finalized source execution/non-execution fact releases its unused
+        # cap, but does not confirm any destination funds or discharge debt.
+        lock.units -= fact.units
+        op.collateral_spent = fact.units
+        self._save_fact(fact, commitment)
+        return fact.units
+
     def observe_collateral_remainder(self, lock_id, raw, *, now):
         lock = self.locks[lock_id]
         require(lock.reserved == 0 and not lock.release_pending and not lock.released,
                 "collateral obligations remain")
-        require(not any(self._pending(x.identity) for x in self.obligations.values() if x.lock == lock_id),
+        require(not self._pending_lock(lock_id),
                 "collateral outcome unknown")
         fact, commitment, duplicate = self._fact(raw, "collateral-remainder", now)
         p = self.profile
@@ -493,10 +585,17 @@ class DeferredSettlement:
         for op in result.operations.values():
             require(op.obligation in result.obligations, "orphan operation")
             amount(op.units)
+            amount(op.collateral_limit)
+            if op.collateral_spent is not None:
+                amount(op.collateral_spent)
+                require(op.collateral_spent <= op.collateral_limit, "invalid source consumption")
             chain_id(op.chain)
             require(op.kind in ("seller-payment", "debt-liquidation", "gas-liquidation", "rollback", "excess-refund", "collateral-unlock"),
                     "invalid operation kind")
             require(op.status in ("PREPARED", "UNKNOWN", "CONFIRMED", "FAILED"), "invalid operation state")
+        for identity, lock in result.locks.items():
+            require(sum(op.collateral_limit for op in result._source_pending(identity)) <= lock.units,
+                    "collateral over-reserved")
         for identity in result.obligations:
             require(len(result._pending(identity)) <= 1, "overlapping pending operations")
         return result

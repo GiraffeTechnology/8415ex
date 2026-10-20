@@ -89,3 +89,49 @@ class DeferredCheckpointTests(unittest.TestCase):
         self.store.save("case", components, expected_generation=row["generation"])
         with self.assertRaises(DeferredRefused):
             self.service.read()
+
+    def test_true_reopen_and_independent_connection_reject_stale_writer(self):
+        self.reserve()
+        second_connection = sqlite3.connect(Path(self.directory.name) / "checkpoint.db")
+        self.addCleanup(second_connection.close)
+        second_connection.execute("PRAGMA synchronous=FULL")
+        second_store = AggregateCheckpointStore(second_connection,
+            components=("deferred-settlement", "original"), source_commit="a" * 40, source_tree="b" * 40)
+        second = DeferredCheckpoint(second_store, "case", self.fixture.profile, self.fixture.verifier)
+        stale = second.read()[0]["generation"]
+        self.apply("observe_registration", "ab", self.fixture.fact("registration-cut", at=150), now=150)
+        with self.assertRaises(DeferredRefused):
+            second.apply("credit_escrow", "ab", self.fixture.fact("principal-allocation", units=800),
+                         now=150, expected_generation=stale)
+        self.connection.close()
+        self.assertTrue(second.read()[1].obligations["ab"].registered)
+        self.assertEqual(second.read()[1].obligations["ab"].escrow, 0)
+
+    def test_commit_acknowledgement_failure_never_calls_executor(self):
+        from unittest.mock import patch
+        from exchange.aggregate_checkpoint import CheckpointCommitUnknown
+        prepared = self.payment()
+        original_save = self.store.save
+        def uncertain(*args, **kwargs):
+            original_save(*args, **kwargs)
+            raise CheckpointCommitUnknown("synthetic lost acknowledgement")
+        calls = []
+        with patch.object(self.store, "save", side_effect=uncertain):
+            with self.assertRaises(CheckpointCommitUnknown):
+                self.service.dispatch_once("pay", calls.append, expected_generation=prepared["generation"])
+        self.assertEqual(calls, [])
+        row, model = self.service.read()
+        self.assertEqual(model.operations["pay"].status, "UNKNOWN")
+        with self.assertRaises(DeferredRefused):
+            self.service.dispatch_once("pay", calls.append, expected_generation=row["generation"])
+        self.assertEqual(calls, [])
+
+    def test_failure_before_save_does_not_dispatch_or_change_prepared_state(self):
+        from unittest.mock import patch
+        prepared = self.payment()
+        calls = []
+        with patch.object(self.store, "save", side_effect=CheckpointRefused("synthetic refusal")):
+            with self.assertRaises(CheckpointRefused):
+                self.service.dispatch_once("pay", calls.append, expected_generation=prepared["generation"])
+        self.assertEqual(calls, [])
+        self.assertEqual(self.service.read()[1].operations["pay"].status, "PREPARED")
