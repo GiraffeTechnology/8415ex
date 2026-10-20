@@ -147,8 +147,8 @@ class ReceiptBoundaries(unittest.TestCase):
     def test_register_preserves_sixteen_published_decisions_without_current_acceptance(self):
         r = decisions.register()
         self.assertEqual([d['id'] for d in r['decisions']], [f'D-{n:02}' for n in range(1,17)])
-        self.assertEqual(r['publishedBaselineVersion'], '1.4')
-        self.assertEqual(r['currentCompletePRDVersion'], '1.4')
+        self.assertEqual(r['publishedBaselineVersion'], '1.5')
+        self.assertEqual(r['currentCompletePRDVersion'], '1.5')
         self.assertTrue(r['completeCurrentContractLoaded'])
         self.assertEqual(r['productStatus'], 'OPEN')
         self.assertEqual(r['acceptedCases'], [])

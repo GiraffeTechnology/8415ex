@@ -156,7 +156,7 @@ def run_scenario(scenario, path=None):
     if path not in PATHS:
         raise ValueError("unknown registration path")
     from scenarios.current_prd import require_current_scenario
-    require_current_scenario(scenario, revision="1.4")
+    require_current_scenario(scenario, revision="1.5")
     try:
         result = _execute(scenario, path)
         return dict(result, scenario=scenario, path=path, simulated=True, status="passed", cases=CASES[scenario])
