@@ -7,6 +7,7 @@ import tempfile
 import threading
 from unittest.mock import patch
 import unittest
+from urllib.parse import urlencode
 
 from exchange.checkpointed_command_workbench import compose_checkpointed_command_workbench
 from exchange.checkpoint_runtime_load import load_exchange_checkpoint
@@ -21,11 +22,15 @@ from integration import test_recovered_workbench_ui as original_ui
 class CheckpointedCommandWorkbenchTests(unittest.TestCase):
     def setUp(self):
         self.ui = original_ui.RecoveredWorkbenchUITests("runTest")
-        self.ui.setUp()
+        original_connect = sqlite3.connect
+        def shared_connect(*args, **kwargs):
+            return original_connect(*args, **dict(kwargs, check_same_thread=False))
+        with patch("sqlite3.connect", side_effect=shared_connect):
+            self.ui.setUp()
         self.addCleanup(self.ui.doCleanups)
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
-        self.claims = sqlite3.connect(Path(directory.name) / "original-native-claims.db")
+        self.claims = sqlite3.connect(Path(directory.name) / "original-native-claims.db", check_same_thread=False)
         self.addCleanup(self.claims.close)
         self.claims.execute("PRAGMA synchronous=FULL")
         DurableEXOperationJournal.initialize(self.claims)
@@ -63,13 +68,15 @@ class CheckpointedCommandWorkbenchTests(unittest.TestCase):
         self.addCleanup(result.server.server_close)
         return result
 
-    def request(self, server, path):
+    def request(self, server, path, *, method="GET", body=None):
         worker = threading.Thread(target=server.serve_forever,
             kwargs={"poll_interval": 0.02}, daemon=True)
         worker.start()
         connection = http.client.HTTPConnection(*server.server_address, timeout=3)
         try:
-            connection.request("GET", path)
+            headers = {} if method == "GET" else {"Origin": server.origin,
+                "Content-Type": "application/x-www-form-urlencoded"}
+            connection.request(method, path, body=body, headers=headers)
             response = connection.getresponse()
             return response.status, response.read().decode()
         finally:
@@ -173,4 +180,53 @@ class CheckpointedCommandWorkbenchTests(unittest.TestCase):
             self.compose(scope="absent-original-scope")
         self.assertEqual(self.builders, [])
         self.assertEqual(self.enquiries, [])
+        self.assertEqual(self.native_calls, [])
+
+
+    def post(self, result, key="threaded-ui-key"):
+        binding = result.server.binding
+        form = urlencode({"csrf": result.server.csrf, "revision": binding.snapshot()["revision"],
+                          "action": "advance-rollback", "key": key, "leg": ""})
+        return self.request(result.server, "/operation", method="POST", body=form)
+
+    def test_native_command_post_uses_shared_original_connections_on_serving_thread(self):
+        result = self.compose()
+        self.assertEqual(self.post(result)[0], 303)
+        self.assertEqual(len(self.native_calls), 1)
+        scope = self.native_calls[0][1]
+        self.assertEqual(self.journal.lookup(scope["nativeOperationId"])["status"], "UNKNOWN")
+        self.assertEqual(self.ui.checkpoint.read(result.server.binding.gateway.bridge.pre_effect_scope(scope))
+                         ["generation"], 1)
+        self.assertEqual(self.post(result)[0], 303)
+        self.assertEqual(len(self.native_calls), 1)
+
+    def test_threaded_native_uncertainty_returns_original_503_and_keeps_claim(self):
+        def builder(access, previous):
+            ports = self.ports(access, previous)
+            def unavailable(scope):
+                self.native_calls.append((access, deepcopy(scope)))
+                raise TimeoutError("private synthetic native timeout")
+            ports["execute_original"] = unavailable
+            return ports
+        result = self.compose(builder=builder)
+        status, body = self.post(result)
+        self.assertEqual(status, 503)
+        self.assertNotIn("private", body)
+        self.assertEqual(len(self.native_calls), 1)
+        scope = self.native_calls[0][1]
+        self.assertEqual(self.journal.lookup(scope["nativeOperationId"])["status"], "UNKNOWN")
+        self.assertEqual(self.post(result)[0], 303)
+        self.assertEqual(len(self.native_calls), 1)
+
+    def test_thread_bound_original_journal_is_refused_before_socket_or_callbacks(self):
+        bound = sqlite3.connect(":memory:")
+        self.addCleanup(bound.close)
+        # Reuse the established journal identity only to exercise the actual
+        # thread-boundary refusal before any serving socket is constructed.
+        with patch.object(self.journal, "connection", bound):
+            with patch("exchange.checkpointed_command_workbench.compose_recovered_workbench_ui") as compose:
+                with self.assertRaisesRegex(ValueError, "serving thread"):
+                    self.compose()
+                compose.assert_not_called()
+        self.assertEqual(self.builders, [])
         self.assertEqual(self.native_calls, [])

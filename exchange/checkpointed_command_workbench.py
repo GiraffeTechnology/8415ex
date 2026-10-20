@@ -1,8 +1,34 @@
 """Connect original command ports after exactly one EX checkpoint load."""
+import sqlite3
+import threading
+
 from .checkpointed_operation import CheckpointedOperationBridge
 from .checkpointed_workbench_gateway import CheckpointedWorkbenchGateway
 from .durable_operation import DurableEXOperationJournal
 from .recovered_workbench_ui import compose_recovered_workbench_ui
+
+
+def _shared_connection(connection):
+    """Check caller-selected SQLite thread compatibility without changing it.
+
+    The existing serialized EX lock guards command reads and writes after
+    construction. A thread-bound connection cannot be converted in place; the
+    original host must supply one suitable for its serving-thread lifecycle.
+    This performs only SELECT 1, with no schema or database-setting changes.
+    """
+    if not isinstance(connection, sqlite3.Connection) or sqlite3.threadsafety == 0:
+        raise ValueError("thread-compatible original SQLite connection required")
+    errors = []
+    def read_constant():
+        try:
+            connection.execute("SELECT 1").fetchone()
+        except Exception as error:
+            errors.append(error)
+    worker = threading.Thread(target=read_constant)
+    worker.start()
+    worker.join()
+    if errors:
+        raise ValueError("original SQLite connection must support the serving thread") from errors[0]
 
 
 def compose_checkpointed_command_workbench(checkpoint, scope, runtime, receipt_id, *,
@@ -17,6 +43,9 @@ def compose_checkpointed_command_workbench(checkpoint, scope, runtime, receipt_i
     """
     if not isinstance(operation_journal, DurableEXOperationJournal) or not callable(make_original_ports):
         raise ValueError("original operation journal and application port builder required")
+    operation_journal._clean()
+    _shared_connection(operation_journal.connection)
+    _shared_connection(checkpoint.store.connection)
     loaded = compose_recovered_workbench_ui(checkpoint, scope, runtime, receipt_id,
                                            **original_ui_options)
     server = loaded.server
