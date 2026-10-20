@@ -293,7 +293,7 @@
     },
     {
       "id": "EX-SETTLE-06",
-      "rule": "Quote, freeze, release and refund each leg in the one currency explicitly selected from its immutable NFT0 allowed set. Keep principal and ETH gas accounts separate; no conversion, substitution or summed multi-currency payment. ETH-priced principal and gas cannot consume the same funds twice.",
+      "rule": "Keep each leg denominated in its explicitly selected immutable NFT0 currency through quote and payment/refund. Prepaid mode freezes that principal before transfer; deferred mode reserves section 7.1 collateral allowance and records later same-currency escrow allocations. Keep gas separate; liquidation destination receipts cannot be treated as principal or gas until actually received in the required asset. Never double-count or substitute balances.",
       "status": "CONFIRMED"
     },
     {
@@ -995,7 +995,7 @@
       "integrationStages": [
         3
       ],
-      "assertion": "ETH is the sole gas asset. Zero/insufficient/unverified applicable ETH warns and refuses new trading even if price funds suffice; selected-currency shortage also refuses. Original sufficient frozen gas remains usable for its approved recovery without second prepayment or double counting.",
+      "assertion": "Prepaid-mode freeze/shortage regression; deferred-mode allowance and recovery follow section 7.1, while currency identity and separate new-trade ETH gas checks remain unchanged. ETH is the sole gas asset. Zero/insufficient/unverified applicable ETH warns and refuses new trading even if price funds suffice; selected-currency shortage also refuses. Original sufficient frozen gas remains usable for its approved recovery without second prepayment or double counting.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -1603,7 +1603,7 @@
         3,
         5
       ],
-      "assertion": "Each order selects one immutable NFT0-allowed currency; both intents and leg freeze/release/refund match it. Wrong currency refuses consistently across three sources and UI/API/Agent, without conversion or substitution.",
+      "assertion": "Prepaid-mode freeze/shortage regression; deferred-mode allowance and recovery follow section 7.1, while currency identity and separate new-trade ETH gas checks remain unchanged. Each order selects one immutable NFT0-allowed currency; both intents and leg freeze/release/refund match it. Wrong currency refuses consistently across three sources and UI/API/Agent, without conversion or substitution.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -2322,10 +2322,11 @@
       "actions": [
         "Implement complete mint declaration, whole NFT, encrypted off-chain mapping, both deadlines and voucher format; ordered owner/holder positions.",
         "Independent bids/asks; price/FIFO/best-price matching and replayable trusted book sequence.",
-        "Disclose cap/P50 ETH/USD with statistical evidence; buyer confirmation; separate principal and maximum gas freezes before send.",
+        "Prepaid-mode rule (deferred allowance, debt and later escrow allocations follow section 7.1 without changing new-trade gas or currency identity): Disclose cap/P50 ETH/USD with statistical evidence; buyer confirmation; separate principal and maximum gas freezes before send.",
         "Read actual wallet grant and show switch/disconnect/revocation/session loss without extra Agent approval.",
         "Three Oracle sources share a contract; holder follows the same authoritative record; ordered index rebuild and duplicate handling.",
-        "Operable basic UI and whole-artwork backend alignment; separate actual, simulated and disconnected states."
+        "Operable basic UI and whole-artwork backend alignment; separate actual, simulated and disconnected states.",
+        "Implement and separately verify applicable section 7.1 deferred obligations; prepaid scenario results never certify T-85..96."
       ],
       "deliverables": "Domain model, samples, adapter contracts, operable UI and Linux unit/state evidence.",
       "acceptance": "All applicable Stage 1 cases including T-41..43,45..51; real freeze is never inferred from model.",
@@ -2400,11 +2401,12 @@
       "title": "Segment principal and independent settlement",
       "entry": "Reproducible chain and registration sequence; real paths additionally require actual authority.",
       "actions": [
-        "Freeze each buyer's own segment principal and confirmed maximum gas separately in wallet; bind parties, asset, amount and Oracle reference.",
+        "Prepaid-mode rule (deferred allowance, debt and later escrow allocations follow section 7.1 without changing new-trade gas or currency identity): Freeze each buyer's own segment principal and confirmed maximum gas separately in wallet; bind parties, asset, amount and Oracle reference.",
         "Never use unreleased later funds to support earlier settlement or resale.",
-        "Release original frozen funds once owner/holder positions and timely Oracle registration make the segment eligible; eliminate its return control.",
+        "Prepaid-mode rule (deferred allowance, debt and later escrow allocations follow section 7.1 without changing new-trade gas or currency identity): Release original frozen funds once owner/holder positions and timely Oracle registration make the segment eligible; eliminate its return control.",
         "Demonstrate AB release while BC/CD remain pending; bind original Oracle/journal/settlement coordinator.",
-        "Recover unknown release, RPC failure, repeat events and restart by lookup before retry; no new buyer payment or business-payment failure."
+        "Prepaid-mode rule (deferred allowance, debt and later escrow allocations follow section 7.1 without changing new-trade gas or currency identity): Recover unknown release, RPC failure, repeat events and restart by lookup before retry; no new buyer payment or business-payment failure.",
+        "Implement and separately verify applicable section 7.1 deferred obligations; prepaid scenario results never certify T-85..96."
       ],
       "deliverables": "Segment escrow/settlement implementation, real/simulated binding list, reconciliation and Linux unit/integration evidence.",
       "acceptance": "T-11..16,28,31 and applicable T-51; per-segment reconciliation; historical C/current D interpreted correctly.",
@@ -2434,7 +2436,8 @@
         "Recover interruption, retries, obsolete/duplicate events, insufficient budget and unknown results; do not invent late-receipt waits.",
         "Re-trade valid unexpired assets from recovered owner=holder; ordinary resale still permits owner ahead of holder.",
         "Integrate gas statistical disclosure, confirmation/cap, maximum prefreeze, actual debit, unused unfreeze and reconfirmed top-up; D-04 allocation only remains pending.",
-        "No gas-shortage custody, redemption deadline, forced sale or liquidation."
+        "Outside section 7.1 deferred gas-recovery liquidation: No gas-shortage custody, redemption deadline, forced sale or liquidation.",
+        "For the explicit deferred mode, insufficient borrower rollback gas may be funded by collateral liquidation with confirmed destination ETH; preserve registered prefix and unresolved effects."
       ],
       "deliverables": "Rollback, fee/reconciliation records, recovery flow and Linux fault-injection evidence.",
       "acceptance": "Applicable T-17..23,29,30,43,44,49..51; model evidence and real control/fee evidence remain distinct.",
@@ -2738,7 +2741,7 @@
     },
     {
       "id": "post-registration-payment",
-      "requirement": "A second buyer payment or buyer business-payment failure after registration",
+      "requirement": "A second buyer payment or buyer business-payment failure in prepaid mode; this retirement does not prohibit the separately consented section 7.1 deferred payment obligation",
       "references": [
         "T-11",
         "T-16",
@@ -2781,7 +2784,7 @@
     },
     {
       "id": "forced-custody",
-      "requirement": "Gas-shortage custody, timed redemption, forced sale or liquidation",
+      "requirement": "Gas-shortage custody and invented timed redemption in all modes; forced sale or liquidation outside the explicitly authorized section 7.1 deferred debt/gas recovery paths",
       "references": [
         "T-22",
         "EX-GAS-03"
@@ -2824,7 +2827,12 @@
   },
   "source": {
     "path": "PRD.md",
-    "bytes": 108643,
-    "sha256": "0f18b0914c46679b17be3d03a07f265c7cb4d1c3fb488e85b6503657622c666c"
+    "bytes": 109552,
+    "sha256": "ccd62e64ce7fbb450c4cb1a6dfe8b9254e1dd9f60530f4c3889935898e25f275"
+  },
+  "moduleSource": {
+    "path": "docs/cross-chain-deferred-settlement.md",
+    "bytes": 8237,
+    "sha256": "4a6570d7690336c449b60f5e5b7e15e1a52a923a516d2efbbff97012c8e66553"
   }
 }

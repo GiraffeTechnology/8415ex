@@ -12,10 +12,11 @@ import sys
 
 VERSION = "1.5"
 CURRENT_COMPLETE_VERSION = "1.5"
-CURRENT_PUBLICATION = (108643, "0f18b0914c46679b17be3d03a07f265c7cb4d1c3fb488e85b6503657622c666c")
+CURRENT_PUBLICATION = (109552, "ccd62e64ce7fbb450c4cb1a6dfe8b9254e1dd9f60530f4c3889935898e25f275")
 PINNED = {
     "prd": CURRENT_PUBLICATION,
-    "executionPlan": (108263, "99f39fa7ff0870155b2e857d9cd8d347fa78bd8ff1c953896852885732ebcb81"),
+    "executionPlan": (110272, "fe792b2a4d33ebb4070c3456335b5a6fcefc38ff34ad67e950e8e7474b5ada0f"),
+    "deferredModule": (8237, "4a6570d7690336c449b60f5e5b7e15e1a52a923a516d2efbbff97012c8e66553"),
 }
 RETIRED_IDS = frozenset({
     "physical-collection", "late-receipt-wait", "post-registration-payment",
@@ -47,7 +48,8 @@ def load(root=None):
     if lock.get("schema") != "8415ex-prd-lock/1" or lock.get("version") != VERSION:
         raise ValueError("current published PRD version pin is missing or stale")
     payloads = {}
-    for key, expected_path in (("prd", "PRD.md"), ("executionPlan", "config/execution-plan.json")):
+    for key, expected_path in (("prd", "PRD.md"), ("executionPlan", "config/execution-plan.json"),
+                               ("deferredModule", "docs/cross-chain-deferred-settlement.md")):
         item = lock[key]
         if item.get("path") != expected_path:
             raise ValueError("unexpected product-contract path")

@@ -29,7 +29,7 @@ Preserve dependencies and exact base/head. Use the existing CI workflow. Record 
 
 Map applicable requirements to exact source/config/run/artifacts and actual evidence. Separate design/models/simulations/implementation/browser/deployment/chain verdicts; missing evidence remains NOT_RUN/NOT_VERIFIED. Undefined feed/locale/interface/commercial matters block only dependent paths. Product documentation is in English.
 
-Published product baseline file integrity: PRD.md SHA-256 `0f18b0914c46679b17be3d03a07f265c7cb4d1c3fb488e85b6503657622c666c`. This identifies document bytes, not a runtime acceptance result.
+Published product baseline file integrity: PRD.md SHA-256 `ccd62e64ce7fbb450c4cb1a6dfe8b9254e1dd9f60530f4c3889935898e25f275`. This identifies document bytes, not a runtime acceptance result.
 
 ## Optional deferred cross-chain mode
 

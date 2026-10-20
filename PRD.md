@@ -160,7 +160,7 @@ One or more allowed price currencies are declared immutably by NFT0 at mint; eac
 
 | ID | Requirement |
 | --- | --- |
-| EX-SETTLE-06 | Quote, freeze, release and refund each leg in the one currency explicitly selected from its immutable NFT0 allowed set. Keep principal and ETH gas accounts separate; no conversion, substitution or summed multi-currency payment. ETH-priced principal and gas cannot consume the same funds twice. |
+| EX-SETTLE-06 | Keep each leg denominated in its explicitly selected immutable NFT0 currency through quote and payment/refund. Prepaid mode freezes that principal before transfer; deferred mode reserves section 7.1 collateral allowance and records later same-currency escrow allocations. Keep gas separate; liquidation destination receipts cannot be treated as principal or gas until actually received in the required asset. Never double-count or substitute balances. |
 | EX-SETTLE-07 | For prepaid mode: If available selected-currency funds cannot fully freeze the price, warn and stop before signing, execution and broadcast. Adequate ETH gas or other allowed currencies cannot replace this order principal. For explicitly selected deferred mode, section 7.1 substitutes verified reserved collateral allowance for principal prefunding, not for gas or currency identity. |
 | EX-INV-13 | For prepaid mode: One or more allowed currencies are immutable per minted NFT and each order binds one through its whole principal lifecycle. Principal or ETH gas shortage forms no new trade. No currency conversion, aggregate currency payment or third-party subsidy bypass; old and replacement identities remain distinct. For explicitly selected deferred mode, section 7.1 substitutes verified reserved collateral allowance for principal prefunding, not for gas or currency identity. |
 | EX-INV-14 | Remint never leaves both old and new valid or loses the valid asset through a one-sided burn. Existing history, funds and registration obligations survive the replacement. |
@@ -443,7 +443,7 @@ Entry: Use verified source and supported Linux configuration; label fixtures whe
 
 - Implement complete mint declaration, whole NFT, encrypted off-chain mapping, both deadlines and voucher format; ordered owner/holder positions.
 - Independent bids/asks; price/FIFO/best-price matching and replayable trusted book sequence.
-- Disclose cap/P50 ETH/USD with statistical evidence; buyer confirmation; separate principal and maximum gas freezes before send.
+- Disclose cap/P50 ETH/USD with statistical evidence and buyer confirmation. Prepaid mode freezes principal and maximum gas separately; deferred mode reserves verified collateral allowance for principal and separately freezes new-trade gas.
 - Read actual wallet grant and show switch/disconnect/revocation/session loss without extra Agent approval.
 - Three Oracle sources share a contract; holder follows the same authoritative record; ordered index rebuild and duplicate handling.
 - Operable basic UI and whole-artwork backend alignment; separate actual, simulated and disconnected states.
@@ -458,11 +458,11 @@ An exit condition defines the evidence required for stage acceptance.
 
 Entry: Reproducible chain and registration sequence; real paths additionally require actual authority.
 
-- Freeze each buyer's own segment principal and confirmed maximum gas separately in wallet; bind parties, asset, amount and Oracle reference.
+- For prepaid mode, freeze each buyer's own segment principal and confirmed maximum gas separately. For deferred mode, bind reserved allowance, selected-currency debt and actual escrow allocations under section 7.1. Both bind parties, asset, amount and Oracle reference.
 - Never use unreleased later funds to support earlier settlement or resale.
 - Release original frozen funds once owner/holder positions and timely Oracle registration make the segment eligible; eliminate its return control.
 - Demonstrate AB release while BC/CD remain pending; bind original Oracle/journal/settlement coordinator.
-- Recover unknown release, RPC failure, repeat events and restart by lookup before retry; no new buyer payment or business-payment failure.
+- Recover unknown release, RPC failure, repeat events and restart by lookup before retry. Prepaid recovery creates no second buyer payment; deferred unpaid debt and recovery use section 7.1.
 
 Deliverables: Segment escrow/settlement implementation, real/simulated binding list, reconciliation and Linux unit/integration evidence.
 
@@ -481,7 +481,7 @@ Entry: Segment model is verified; genuine rollback needs existing authorized con
 - Recover interruption, retries, obsolete/duplicate events, insufficient budget and unknown results; do not invent late-receipt waits.
 - Re-trade valid unexpired assets from recovered owner=holder; ordinary resale still permits owner ahead of holder.
 - Integrate gas statistical disclosure, confirmation/cap, maximum prefreeze, actual debit, unused unfreeze and reconfirmed top-up; D-04 allocation only remains pending.
-- No gas-shortage custody or invented redemption deadline. The section 7.1 deferred rollback-gas exception does not waive new-trade gas admission.
+- Outside section 7.1, no gas-shortage forced sale or liquidation is executable. Gas-shortage custody and invented redemption deadlines remain excluded in all modes. The explicit deferred rollback-gas exception does not waive new-trade gas admission.
 
 Deliverables: Rollback, fee/reconciliation records, recovery flow and Linux fault-injection evidence.
 
@@ -559,7 +559,7 @@ The complete matrix retains T-01 through T-68 with revised semantics and extends
 | T-19 | Return each segment's unreleased principal to its original buyer; show actual gas and net proceeds with explicit units. | EX-GAS-01 / EX-ROLLBACK-03 / EX-SETTLE-06 | 3 |
 | T-20 | Intermediate wallets with zero ordinary ETH do not change recovery duties or require serial wallet-by-wallet NFT return. | EX-ROLLBACK-04 / EX-GAS-07 / EX-GAS-10 | 3 |
 | T-21 | One shared operation must not be charged in full to multiple segments. | EX-GAS-02 | 3 |
-| T-22 | ETH is the sole gas asset. Zero/insufficient/unverified applicable ETH warns and refuses new trading even if price funds suffice; selected-currency shortage also refuses. Original sufficient frozen gas remains usable for its approved recovery without second prepayment or double counting. | EX-GAS-03 | 3 |
+| T-22 | Prepaid-mode freeze/shortage regression; deferred-mode allowance and recovery follow section 7.1, while currency identity and separate new-trade ETH gas checks remain unchanged. ETH is the sole gas asset. Zero/insufficient/unverified applicable ETH warns and refuses new trading even if price funds suffice; selected-currency shortage also refuses. Original sufficient frozen gas remains usable for its approved recovery without second prepayment or double counting. | EX-GAS-03 | 3 |
 | T-23 | Resume crashed rollback without duplicate refunds/gas or revival of failed segments. cancelSettlement is not refund/owner return/registration reversal; enforce recorded initiator and strict protocol deadline independently. Gap closure cannot fabricate refusal or completion. | EX-INV-04 / EX-INV-07 / EX-TIME-03 | 3 |
 | T-24 | Honor mint time units and boundaries; refuse new trades after cutoff; overdue unregistered suffix fails and owner returns to effective holder; preserve registered and settled prefix. | EX-TIME-01 / EX-TIME-02 / EX-TIME-03 | 4 |
 | T-25 | EX transfers the bill of lading without physical collection, transport, warehouse exit or collection-driven burn. Terms remain readable; owner ahead of holder may resell. Authorized atomic holder remint is separately covered by T63-68. | EX-SCOPE-08 / EX-EXIT-01 / EX-INV-08 / EX-SCOPE-12 | 4 |
@@ -594,7 +594,7 @@ The complete matrix retains T-01 through T-68 with revised semantics and extends
 | T-54 | Gas quote confirmation, freeze, debit and unused unfreeze settle in ETH; USD is display only. Refuse PYUSD/WETH/other gas assets, conversion, non-ETH-principal gas deductions and subsidy bypass. Preserve cap/median and consumption idempotence. | EX-GAS-04 / EX-GAS-07 / EX-GAS-08 / EX-GAS-09 / EX-SCOPE-11 | 1 / 2 / 3 / 5 |
 | T-55 | Recheck changed account/chain, concurrent ETH use, invalid freeze, old-signature replay and retries before signing/broadcast. Direct backend calls cannot bypass; prebroadcast refusal cannot invent consumed gas. | EX-GAS-10 / EX-AUTH-02 / EX-AUTH-04 / EX-INV-04 | 1 / 3 / 5 |
 | T-56 | Sufficient original frozen ETH for the same approved rollback obligation remains usable with zero unfrozen cash. No second prepayment, early unfreeze or cancelled rollback. A remaining shortage uses the original confirmed replenishment flow in prepaid mode; deferred rollback may use the explicitly authorized collateral gas-recovery route in section 7.1. | EX-ROLLBACK-04 / EX-GAS-05 / EX-GAS-07 / EX-GAS-08 | 3 / 5 |
-| T-57 | Each order selects one immutable NFT0-allowed currency; both intents and leg freeze/release/refund match it. Wrong currency refuses consistently across three sources and UI/API/Agent, without conversion or substitution. | EX-SCOPE-11 / EX-MINT-07 / EX-MATCH-01 / EX-SETTLE-06 / EX-INV-13 | 1 / 2 / 3 / 5 |
+| T-57 | Prepaid-mode freeze/shortage regression; deferred-mode allowance and recovery follow section 7.1, while currency identity and separate new-trade ETH gas checks remain unchanged. Each order selects one immutable NFT0-allowed currency; both intents and leg freeze/release/refund match it. Wrong currency refuses consistently across three sources and UI/API/Agent, without conversion or substitution. | EX-SCOPE-11 / EX-MINT-07 / EX-MATCH-01 / EX-SETTLE-06 / EX-INV-13 | 1 / 2 / 3 / 5 |
 | T-58 | Absent, conflicting, changed or unverifiable NFT0 currencies or an order without explicit selection refuse. No ETH/PYUSD default or balance-based automatic choice. PYUSD fixtures require mint-time membership and explicit selection. | EX-MINT-07 / EX-SCOPE-11 / EX-DEMO-01 | 1 / 5 |
 | T-59 | When selected principal is ETH, independently cover and account for principal and maximum gas. Refuse coverage of only one or counting the same balance/freeze twice. Reconcile principal refund and unused gas separately without restoring consumed gas. | EX-SETTLE-06 / EX-SETTLE-07 / EX-GAS-07 / EX-GAS-08 / EX-INV-13 | 1 / 2 / 3 |
 | T-60 | Mint-time one-currency and multiple-currency sets are recorded/read correctly. No later UI/API/Agent/contract/admin path can add, remove or replace the same NFT set. Valid remint creates a new NFT while atomically burning the old one. | EX-MINT-07 / EX-SCOPE-11 / EX-INV-13 / EX-REMINT-03 | 1 / 4 / 5 |
