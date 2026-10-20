@@ -20,7 +20,7 @@ EXECUTE = {"taskDigest": "0x" + "a" * 64, "operationId": "synthetic-operation",
 
 
 @contextmanager
-def original_protocol(*, durable_attempts=True):
+def original_protocol(*, durable_attempts=True, client_class=WalletAPIClient, chain_id=11155111):
     state = {"now": NOW, "calls": [], "mode": None}
 
     class Handler(BaseHTTPRequestHandler):
@@ -55,13 +55,13 @@ def original_protocol(*, durable_attempts=True):
                     return
                 state["challenge_count"] = state.get("challenge_count", 0) + 1
                 c = {"origin": state["origin"], "tenant": "synthetic", "account": ACTOR,
-                     "chainId": "11155111", "id": f'{state["challenge_count"]:043d}',
+                     "chainId": str(chain_id), "id": f'{state["challenge_count"]:043d}',
                      "nonce": "syntheticNonce" + str(state["challenge_count"]),
                      "method": "wallet", "issuedAt": NOW, "expiresAt": NOW + 120000}
                 iso = lambda value: datetime.fromtimestamp(value / 1000, timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
                 c["message"] = (f'{c["origin"]} wants you to sign in with your Ethereum account:\n{ACTOR}\n\n'
                     'Log in to 8415wallet to view assets and history. This does not authorize a transaction or standing access.\n\n'
-                    f'URI: {c["origin"]}\nVersion: 1\nChain ID: 11155111\nNonce: {c["nonce"]}\n'
+                    f'URI: {c["origin"]}\nVersion: 1\nChain ID: {chain_id}\nNonce: {c["nonce"]}\n'
                     f'Issued At: {iso(NOW)}\nExpiration Time: {iso(NOW + 120000)}\nResources:\n'
                     f'- urn:8415wallet:tenant:synthetic\n- urn:8415wallet:purpose:login\n- urn:8415wallet:request:{c["id"]}')
                 mode = state["mode"]
@@ -70,7 +70,7 @@ def original_protocol(*, durable_attempts=True):
                 elif mode == "wrong-account":
                     c["account"] = OTHER
                 elif mode == "wrong-chain":
-                    c["chainId"] = "560048"
+                    c["chainId"] = "560048" if chain_id == 11155111 else "11155111"
                 elif mode == "wrong-tenant":
                     c["tenant"] = "other"
                 elif mode == "expired":
@@ -104,7 +104,7 @@ def original_protocol(*, durable_attempts=True):
 
         def session_row(self):
             return {"id": "i" * 43, "tenant": "synthetic", "origin": state["origin"],
-                    "username": "synthetic-user", "account": ACTOR, "chainId": "11155111",
+                    "username": "synthetic-user", "account": ACTOR, "chainId": str(chain_id),
                     "kind": "wallet", "issuedAt": NOW, "expiresAt": NOW + 900000, "csrf": "s" * 43}
 
         def reply(self, row, status=200, cookie=None):
@@ -125,7 +125,7 @@ def original_protocol(*, durable_attempts=True):
     try:
         attempts = (WalletExecutionAttempts(str(Path(attempt_directory.name) / "attempts.sqlite3"))
                     if durable_attempts else None)
-        client = WalletAPIClient(state["origin"], "synthetic", ACTOR, 11155111,
+        client = client_class(state["origin"], "synthetic", ACTOR, chain_id,
                                  clock_ms=lambda: state["now"], allow_loopback_http=True,
                                  execution_attempts=attempts)
         yield client, state
@@ -286,3 +286,41 @@ class WalletAPIClientContracts(unittest.TestCase):
                               ("https://example.invalid/auth", 11155111)):
             with self.subTest(origin=origin, chain=chain), self.assertRaises(WalletAPIRefused):
                 WalletAPIClient(origin, "synthetic", ACTOR, chain)
+
+
+class HoodiDeferredWalletContracts(unittest.TestCase):
+    """Synthetic HTTP plus the unchanged native task path, not chain evidence."""
+
+    def signer(self, message, account, chain):
+        self.assertEqual((account, chain), (ACTOR, "560048"))
+        self.assertIn("Chain ID: 560048\n", message)
+        return "0x" + "1" * 130
+
+    def test_hoodi_original_protocol_rejects_repeat_and_restart_execution(self):
+        from exchange.deferred_wallet_ports import HoodiCollateralWalletClient
+        with original_protocol(client_class=HoodiCollateralWalletClient, chain_id=560048) as (client, state):
+            self.assertEqual(client.login(self.signer), {"authenticated": True, "chainId": "560048"})
+            self.assertEqual(client.task("execute", EXECUTE)["action"], "execute")
+            with self.assertRaises(WalletAPIRefused):
+                client.task("execute", EXECUTE)
+            restarted = HoodiCollateralWalletClient(state["origin"], "synthetic", ACTOR, 560048,
+                clock_ms=lambda: state["now"], allow_loopback_http=True,
+                execution_attempts=WalletExecutionAttempts(client._execution_attempts.path))
+            restarted.login(self.signer)
+            with self.assertRaises(WalletAPIRefused):
+                restarted.task("execute", EXECUTE)
+            self.assertEqual(restarted.task("observe", EXECUTE)["action"], "observe")
+            self.assertEqual(sum(path == "/auth/tasks/execute" for _, path, _ in state["calls"]), 1)
+
+    def test_hoodi_refuses_sepolia_challenge_before_signing(self):
+        from exchange.deferred_wallet_ports import HoodiCollateralWalletClient
+        with original_protocol(client_class=HoodiCollateralWalletClient, chain_id=560048) as (client, state):
+            state["mode"] = "wrong-chain"
+            signer_calls = []
+            def record_signer(*args):
+                signer_calls.append(args)
+                return "0x" + "1" * 130
+            with self.assertRaises(WalletAPIRefused):
+                client.login(record_signer)
+            self.assertEqual(signer_calls, [])
+            self.assertNotIn("proof", state)

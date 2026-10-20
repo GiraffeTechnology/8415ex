@@ -52,6 +52,8 @@ class WalletAPIClient:
     loader, transaction-signer fallback, account provisioning or scope widening.
     Native policy/child construction and atomic execution remain server-owned.
     """
+    _BOUND_CHAIN = "11155111"
+
     _FIELDS = {
         "prepare": {"policy"},
         "authorize": {"challengeId", "taskDigest", "executorDigest", "observationPolicyDigest", "code"},
@@ -74,7 +76,7 @@ class WalletAPIClient:
                 or any(c in origin for c in "\r\n\t")
                 or type(tenant) is not str or not re.fullmatch(r"[a-z][a-z0-9-]{0,47}", tenant)
                 or type(account) is not str or not re.fullmatch(r"0x[0-9a-fA-F]{40}", account)
-                or int(account, 16) == 0 or str(chain_id) != "11155111"
+                or int(account, 16) == 0 or str(chain_id) != self._BOUND_CHAIN
                 or type(timeout_seconds) not in (int, float) or not 0 < timeout_seconds <= 30):
             raise WalletAPIRefused("EX_WALLET_BINDING_REFUSED")
         self._origin, self._tenant = origin, tenant
