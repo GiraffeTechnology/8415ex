@@ -617,6 +617,7 @@ class DeferredSettlement:
     def public_status(self, obligation_id):
         """Identity-free data for existing UI; not authorization to read it."""
         item = self.obligations[obligation_id]
+        lock = self.locks[item.lock]
         state = ("ROLLED_BACK" if item.rollback_confirmed else "SETTLED" if item.resolved else
                  "ROLLBACK_PENDING" if item.rollback else "UNSETTLED")
         return {"schema": "8415ex-deferred-status/1", "state": state,
@@ -630,7 +631,10 @@ class DeferredSettlement:
                 "paidUnits": item.paid, "escrowUnits": item.escrow,
                 "shortfallUnits": 0 if item.rollback else max(0, item.due - item.escrow),
                 "settlementDeadline": item.deadline,
-                "collateralUnits": item.collateral_remaining,
+                "collateralUnits": 0 if item.resolved or lock.released else item.collateral_remaining,
+                "recordedCollateralAllocationUnits": item.collateral_remaining,
+                "collateralLockState": "RELEASED" if lock.released else
+                                       "RELEASE_PENDING" if lock.release_pending else "LOCKED",
                 "sourceExposurePending": any(op.obligation == obligation_id for op in self._source_pending(item.lock)),
                 "operations": [{"kind": op.kind, "status": op.status} for op in self.operations.values()
                                if op.obligation == obligation_id]}

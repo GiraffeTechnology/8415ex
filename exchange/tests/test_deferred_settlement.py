@@ -488,3 +488,31 @@ class DeferredTests(unittest.TestCase):
         self.engine.observe_gas_requirement("ab", gas, now=200)
         self.complete(self.engine.prepare("return", "ab", kind="rollback", now=200))
         self.assertEqual(self.engine.public_status("ab")["debtStatus"], "CANCELLED_BY_ROLLBACK")
+
+    def test_projection_separates_recorded_allocation_from_live_collateral(self):
+        self.reserve(); self.credit(800); self.register()
+        self.assertEqual(self.engine.public_status("ab")["collateralUnits"], 80)
+        self.complete(self.engine.prepare("pay", "ab", kind="seller-payment", now=150))
+        settled = self.engine.public_status("ab")
+        self.assertEqual(settled["collateralUnits"], 0)
+        self.assertEqual(settled["recordedCollateralAllocationUnits"], 80)
+        self.assertEqual(settled["collateralLockState"], "LOCKED")
+        self.complete(self.engine.prepare("unlock", "ab", kind="collateral-unlock", now=200))
+        released = self.engine.public_status("ab")
+        self.assertEqual(released["collateralUnits"], 0)
+        self.assertEqual(released["recordedCollateralAllocationUnits"], 80)
+        self.assertEqual(released["collateralLockState"], "RELEASED")
+        self.assertEqual(self.engine.obligations["ab"].collateral_remaining, 80)
+
+    def test_settled_projection_does_not_hide_unknown_source_exposure(self):
+        self.reserve(); self.register()
+        sale = self.engine.prepare("sale", "ab", kind="debt-liquidation", now=200,
+                                   liquidation_quote=self.quote("debt-liquidation", 800))
+        self.complete(sale)
+        self.complete(self.engine.prepare("pay", "ab", kind="seller-payment", now=200))
+        projection = self.engine.public_status("ab")
+        self.assertEqual(projection["collateralUnits"], 0)
+        self.assertTrue(projection["sourceExposurePending"])
+        self.assertEqual(projection["collateralLockState"], "LOCKED")
+        with self.assertRaises(DeferredRefused):
+            self.engine.prepare("unlock", "ab", kind="collateral-unlock", now=200)

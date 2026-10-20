@@ -96,6 +96,19 @@ class DeferredWalletPorts:
         client, binding = self._bound(operation)
         return client.task("execute", binding.payload())
 
+    def prepare_original(self, operation):
+        """Read-only resolution, before the durable UNKNOWN dispatch claim."""
+        if not isinstance(operation, Operation) or operation.status != "PREPARED":
+            raise DeferredRefused("prepared deferred operation required")
+        client, binding = self._bound(operation)
+        identity, commitment = operation.identity, operation.commitment
+        def execute_bound(claimed):
+            if (not isinstance(claimed, Operation) or claimed.status != "UNKNOWN"
+                    or claimed.identity != identity or claimed.commitment != commitment):
+                raise DeferredRefused("original dispatch claim changed")
+            return client.task("execute", binding.payload())
+        return execute_bound
+
     def observe_original(self, operation):
         client, binding = self._bound(operation)
         return client.task("observe", binding.payload())

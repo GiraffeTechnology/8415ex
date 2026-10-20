@@ -97,3 +97,19 @@ class DeferredWalletPortTests(unittest.TestCase):
         self.hoodi._execution_attempts = None
         with self.assertRaises(DeferredRefused):
             DeferredWalletPorts(self.profile, self.sepolia, self.hoodi, self.binding)
+
+    def test_preflight_resolves_without_dispatch_and_binds_claim(self):
+        prepared = replace(self.operation("seller-payment"), status="PREPARED")
+        execute = self.ports.prepare_original(prepared)
+        self.assertEqual(self.sepolia.calls + self.hoodi.calls, [])
+        with self.assertRaises(DeferredRefused):
+            execute(replace(prepared, status="UNKNOWN", commitment="0x" + "e" * 64))
+        self.assertEqual(self.sepolia.calls + self.hoodi.calls, [])
+        execute(replace(prepared, status="UNKNOWN"))
+        self.assertEqual(len(self.sepolia.calls), 1)
+
+    def test_missing_binding_is_detected_by_read_only_preflight(self):
+        ports = DeferredWalletPorts(self.profile, self.sepolia, self.hoodi, lambda op: None)
+        with self.assertRaises(DeferredRefused):
+            ports.prepare_original(replace(self.operation("gas-liquidation"), status="PREPARED"))
+        self.assertEqual(self.sepolia.calls + self.hoodi.calls, [])

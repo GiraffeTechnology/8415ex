@@ -64,10 +64,27 @@ class DeferredCheckpoint:
                                 immutable_components=tuple(k for k in components if k != self.COMPONENT))
         return {"generation": saved["generation"], "result": deepcopy(value), "dispatched": False}
 
-    def dispatch_once(self, operation_id, execute_original, *, expected_generation):
-        if not callable(execute_original):
-            raise DeferredRefused("original bounded execution port required")
-        # Persist UNKNOWN before any callback. A stale contender cannot dispatch.
+    def dispatch_once(self, operation_id, execution_port, *, expected_generation):
+        prepare_original = getattr(execution_port, "prepare_original", None)
+        if not callable(prepare_original):
+            raise DeferredRefused("original read-only execution preflight required")
+        row, model = self.read()
+        if type(expected_generation) is not int or expected_generation != row["generation"]:
+            raise DeferredRefused("stale deferred generation")
+        operation = model.operations.get(operation_id)
+        if operation is None or operation.status != "PREPARED":
+            raise DeferredRefused("prepared original operation required")
+        # This trusted port only resolves an existing route and authorized child.
+        # It must not sign, send, reserve funds or change external state.
+        try:
+            execute_original = prepare_original(deepcopy(operation))
+            if not callable(execute_original):
+                raise DeferredRefused("original route unavailable")
+        except Exception:
+            return {"generation": row["generation"], "status": "BLOCKED_NOT_DISPATCHED",
+                    "dispatched": False}
+        # Persist UNKNOWN before execution. CAS also catches changes during the
+        # read-only preflight; no prepared callback runs after a failed save.
         prepared = self.apply("mark_dispatched", operation_id, expected_generation=expected_generation)
         operation = prepared["result"]
         try:

@@ -12,6 +12,15 @@ from exchange.ids import canonical_json, digest
 from exchange.tests import test_deferred_settlement as fixture_module
 
 
+class SyntheticPort:
+    """Test-only preflight; no real route or financial execution."""
+    def __init__(self, execute):
+        self.execute = execute
+
+    def prepare_original(self, operation):
+        return self.execute
+
+
 class DeferredCheckpointTests(unittest.TestCase):
     def setUp(self):
         self.fixture = fixture_module.DeferredTests()
@@ -56,7 +65,7 @@ class DeferredCheckpointTests(unittest.TestCase):
         self.payment()
         calls = []
         with self.assertRaises(DeferredRefused):
-            self.service.dispatch_once("pay", calls.append, expected_generation=1)
+            self.service.dispatch_once("pay", SyntheticPort(calls.append), expected_generation=1)
         self.assertEqual(calls, [])
         self.assertEqual(self.service.read()[1].operations["pay"].status, "PREPARED")
 
@@ -67,17 +76,17 @@ class DeferredCheckpointTests(unittest.TestCase):
             self.assertEqual(self.service.read()[1].operations["pay"].status, "UNKNOWN")
             calls.append(op.identity)
             raise TimeoutError("synthetic transport failure")
-        result = self.service.dispatch_once("pay", uncertain, expected_generation=prepared["generation"])
+        result = self.service.dispatch_once("pay", SyntheticPort(uncertain), expected_generation=prepared["generation"])
         self.assertEqual(result["status"], "UNKNOWN")
         restarted = DeferredCheckpoint(self.store, "case", self.fixture.profile, self.fixture.verifier)
         with self.assertRaises(DeferredRefused):
-            restarted.dispatch_once("pay", calls.append, expected_generation=result["generation"])
+            restarted.dispatch_once("pay", SyntheticPort(calls.append), expected_generation=result["generation"])
         self.assertEqual(calls, ["pay"])
         self.assertEqual(restarted.read()[1].obligations["ab"].paid, 0)
 
     def test_untrusted_executor_response_is_not_payment_confirmation(self):
         prepared = self.payment()
-        self.service.dispatch_once("pay", lambda op: {"success": True}, expected_generation=prepared["generation"])
+        self.service.dispatch_once("pay", SyntheticPort(lambda op: {"success": True}), expected_generation=prepared["generation"])
         model = self.service.read()[1]
         self.assertEqual(model.operations["pay"].status, "UNKNOWN")
         self.assertEqual(model.obligations["ab"].paid, 0)
@@ -118,12 +127,12 @@ class DeferredCheckpointTests(unittest.TestCase):
         calls = []
         with patch.object(self.store, "save", side_effect=uncertain):
             with self.assertRaises(CheckpointCommitUnknown):
-                self.service.dispatch_once("pay", calls.append, expected_generation=prepared["generation"])
+                self.service.dispatch_once("pay", SyntheticPort(calls.append), expected_generation=prepared["generation"])
         self.assertEqual(calls, [])
         row, model = self.service.read()
         self.assertEqual(model.operations["pay"].status, "UNKNOWN")
         with self.assertRaises(DeferredRefused):
-            self.service.dispatch_once("pay", calls.append, expected_generation=row["generation"])
+            self.service.dispatch_once("pay", SyntheticPort(calls.append), expected_generation=row["generation"])
         self.assertEqual(calls, [])
 
     def test_failure_before_save_does_not_dispatch_or_change_prepared_state(self):
@@ -132,10 +141,46 @@ class DeferredCheckpointTests(unittest.TestCase):
         calls = []
         with patch.object(self.store, "save", side_effect=CheckpointRefused("synthetic refusal")):
             with self.assertRaises(CheckpointRefused):
-                self.service.dispatch_once("pay", calls.append, expected_generation=prepared["generation"])
+                self.service.dispatch_once("pay", SyntheticPort(calls.append), expected_generation=prepared["generation"])
         self.assertEqual(calls, [])
         self.assertEqual(self.service.read()[1].operations["pay"].status, "PREPARED")
 
     def test_same_profile_cannot_use_another_ledger_scope_to_replay_capacity(self):
         with self.assertRaises(DeferredRefused):
             DeferredCheckpoint(self.store, "another-case", self.fixture.profile, self.fixture.verifier)
+
+    def test_missing_route_stays_prepared_without_claim_or_dispatch(self):
+        prepared = self.payment()
+        before = self.service.read()[0]
+        class MissingRoute:
+            def prepare_original(self, operation):
+                raise DeferredRefused("synthetic missing route")
+        result = self.service.dispatch_once("pay", MissingRoute(), expected_generation=prepared["generation"])
+        self.assertEqual(result, {"generation": prepared["generation"], "status": "BLOCKED_NOT_DISPATCHED", "dispatched": False})
+        after, model = self.service.read()
+        self.assertEqual(after, before)
+        self.assertEqual(model.operations["pay"].status, "PREPARED")
+        calls = []
+        self.service.dispatch_once("pay", SyntheticPort(calls.append), expected_generation=prepared["generation"])
+        self.assertEqual(len(calls), 1)
+
+    def test_legacy_callback_cannot_accidentally_execute_during_preflight(self):
+        prepared = self.payment()
+        calls = []
+        with self.assertRaises(DeferredRefused):
+            self.service.dispatch_once("pay", calls.append, expected_generation=prepared["generation"])
+        self.assertEqual(calls, [])
+        self.assertEqual(self.service.read()[1].operations["pay"].status, "PREPARED")
+
+    def test_competing_change_during_read_only_preflight_blocks_execution(self):
+        prepared = self.payment()
+        calls = []
+        service = self.service
+        class ChangedRoute:
+            def prepare_original(inner, operation):
+                row = service.read()[0]
+                service.store.save("case", row["components"], expected_generation=row["generation"])
+                return calls.append
+        with self.assertRaises(DeferredRefused):
+            self.service.dispatch_once("pay", ChangedRoute(), expected_generation=prepared["generation"])
+        self.assertEqual(calls, [])
