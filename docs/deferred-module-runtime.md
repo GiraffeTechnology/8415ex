@@ -12,6 +12,12 @@ Implemented state distinctions include registration-first debt without NFT rollb
 
 The existing UI is unchanged. Its later wiring must use private state projections without publishing wallet identifiers or diagnostics. Original receipt transfer/rollback authority, actual trusted proof implementations, original vault/native operation composition, UI wiring, real Hoodi lock and Sepolia receipts remain separate integration work. The tests use explicitly synthetic facts and file-backed local fixtures in CI. They do not constitute a production verifier or live financial execution.
 
+## Commercial-policy revision (2026-10-20)
+
+The current PRD distinguishes source-chain collateral from destination USD allowance; an asset bridge is not mandatory. The upfront ETH settlement fee covers normal-process gas, excluding contingent liquidation gas. EX pays contingent liquidation gas first and charges B an additional penalty deducted from liquidated collateral. B's later ETH balance is not a liquidation prerequisite. Native chain fees and destination settlement evidence remain distinct.
+
+This document describes the existing source increment, not completed implementation of that revised commercial policy. The legacy gas-recovery states described below must not be wired as a mandatory sale-to-gas prerequisite or as a substitute for the revised fee/penalty accounting. Actual fee receipt/allocation, EX-funded liquidation and penalty reconciliation need implementation and exact-source acceptance. Previous model/CI results do not certify those new assertions. Preserve the V1.5 isolation/no-main-merge hold.
+
 ## Recovery refinements
 
 Deadline processing requires an authenticated original Oracle cut as of the settlement deadline before classifying an unobserved registration as absent. Missing evidence returns REGISTRATION_RECONCILIATION_REQUIRED and does not open a rollback dispatch. A timely cut received late cancels only unsent recovery preparations; conflicting already-dispatched recovery stays a reconciliation error rather than silently rewriting effects.

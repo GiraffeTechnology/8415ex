@@ -12,11 +12,11 @@ import sys
 
 VERSION = "1.5"
 CURRENT_COMPLETE_VERSION = "1.5"
-CURRENT_PUBLICATION = (109552, "ccd62e64ce7fbb450c4cb1a6dfe8b9254e1dd9f60530f4c3889935898e25f275")
+CURRENT_PUBLICATION = (114065, "e5124bb30d408ae6ce8bcaba7c1ba6d14eda2a461c25e0c9c7202410278856c6")
 PINNED = {
     "prd": CURRENT_PUBLICATION,
-    "executionPlan": (110272, "fe792b2a4d33ebb4070c3456335b5a6fcefc38ff34ad67e950e8e7474b5ada0f"),
-    "deferredModule": (8237, "4a6570d7690336c449b60f5e5b7e15e1a52a923a516d2efbbff97012c8e66553"),
+    "executionPlan": (113973, "9bb578a2f5f6d664441025b77ecb36ef100fcee84ba043055f54481a860d180d"),
+    "deferredModule": (11512, "17a8f0407907c135b9d71cc0eb8d3e5f5c4559f1e9845792e408f11091ff9b45"),
 }
 RETIRED_IDS = frozenset({
     "physical-collection", "late-receipt-wait", "post-registration-payment",
@@ -155,4 +155,3 @@ def main(argv=None):
 
 if __name__ == "__main__":
     sys.exit(main())
-

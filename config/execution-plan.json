@@ -53,7 +53,7 @@
     },
     {
       "id": "EX-SCOPE-06",
-      "rule": "The buyer pays its transaction gas and assigned rollback gas in ETH only. Warn and refuse a new trade when ETH is absent or insufficient. Agent service fees remain a separate later decision.",
+      "rule": "The buyer funds its transaction and assigned normal rollback gas in ETH. Refuse new trading when the required ETH funding is insufficient. In deferred mode, section 7.1 collects normal-process gas within the upfront ETH settlement fee; contingent liquidation gas is paid first by EX and the additional liquidation penalty is deducted from collateral. Unrelated Agent service fees remain a separate later decision.",
       "status": "CONFIRMED"
     },
     {
@@ -348,7 +348,7 @@
     },
     {
       "id": "EX-GAS-03",
-      "rule": "ETH is the sole gas settlement asset. Refuse a new trade if ETH is absent or insufficient after reservations; principal and gas balances cannot substitute for one another. Deferred-mode rollback may liquidate the borrower's collateral to cover a verified recovery-gas shortfall, without waiving the original new-trade gate or inventing a custody/redemption deadline.",
+      "rule": "ETH is the EX gas settlement asset. Refuse a new trade if required ETH funding is absent or insufficient after disjoint effective reservations; principal and collateral allowance cannot substitute for gas. In deferred mode count the confirmed normal-process gas allocation within the upfront ETH settlement fee, without a duplicate prepayment. EX funds contingent liquidation gas under section 7.1; do not make liquidation depend on B replenishing ETH or first liquidating collateral to obtain execution gas.",
       "status": "CONFIRMED"
     },
     {
@@ -378,12 +378,12 @@
     },
     {
       "id": "EX-GAS-09",
-      "rule": "ETH is the sole gas settlement asset. USD is disclosure only; PYUSD, WETH or other assets cannot pay gas. No automatic exchange, non-ETH-principal gas deduction or platform/third-party subsidy bypass.",
+      "rule": "ETH is the EX gas settlement asset; USD display values and PYUSD/WETH principal are not native gas. Preserve prepaid-mode prohibitions on automatic principal conversion and subsidy bypass. Section 7.1 specifically permits EX to pay contingent liquidation gas and charge the agreed collateral-deducted penalty; it does not waive upfront normal-process ETH admission. Source-chain native transaction fees remain chain-specific, including BTC on Bitcoin and Hoodi ETH on Hoodi.",
       "status": "CONFIRMED"
     },
     {
       "id": "EX-GAS-10",
-      "rule": "Zero ETH warns and refuses new trading before signing, execution and broadcast. Available ETH below the confirmed maximum freeze also refuses. UI, API, Agent and retry paths cannot bypass this check.",
+      "rule": "Refuse new trading before signing, execution or broadcast when effective approved ETH funding is below the confirmed normal-process requirement. Count disjoint valid prepaid funding, including the deferred settlement-fee gas allocation, not only B's current free balance. UI, API, Agent and retry paths cannot bypass admission. This gate does not require a fresh B payment for EX-funded contingent liquidation under section 7.1.",
       "status": "CONFIRMED"
     },
     {
@@ -588,7 +588,7 @@
     },
     {
       "id": "EX-DEFER-02",
-      "rule": "Accept BTC/ETH as product collateral; test only Hoodi ETH collateral with Sepolia PYUSD principal and Sepolia ETH gas. Hoodi operations need separately accounted Hoodi gas. No unimplemented Bitcoin custody or cross-chain bridge is inferred.",
+      "rule": "Accept BTC/ETH as collateral. Production BTC stays on Bitcoin; Ethereum records verified collateral-backed USD allowance and performs NFT/stablecoin settlement. An asset bridge or wrapped BTC is not mandatory. Verify source facts through the authorized evidence path; an agreed disposal/settlement counterparty may deliver destination USD proceeds without moving BTC across chains. Test Hoodi ETH collateral, Sepolia PYUSD principal and Sepolia ETH gas; keep Hoodi native gas separate. No provider, liquidity or custody capability is inferred.",
       "status": "CONFIRMED"
     },
     {
@@ -623,12 +623,12 @@
     },
     {
       "id": "EX-DEFER-09",
-      "rule": "When B cannot fund gas needed for eligible rollback, allow collateral liquidation to cover that verified gas shortfall. Keep debt principal, fee, Sepolia recovery gas, Hoodi execution gas and residual collateral separate; do not treat Hoodi ETH as Sepolia gas.",
+      "rule": "Collect the agreed settlement fee upfront in ETH when accepting collateral; it includes normal-process gas, but must NOT reserve contingent liquidation gas. Confirm sufficient received and allocated normal-process funding before admission, without substituting collateral allowance for fees or charging included gas twice. If liquidation is needed, 8415EX pays its execution gas upfront, then charges B an additional liquidation penalty deducted from the liquidated collateral assets. Liquidation must not depend on B holding fresh ETH at that time. Record debt, normal fee/gas, EX-paid liquidation costs, penalty and residual collateral separately. Do not invent a penalty rate, repayment priority or double recovery.",
       "status": "CONFIRMED"
     },
     {
       "id": "EX-DEFER-10",
-      "rule": "Liquidation request, source execution and destination receipt are distinct. Only verified destination PYUSD satisfies seller-payment funds; only verified destination ETH satisfies recovery-gas funding. Missing liquidity/provider, partial proceeds or unknown outcome remain unresolved, never fabricated conversion.",
+      "rule": "Liquidation request, source execution, penalty deduction and destination receipt are distinct evidence-backed events. Only verified destination USD stablecoin receipts satisfy seller-payment funds. EX-funded liquidation execution is not conditional on first receiving liquidation proceeds or a new ETH payment from B. Custody/disposal and destination-liquidity arrangements are commercial execution inputs, not a mandatory asset bridge. Missing actual execution capability, partial proceeds or unknown outcomes remain unresolved; never fabricate conversion or payment.",
       "status": "CONFIRMED"
     },
     {
@@ -638,7 +638,7 @@
     },
     {
       "id": "EX-DEFER-12",
-      "rule": "Reuse existing UI rather than create a duplicate. Bind implementation, exact-head CI and main merge to the module contract before downstream wiring/testing/deployment acceptance. Report simulation, CI, actual cross-chain and served acceptance separately.",
+      "rule": "Reuse existing UI rather than create a duplicate. Keep the complete V1.5 branch isolated; even successful exact-head CI does not authorize a main merge or interference with V1.4 acceptance. Bind subsequent authorized wiring/testing/deployment to the exact version and module contract. Report simulation, CI, actual source/destination evidence and served acceptance separately.",
       "status": "CONFIRMED"
     }
   ],
@@ -1542,7 +1542,7 @@
         3,
         5
       ],
-      "assertion": "Gas quote confirmation, freeze, debit and unused unfreeze settle in ETH; USD is display only. Refuse PYUSD/WETH/other gas assets, conversion, non-ETH-principal gas deductions and subsidy bypass. Preserve cap/median and consumption idempotence.",
+      "assertion": "Prepaid-mode gas quote confirmation, freeze, debit and unused unfreeze settle in ETH; USD is display only. Refuse PYUSD/WETH principal substitution and unauthorized subsidy. Preserve cap/median and idempotence. In deferred mode verify upfront ETH normal-process allocation and no duplicate gas charge; keep the explicit EX-funded liquidation exception separate.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -1581,7 +1581,7 @@
         3,
         5
       ],
-      "assertion": "Sufficient original frozen ETH for the same approved rollback obligation remains usable with zero unfrozen cash. No second prepayment, early unfreeze or cancelled rollback. A remaining shortage uses the original confirmed replenishment flow in prepaid mode; deferred rollback may use the explicitly authorized collateral gas-recovery route in section 7.1.",
+      "assertion": "Sufficient original frozen ETH for the same approved rollback obligation remains usable with zero unfrozen cash. No second prepayment, early unfreeze or cancelled rollback. Prepaid shortages retain the original replenishment flow. Deferred normal-process gas uses its confirmed upfront settlement-fee allocation; contingent liquidation is funded by EX and does not await B's free ETH balance or liquidation proceeds.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -2127,7 +2127,7 @@
         1,
         5
       ],
-      "assertion": "Accept BTC/ETH as product collateral; test only Hoodi ETH collateral with Sepolia PYUSD principal and Sepolia ETH gas. Hoodi operations need separately accounted Hoodi gas. No unimplemented Bitcoin custody or cross-chain bridge is inferred.",
+      "assertion": "Accept BTC/ETH as collateral. Production BTC stays on Bitcoin; Ethereum records verified collateral-backed USD allowance and performs NFT/stablecoin settlement. An asset bridge or wrapped BTC is not mandatory. Verify source facts through the authorized evidence path; an agreed disposal/settlement counterparty may deliver destination USD proceeds without moving BTC across chains. Test Hoodi ETH collateral, Sepolia PYUSD principal and Sepolia ETH gas; keep Hoodi native gas separate. No provider, liquidity or custody capability is inferred.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -2239,7 +2239,7 @@
         1,
         5
       ],
-      "assertion": "When B cannot fund gas needed for eligible rollback, allow collateral liquidation to cover that verified gas shortfall. Keep debt principal, fee, Sepolia recovery gas, Hoodi execution gas and residual collateral separate; do not treat Hoodi ETH as Sepolia gas.",
+      "assertion": "Collect the agreed settlement fee upfront in ETH when accepting collateral; it includes normal-process gas, but must NOT reserve contingent liquidation gas. Confirm sufficient received and allocated normal-process funding before admission, without substituting collateral allowance for fees or charging included gas twice. If liquidation is needed, 8415EX pays its execution gas upfront, then charges B an additional liquidation penalty deducted from the liquidated collateral assets. Liquidation must not depend on B holding fresh ETH at that time. Record debt, normal fee/gas, EX-paid liquidation costs, penalty and residual collateral separately. Do not invent a penalty rate, repayment priority or double recovery.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -2255,7 +2255,7 @@
         1,
         5
       ],
-      "assertion": "Liquidation request, source execution and destination receipt are distinct. Only verified destination PYUSD satisfies seller-payment funds; only verified destination ETH satisfies recovery-gas funding. Missing liquidity/provider, partial proceeds or unknown outcome remain unresolved, never fabricated conversion.",
+      "assertion": "Liquidation request, source execution, penalty deduction and destination receipt are distinct evidence-backed events. Only verified destination USD stablecoin receipts satisfy seller-payment funds. EX-funded liquidation execution is not conditional on first receiving liquidation proceeds or a new ETH payment from B. Custody/disposal and destination-liquidity arrangements are commercial execution inputs, not a mandatory asset bridge. Missing actual execution capability, partial proceeds or unknown outcomes remain unresolved; never fabricate conversion or payment.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -2287,7 +2287,7 @@
         1,
         5
       ],
-      "assertion": "Reuse existing UI rather than create a duplicate. Bind implementation, exact-head CI and main merge to the module contract before downstream wiring/testing/deployment acceptance. Report simulation, CI, actual cross-chain and served acceptance separately.",
+      "assertion": "Reuse existing UI rather than create a duplicate. Keep the complete V1.5 branch isolated; even successful exact-head CI does not authorize a main merge or interference with V1.4 acceptance. Bind subsequent authorized wiring/testing/deployment to the exact version and module contract. Report simulation, CI, actual source/destination evidence and served acceptance separately.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -2436,7 +2436,7 @@
         "Recover interruption, retries, obsolete/duplicate events, insufficient budget and unknown results; do not invent late-receipt waits.",
         "Re-trade valid unexpired assets from recovered owner=holder; ordinary resale still permits owner ahead of holder.",
         "Integrate gas statistical disclosure, confirmation/cap, maximum prefreeze, actual debit, unused unfreeze and reconfirmed top-up; D-04 allocation only remains pending.",
-        "Outside section 7.1 deferred gas-recovery liquidation: No gas-shortage custody, redemption deadline, forced sale or liquidation.",
+        "Outside section 7.1 agreed deferred liquidation: No gas-shortage custody, invented redemption deadline or forced sale. Deferred normal gas is prepaid; contingent liquidation is EX-funded, with a collateral-deducted penalty.",
         "For the explicit deferred mode, insufficient borrower rollback gas may be funded by collateral liquidation with confirmed destination ETH; preserve registered prefix and unresolved effects."
       ],
       "deliverables": "Rollback, fee/reconciliation records, recovery flow and Linux fault-injection evidence.",
@@ -2608,7 +2608,7 @@
     {
       "id": "D-14",
       "status": "PARTLY_CONFIRMED",
-      "rule": "Crypto and warehouse-NFT choices remain. Section 7.1 confirms optional BTC/ETH-backed deferred stablecoin settlement, deadline debt liquidation and rollback-gas recovery, without EX lending. Exact ratio, valuation/finality/provider and fee parameters must be explicitly configured; no invented defaults or returns.",
+      "rule": "Crypto and warehouse-NFT choices remain. Section 7.1 confirms optional BTC/ETH-backed deferred stablecoin settlement, deadline debt liquidation, upfront ETH normal-process fees and EX-funded contingent liquidation with a collateral-deducted penalty, without EX lending. Exact ratio, valuation/finality/provider and fee parameters must be explicitly configured; no invented defaults or returns.",
       "blocks": "Only unsupplied dependent mechanisms; do not block independent spot/UI work."
     },
     {
@@ -2784,7 +2784,7 @@
     },
     {
       "id": "forced-custody",
-      "requirement": "Gas-shortage custody and invented timed redemption in all modes; forced sale or liquidation outside the explicitly authorized section 7.1 deferred debt/gas recovery paths",
+      "requirement": "Gas-shortage custody and invented timed redemption in all modes; forced sale or liquidation outside the expressly authorized section 7.1 deferred liquidation remedy",
       "references": [
         "T-22",
         "EX-GAS-03"
@@ -2823,16 +2823,19 @@
       "name": "Hoodi",
       "chainId": 560048,
       "role": "deferred collateral only"
-    }
+    },
+    "mergeHold": true,
+    "implementationBranch": "V1.5",
+    "commercialRevision": "2026-10-20: upfront normal gas; EX-funded contingent liquidation; collateral-deducted penalty; no mandatory asset bridge"
   },
   "source": {
     "path": "PRD.md",
-    "bytes": 109552,
-    "sha256": "ccd62e64ce7fbb450c4cb1a6dfe8b9254e1dd9f60530f4c3889935898e25f275"
+    "bytes": 114065,
+    "sha256": "e5124bb30d408ae6ce8bcaba7c1ba6d14eda2a461c25e0c9c7202410278856c6"
   },
   "moduleSource": {
     "path": "docs/cross-chain-deferred-settlement.md",
-    "bytes": 8237,
-    "sha256": "4a6570d7690336c449b60f5e5b7e15e1a52a923a516d2efbbff97012c8e66553"
+    "bytes": 11512,
+    "sha256": "17a8f0407907c135b9d71cc0eb8d3e5f5c4559f1e9845792e408f11091ff9b45"
   }
 }
