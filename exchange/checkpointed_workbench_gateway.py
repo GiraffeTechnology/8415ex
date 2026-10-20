@@ -5,7 +5,8 @@ import json
 import re
 
 from .checkpointed_operation import CheckpointedOperationBridge
-from .durable_operation import DurableEXOperationJournal, _scope
+from .durable_operation import (DurableEXOperationJournal, DurableOperationCommitUnknown,
+                                DurableNativeOutcomeUnknown, _scope)
 from .public_workbench import command_result
 from .workbench import ACTIONS
 
@@ -15,6 +16,10 @@ class WorkbenchGatewayRefused(ValueError):
 
 
 class WorkbenchBindingCommitUnknown(OSError):
+    pass
+
+
+class WorkbenchOperationUnknown(OSError):
     pass
 
 
@@ -145,6 +150,8 @@ class CheckpointedWorkbenchGateway:
             if scope is None:
                 return None
             result = self.bridge.journal.observe(scope, self.enquire_original)
+            if action == "reconcile-payment":
+                return command_result(result["nativeObservation"])
             if result["localClaim"] is None and result["nativeObservation"] is None:
                 # A crash between correlation commit and claim is pre-effect.
                 # The same request may continue through original invoke_once;
@@ -166,9 +173,19 @@ class CheckpointedWorkbenchGateway:
                 if (scope["receiptId"] != context["receiptId"]
                         or scope["action"] not in NATIVE_ACTIONS[action]):
                     raise WorkbenchGatewayRefused("original native command mapping conflicts")
-                scope = self._bind(context, scope)
-            result = self.bridge.invoke(scope,
-                expected_operation_revision=self.bridge.journal.revision(scope["receiptId"]),
-                enquire_original=self.enquire_original,
-                execute_original=self.execute_original)
+                if action != "reconcile-payment":
+                    scope = self._bind(context, scope)
+            if action == "reconcile-payment":
+                # A fresh enquiry key is never authority to claim or execute.
+                observed = self.bridge.journal.observe(scope, self.enquire_original)
+                return command_result(observed["nativeObservation"])
+            try:
+                result = self.bridge.invoke(scope,
+                    expected_operation_revision=self.bridge.journal.revision(scope["receiptId"]),
+                    enquire_original=self.enquire_original,
+                    execute_original=self.execute_original)
+            except (DurableOperationCommitUnknown, DurableNativeOutcomeUnknown) as error:
+                # Preserve the original claim and expose only the transport
+                # contract for uncertainty; never turn it into native absence.
+                raise WorkbenchOperationUnknown("Original operation outcome unknown") from error
             return command_result(result["operation"]["nativeObservation"])
