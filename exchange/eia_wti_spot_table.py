@@ -8,7 +8,7 @@ SOURCE_URL = "https://www.eia.gov/dnav/pet/hist/RWTCD.htm"
 TITLE = "Cushing, OK WTI Spot Price FOB (Dollars per Barrel)"
 SCOPE = {
     "provider": "U.S. Energy Information Administration",
-    "series": "RWTC.D",
+    "series": "PET.RWTC.D",
     "commodity": "crude-oil",
     "spec": "WTI",
     "market": "Cushing, Oklahoma; FOB",
