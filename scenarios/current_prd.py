@@ -10,12 +10,12 @@ import json
 import pathlib
 import sys
 
-VERSION = "1.4"
-CURRENT_COMPLETE_VERSION = "1.4"
-CURRENT_PUBLICATION = (97728, "b3989a91f1d3f7a1de6812fa05777d0dfdf84a4eee4a7909bdda77d1196032ce")
+VERSION = "1.5"
+CURRENT_COMPLETE_VERSION = "1.5"
+CURRENT_PUBLICATION = (108643, "0f18b0914c46679b17be3d03a07f265c7cb4d1c3fb488e85b6503657622c666c")
 PINNED = {
     "prd": CURRENT_PUBLICATION,
-    "executionPlan": (94921, "77678d33c7a06b1c2b8bcd2f25a540273e3b7e5b7852589e89ae2f76b5efdb39"),
+    "executionPlan": (108263, "99f39fa7ff0870155b2e857d9cd8d347fa78bd8ff1c953896852885732ebcb81"),
 }
 RETIRED_IDS = frozenset({
     "physical-collection", "late-receipt-wait", "post-registration-payment",
@@ -61,7 +61,7 @@ def load(root=None):
     if plan.get("schema") != "8415ex-execution-plan/1" or plan.get("version") != VERSION:
         raise ValueError("execution plan is from a different PRD version")
     for key, expected in (
-        ("cases", {"T-%02d" % n for n in range(1, 85)}),
+        ("cases", {"T-%02d" % n for n in range(1, 97)}),
         ("decisions", {"D-%02d" % n for n in range(1, 17)}),
         ("demonstrations", set(LEGACY_DEMOS)), ("stages", set(range(6))),
     ):
@@ -71,7 +71,7 @@ def load(root=None):
     if plan["sections"] != list(range(1, 22)):
         raise ValueError("the full 21-section contract is required")
     declared = [entry["id"] for entry in plan["requirements"]]
-    if len(declared) != 111 or len(declared) != len(set(declared)):
+    if len(declared) != 123 or len(declared) != len(set(declared)):
         raise ValueError("incomplete or duplicated requirement ledger")
     if any(not set(case["requirementIds"]) <= set(declared) for case in plan["cases"]):
         raise ValueError("case refers to undeclared requirement")
@@ -120,7 +120,7 @@ def require_current_scenario(scenario_id, revision=None):
     load()
     if scenario_id in LEGACY_DEMOS and revision != CURRENT_COMPLETE_VERSION:
         raise ValueError("PRD_MIGRATION_REQUIRED: " + scenario_id
-                         + " requires migration against the complete current v1.4 contract; "
+                         + " requires migration against the complete current v1.5 contract; "
                          "requirements metadata alone cannot migrate an executable scenario. "
                          "No legacy collection/burn/payment/grace step was executed.")
 
@@ -131,7 +131,7 @@ def blocked(command, root=None):
             "publishedBaselineVersion": VERSION, "completeCurrentContractLoaded": True,
             "command": command, "status": "PRD_MIGRATION_REQUIRED", "executed": False,
             "allPassed": False, "productStatus": "OPEN",
-            "reason": "This legacy path has not been accepted against the complete current v1.4 contract. "
+            "reason": "This legacy path has not been accepted against the complete current v1.5 contract. "
                       "Requirements are not executed scenarios; never inherit old PASS.",
             "retiredRequirements": plan["retiredRequirements"],
             "independentWorkMayContinue": True}

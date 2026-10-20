@@ -1,6 +1,6 @@
 {
   "schema": "8415ex-execution-plan/1",
-  "version": "1.4",
+  "version": "1.5",
   "status": "OPEN",
   "sections": [
     1,
@@ -58,7 +58,7 @@
     },
     {
       "id": "EX-SCOPE-07",
-      "rule": "No arbitrary compulsory custody or instant liquidation; normal conditional funds escrow and agreed asset-return control remain.",
+      "rule": "No arbitrary compulsory custody or instant liquidation. Normal conditional funds escrow and agreed asset-return control remain. Only the explicitly consented deferred-mode debt and recovery-gas liquidation in section 7.1 is added.",
       "status": "CONFIRMED"
     },
     {
@@ -78,7 +78,7 @@
     },
     {
       "id": "EX-SCOPE-11",
-      "rule": "NFT0 fixes one or more allowed price currencies at mint. Each order explicitly selects one member; insufficient selected-currency funds warn and refuse. EX does not exchange, auto-select, combine currency balances or substitute assets for principal or ETH gas. Holder remint creates a new NFT and never edits the old allowed set.",
+      "rule": "For prepaid mode: NFT0 fixes one or more allowed price currencies at mint. Each order explicitly selects one member; insufficient selected-currency funds warn and refuse. EX does not exchange, auto-select, combine currency balances or substitute assets for principal or ETH gas. Holder remint creates a new NFT and never edits the old allowed set. For explicitly selected deferred mode, section 7.1 substitutes verified reserved collateral allowance for principal prefunding, not for gas or currency identity.",
       "status": "CONFIRMED"
     },
     {
@@ -93,7 +93,7 @@
     },
     {
       "id": "EX-SCOPE-14",
-      "rule": "Both cryptocurrency and commodity warehouse-receipt NFTs are confirmed collateral choices; do not restrict the scenario to crypto collateral only. Economic and execution parameters remain D-14.",
+      "rule": "Both cryptocurrency and commodity warehouse-receipt NFTs are confirmed collateral choices; do not restrict the scenario to crypto collateral only. Deferred crypto-collateral terms are specified in section 7.1; other economic and execution parameters remain D-14.",
       "status": "CONFIRMED"
     },
     {
@@ -238,17 +238,17 @@
     },
     {
       "id": "EX-SETTLE-01",
-      "rule": "Before a trade, fully freeze its own buyer principal in the one explicitly selected NFT0-allowed currency and the buyer-confirmed maximum ETH gas separately. No conversion, currency substitution or duplicate use of funds. Original effective freezes are reconciled, never debited again after registration.",
+      "rule": "In prepaid mode fully freeze each buyer's selected NFT0-allowed principal and confirmed maximum ETH gas separately before trading. Deferred mode instead requires the section 7.1 verified collateral allowance for principal; it still requires separate new-trade gas. Never double-use principal, collateral capacity or a confirmed freeze.",
       "status": "CONFIRMED"
     },
     {
       "id": "EX-SETTLE-02",
-      "rule": "Release each eligible segment by ordered owner/holder positions and remove its rollback control without waiting for the entire chain.",
+      "rule": "At the authoritative registered buyer cut, permanently remove that segment's NFT rollback control without waiting for the suffix. Release its prepaid funds; in deferred mode retain B's separate payment obligation until actual settlement, without reviving the completed NFT rollback.",
       "status": "CONFIRMED"
     },
     {
       "id": "EX-SETTLE-03",
-      "rule": "Keep seller, buyer, price, asset, registration sequence, principal, fees and rollback per segment; no later-funds subsidy.",
+      "rule": "Keep seller, buyer, price, asset, registration sequence, principal, fees and rollback per segment. Prepaid mode cannot use later-funds subsidy. Explicit deferred mode may allocate B's resale proceeds to its escrow under section 7.1, preserving refundable suffix obligations and preventing double allocation.",
       "status": "CONFIRMED"
     },
     {
@@ -258,7 +258,7 @@
     },
     {
       "id": "EX-SETTLE-05",
-      "rule": "Release already frozen principal; no second buyer payment or business-payment failure branch. Technical recovery cannot duplicate debit, release or gas.",
+      "rule": "Prepaid mode releases already frozen principal without a second buyer payment. Deferred mode permits the explicitly agreed later payment, top-up and deadline liquidation in section 7.1. Technical recovery never duplicates debit, payment, release or gas.",
       "status": "CONFIRMED"
     },
     {
@@ -298,12 +298,12 @@
     },
     {
       "id": "EX-SETTLE-07",
-      "rule": "If available selected-currency funds cannot fully freeze the price, warn and stop before signing, execution and broadcast. Adequate ETH gas or other allowed currencies cannot replace this order principal.",
+      "rule": "For prepaid mode: If available selected-currency funds cannot fully freeze the price, warn and stop before signing, execution and broadcast. Adequate ETH gas or other allowed currencies cannot replace this order principal. For explicitly selected deferred mode, section 7.1 substitutes verified reserved collateral allowance for principal prefunding, not for gas or currency identity.",
       "status": "CONFIRMED"
     },
     {
       "id": "EX-INV-13",
-      "rule": "One or more allowed currencies are immutable per minted NFT and each order binds one through its whole principal lifecycle. Principal or ETH gas shortage forms no new trade. No currency conversion, aggregate currency payment or third-party subsidy bypass; old and replacement identities remain distinct.",
+      "rule": "For prepaid mode: One or more allowed currencies are immutable per minted NFT and each order binds one through its whole principal lifecycle. Principal or ETH gas shortage forms no new trade. No currency conversion, aggregate currency payment or third-party subsidy bypass; old and replacement identities remain distinct. For explicitly selected deferred mode, section 7.1 substitutes verified reserved collateral allowance for principal prefunding, not for gas or currency identity.",
       "status": "CONFIRMED"
     },
     {
@@ -348,7 +348,7 @@
     },
     {
       "id": "EX-GAS-03",
-      "rule": "ETH is the sole gas settlement asset. Warn and refuse a new trade if ETH is absent or insufficient after reservations. Validate and account for NFT0 price-currency funds separately; neither balance substitutes for the other. No gas-shortage temporary custody, redemption deadline, forced sale or instant liquidation.",
+      "rule": "ETH is the sole gas settlement asset. Refuse a new trade if ETH is absent or insufficient after reservations; principal and gas balances cannot substitute for one another. Deferred-mode rollback may liquidate the borrower's collateral to cover a verified recovery-gas shortfall, without waiving the original new-trade gate or inventing a custody/redemption deadline.",
       "status": "CONFIRMED"
     },
     {
@@ -568,7 +568,7 @@
     },
     {
       "id": "EX-DEMO-01",
-      "rule": "Use Ethereum Sepolia chain 11155111 for the demonstration test path. The designated Sepolia PYUSD fixture must be a member of fixture NFT0 mint-time currencies and explicitly selected by scenario orders; gas is test ETH. Do not borrow the separate Wallet Hoodi configuration or make PYUSD a universal product currency.",
+      "rule": "The settlement demonstration uses Ethereum Sepolia 11155111 and test ETH gas, with verified designated test PYUSD permitted by fixture NFT0 and explicitly selected by orders. Deferred cross-chain tests additionally lock Hoodi ETH on Hoodi 560048; Hoodi does not replace Sepolia settlement, its gas or principal. Do not copy unrelated Wallet configuration.",
       "status": "CONFIRMED"
     },
     {
@@ -579,6 +579,66 @@
     {
       "id": "EX-DEMO-03",
       "rule": "Deliver an operable trading demo, editable PPT proposal and playable film, clearly labelling real test-chain activity, simulated registrars and animation.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-DEFER-01",
+      "rule": "Deferred mode is optional and seller-consented, with an exact T+n deadline or 72 hours before the registration deadline; retain prepaid mode. Only NFT0-allowed USD stablecoins may be principal. EX grants secured trading allowance, not a cash loan, and charges no interest spread.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-DEFER-02",
+      "rule": "Accept BTC/ETH as product collateral; test only Hoodi ETH collateral with Sepolia PYUSD principal and Sepolia ETH gas. Hoodi operations need separately accounted Hoodi gas. No unimplemented Bitcoin custody or cross-chain bridge is inferred.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-DEFER-03",
+      "rule": "Verify canonical finalized collateral lock evidence and its chain, vault, asset, borrower, amount and unique identity before granting destination allowance. Authenticated proof validation, valuation freshness/denomination and explicit ratio policy are required; 50 percent is only an example.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-DEFER-04",
+      "rule": "Reserve collateral-backed allowance per obligation atomically and durably; reject duplicate pledges, replay, conflicting observations and concurrent over-allocation. A UI balance or caller verified flag is not authority.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-DEFER-05",
+      "rule": "For A-B-C, B may resell before paying A. C's principal enters B's escrow, with original refundable segment encumbrances preserved and no double allocation. B may deposit the correctly denominated difference before the agreed deadline.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-DEFER-06",
+      "rule": "If the settlement deadline arrives before AB registration completes, treat AB as incomplete and initiate the existing eligible rollback, preserving registered prefix. Do not extend the payment wait or pay A as if registration succeeded.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-DEFER-07",
+      "rule": "If AB registration completes first, its NFT rollback responsibility permanently detaches under the original ordered-cut rule even if A is unpaid. B independently owes A; later debt, liquidation or payment failure cannot reverse that completed cut or make C responsible.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-DEFER-08",
+      "rule": "Allow early manual settlement only with the original registration and authorization conditions. At registered-debt maturity, settle from available B escrow; liquidate pledged collateral for a remaining shortfall. No automatic unapproved margin-call threshold or guaranteed recovery is added.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-DEFER-09",
+      "rule": "When B cannot fund gas needed for eligible rollback, allow collateral liquidation to cover that verified gas shortfall. Keep debt principal, fee, Sepolia recovery gas, Hoodi execution gas and residual collateral separate; do not treat Hoodi ETH as Sepolia gas.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-DEFER-10",
+      "rule": "Liquidation request, source execution and destination receipt are distinct. Only verified destination PYUSD satisfies seller-payment funds; only verified destination ETH satisfies recovery-gas funding. Missing liquidity/provider, partial proceeds or unknown outcome remain unresolved, never fabricated conversion.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-DEFER-11",
+      "rule": "Persist operation identity, exact payload and reservation before dispatch; reconcile ambiguous outcomes without blind replay. Confirm actual payment/refund/release once, preserve restart/concurrency safety and prohibit collateral unlock while secured obligations or unknown effects remain.",
+      "status": "CONFIRMED"
+    },
+    {
+      "id": "EX-DEFER-12",
+      "rule": "Reuse existing UI rather than create a duplicate. Bind implementation, exact-head CI and main merge to the module contract before downstream wiring/testing/deployment acceptance. Report simulation, CI, actual cross-chain and served acceptance separately.",
       "status": "CONFIRMED"
     }
   ],
@@ -758,7 +818,7 @@
       "integrationStages": [
         2
       ],
-      "assertion": "Principal uses the explicit selected member of the immutable NFT0 set through freeze/release/refund. Refuse missing/changed currency, conversion/substitution and insufficient/unknown selected-currency balance even with sufficient ETH gas. Freeze each liability separately before trade; no second principal debit after registration.",
+      "assertion": "Prepaid-mode regression: Principal uses the explicit selected member of the immutable NFT0 set through freeze/release/refund. Refuse missing/changed currency, conversion/substitution and insufficient/unknown selected-currency balance even with sufficient ETH gas. Freeze each liability separately before trade; no second principal debit after registration.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -790,7 +850,7 @@
       "integrationStages": [
         2
       ],
-      "assertion": "Keep every segment's price and funds separate; pending later funds cannot subsidize an earlier release.",
+      "assertion": "Prepaid-mode regression: Keep every segment's price and funds separate; pending later funds cannot subsidize an earlier release.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -1151,7 +1211,7 @@
       "integrationStages": [
         5
       ],
-      "assertion": "Sepolia 11155111 only; fixture NFT0 immutably permits the verified designated test PYUSD and each scenario order explicitly selects it; gas is test ETH. Refuse wrong chain/asset/NFT0 selection before sending, without currency substitution, conversion or Hoodi.",
+      "assertion": "Sepolia remains the execution/principal chain with verified NFT0-permitted selected PYUSD and test ETH gas. Reject accidental chain/asset substitution; allow Hoodi only for the separately specified deferred collateral source, never as settlement or gas replacement.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -1521,7 +1581,7 @@
         3,
         5
       ],
-      "assertion": "Sufficient original frozen ETH for the same approved rollback obligation remains usable with zero unfrozen cash. No second prepayment, early unfreeze or cancelled rollback. A remaining shortage uses the original confirmed replenishment flow; no automatic exchange/subsidy.",
+      "assertion": "Sufficient original frozen ETH for the same approved rollback obligation remains usable with zero unfrozen cash. No second prepayment, early unfreeze or cancelled rollback. A remaining shortage uses the original confirmed replenishment flow in prepaid mode; deferred rollback may use the explicitly authorized collateral gas-recovery route in section 7.1.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -1623,7 +1683,7 @@
         3,
         5
       ],
-      "assertion": "Warn and refuse selected-currency principal at zero or one smallest unit short before signing/broadcast, despite sufficient other currencies/gas. Exact sufficiency may proceed under other conditions. Exclude concurrent reservations; reuse only this operation own effective freeze.",
+      "assertion": "Prepaid-mode regression: Warn and refuse selected-currency principal at zero or one smallest unit short before signing/broadcast, despite sufficient other currencies/gas. Exact sufficiency may proceed under other conditions. Exclude concurrent reservations; reuse only this operation own effective freeze.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -2015,7 +2075,7 @@
         4,
         5
       ],
-      "assertion": "Documents/design/code/runtime have independent identities. v1.4 cannot inherit a historical loader pass or clickable design as runtime acceptance; preserve T-01..68, six stages/demos and the current product edition.",
+      "assertion": "Documents/design/code/runtime have independent identities. v1.5 cannot inherit a historical loader pass or clickable design as runtime acceptance; preserve T-01..68, six stages/demos and the current product edition.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -2036,6 +2096,198 @@
         5
       ],
       "assertion": "Responsive market/details navigation and loading/error/empty/long-chain states recover; all three sources share real states and six-language rules. Missing feed/original terms stays explicit, never overall-complete.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-85",
+      "requirementIds": [
+        "EX-DEFER-01"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "Deferred mode is optional and seller-consented, with an exact T+n deadline or 72 hours before the registration deadline; retain prepaid mode. Only NFT0-allowed USD stablecoins may be principal. EX grants secured trading allowance, not a cash loan, and charges no interest spread.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-86",
+      "requirementIds": [
+        "EX-DEFER-02"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "Accept BTC/ETH as product collateral; test only Hoodi ETH collateral with Sepolia PYUSD principal and Sepolia ETH gas. Hoodi operations need separately accounted Hoodi gas. No unimplemented Bitcoin custody or cross-chain bridge is inferred.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-87",
+      "requirementIds": [
+        "EX-DEFER-03"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "Verify canonical finalized collateral lock evidence and its chain, vault, asset, borrower, amount and unique identity before granting destination allowance. Authenticated proof validation, valuation freshness/denomination and explicit ratio policy are required; 50 percent is only an example.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-88",
+      "requirementIds": [
+        "EX-DEFER-04"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "Reserve collateral-backed allowance per obligation atomically and durably; reject duplicate pledges, replay, conflicting observations and concurrent over-allocation. A UI balance or caller verified flag is not authority.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-89",
+      "requirementIds": [
+        "EX-DEFER-05"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "For A-B-C, B may resell before paying A. C's principal enters B's escrow, with original refundable segment encumbrances preserved and no double allocation. B may deposit the correctly denominated difference before the agreed deadline.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-90",
+      "requirementIds": [
+        "EX-DEFER-06"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "If the settlement deadline arrives before AB registration completes, treat AB as incomplete and initiate the existing eligible rollback, preserving registered prefix. Do not extend the payment wait or pay A as if registration succeeded.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-91",
+      "requirementIds": [
+        "EX-DEFER-07"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "If AB registration completes first, its NFT rollback responsibility permanently detaches under the original ordered-cut rule even if A is unpaid. B independently owes A; later debt, liquidation or payment failure cannot reverse that completed cut or make C responsible.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-92",
+      "requirementIds": [
+        "EX-DEFER-08"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "Allow early manual settlement only with the original registration and authorization conditions. At registered-debt maturity, settle from available B escrow; liquidate pledged collateral for a remaining shortfall. No automatic unapproved margin-call threshold or guaranteed recovery is added.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-93",
+      "requirementIds": [
+        "EX-DEFER-09"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "When B cannot fund gas needed for eligible rollback, allow collateral liquidation to cover that verified gas shortfall. Keep debt principal, fee, Sepolia recovery gas, Hoodi execution gas and residual collateral separate; do not treat Hoodi ETH as Sepolia gas.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-94",
+      "requirementIds": [
+        "EX-DEFER-10"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "Liquidation request, source execution and destination receipt are distinct. Only verified destination PYUSD satisfies seller-payment funds; only verified destination ETH satisfies recovery-gas funding. Missing liquidity/provider, partial proceeds or unknown outcome remain unresolved, never fabricated conversion.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-95",
+      "requirementIds": [
+        "EX-DEFER-11"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "Persist operation identity, exact payload and reservation before dispatch; reconcile ambiguous outcomes without blind replay. Confirm actual payment/refund/release once, preserve restart/concurrency safety and prohibit collateral unlock while secured obligations or unknown effects remain.",
+      "status": "NOT_VERIFIED",
+      "evidence": [],
+      "legacyResultsReusable": false
+    },
+    {
+      "id": "T-96",
+      "requirementIds": [
+        "EX-DEFER-12"
+      ],
+      "decisionIds": [],
+      "firstStage": 1,
+      "integrationStages": [
+        1,
+        5
+      ],
+      "assertion": "Reuse existing UI rather than create a duplicate. Bind implementation, exact-head CI and main merge to the module contract before downstream wiring/testing/deployment acceptance. Report simulation, CI, actual cross-chain and served acceptance separately.",
       "status": "NOT_VERIFIED",
       "evidence": [],
       "legacyResultsReusable": false
@@ -2126,7 +2378,19 @@
         "T-80",
         "T-81",
         "T-82",
-        "T-84"
+        "T-84",
+        "T-85",
+        "T-86",
+        "T-87",
+        "T-88",
+        "T-89",
+        "T-90",
+        "T-91",
+        "T-92",
+        "T-93",
+        "T-94",
+        "T-95",
+        "T-96"
       ],
       "continueAfterPR": true,
       "waitForCIToDevelopNext": false
@@ -2241,7 +2505,19 @@
         "T-35",
         "T-36",
         "T-37",
-        "T-38"
+        "T-38",
+        "T-85",
+        "T-86",
+        "T-87",
+        "T-88",
+        "T-89",
+        "T-90",
+        "T-91",
+        "T-92",
+        "T-93",
+        "T-94",
+        "T-95",
+        "T-96"
       ],
       "continueAfterPR": true,
       "waitForCIToDevelopNext": false
@@ -2280,9 +2556,9 @@
     },
     {
       "id": "D-06",
-      "status": "CLOSED",
-      "rule": "Principal is frozen before trade; registration releases that original position; no second buyer payment business branch.",
-      "blocks": "Only technical unknown-result and idempotent recovery remain."
+      "status": "CONFIRMED",
+      "rule": "Prepaid mode freezes principal before trade and registration releases that position without a second payment. The separately selected deferred mode follows section 7.1: collateral allowance, registration-independent B debt, exact deadline and recovery rules.",
+      "blocks": "Implementation and exact-version acceptance remain; no EX lending obligation is added."
     },
     {
       "id": "D-07",
@@ -2329,8 +2605,8 @@
     {
       "id": "D-14",
       "status": "PARTLY_CONFIRMED",
-      "rule": "Crypto and warehouse-NFT collateral and hedging/collateral/arbitrage scenes are confirmed; valuation, ratios, financing, liquidation and returns remain undefined.",
-      "blocks": "Only dependent mechanisms/economic calculations; do not block choices, market, references, spot or settlement."
+      "rule": "Crypto and warehouse-NFT choices remain. Section 7.1 confirms optional BTC/ETH-backed deferred stablecoin settlement, deadline debt liquidation and rollback-gas recovery, without EX lending. Exact ratio, valuation/finality/provider and fee parameters must be explicitly configured; no invented defaults or returns.",
+      "blocks": "Only unsupplied dependent mechanisms; do not block independent spot/UI work."
     },
     {
       "id": "D-15",
@@ -2539,11 +2815,16 @@
       "chainId": 11155111
     },
     "ci": "GitHub Actions",
-    "runtime": "project-supported Linux"
+    "runtime": "project-supported Linux",
+    "collateralTestNetwork": {
+      "name": "Hoodi",
+      "chainId": 560048,
+      "role": "deferred collateral only"
+    }
   },
   "source": {
     "path": "PRD.md",
-    "bytes": 97728,
-    "sha256": "b3989a91f1d3f7a1de6812fa05777d0dfdf84a4eee4a7909bdda77d1196032ce"
+    "bytes": 108643,
+    "sha256": "0f18b0914c46679b17be3d03a07f265c7cb4d1c3fb488e85b6503657622c666c"
   }
 }

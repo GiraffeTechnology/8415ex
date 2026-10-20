@@ -48,10 +48,10 @@ class CurrentPRDV13Contracts(unittest.TestCase):
 
     def test_current_contract_has_all_cases_and_no_inherited_acceptance(self):
         plan = current_prd.load(self.root)
-        self.assertEqual(plan["version"], "1.4")
-        self.assertEqual(len(plan["requirements"]), 111)
+        self.assertEqual(plan["version"], "1.5")
+        self.assertEqual(len(plan["requirements"]), 123)
         self.assertEqual({row["id"] for row in plan["cases"]},
-                         {"T-%02d" % n for n in range(1, 85)})
+                         {"T-%02d" % n for n in range(1, 97)})
         report = current_prd.report("matrix", self.root)
         self.assertEqual(report["productStatus"], "OPEN")
         self.assertEqual(report["acceptedCases"], [])

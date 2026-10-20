@@ -1,14 +1,14 @@
 # 8415ex Product Requirements
 
-Version: 1.4 (product baseline revised 2026-10-18; publication synchronization 2026-10-18 UTC)
+Version: 1.5 (complete product iteration 2026-10-20 UTC)
 Edition: complete English product and acceptance contract
 Status: OPEN; requirements are not implementation or acceptance evidence.
 
-This English edition carries the complete product and acceptance scope of v1.4: 111 EX requirements, 84 acceptance cases, six stages and six core demonstrations. Publication does not imply implementation or acceptance. It supersedes conflicting earlier requirement editions and execution checklists. All product stages, requirement IDs, acceptance cases and decisions remain represented.
+This English edition carries the complete product and acceptance scope of v1.5: 123 EX requirements, 96 acceptance cases, six stages and six core demonstrations. Publication does not imply implementation or acceptance. It supersedes conflicting earlier requirement editions and execution checklists. All prior product stages, requirement IDs, acceptance cases and decisions remain represented. The added deferred mode is not evidence of deployed capability.
 
 ## 1. Execution conclusion
 
-Build a commodity spot-intermediary Web3 infrastructure DEMO with a cryptocurrency/commodity-market frontend, BTC/ETH and soybean/iron-ore scenarios, two collateral asset classes, live public reference data and simulated NFT orders kept distinct. Undefined financing, valuation ratios, liquidation and revenue parameters block only dependent mechanisms, never independent confirmed delivery.
+Build a commodity spot-intermediary Web3 infrastructure DEMO with a cryptocurrency/commodity-market frontend, BTC/ETH and soybean/iron-ore scenarios, two collateral asset classes, live public reference data and simulated NFT orders kept distinct. The optional cross-chain collateral-backed deferred mode is specified in section 7.1; EX grants a trading allowance without lending cash or charging an interest spread. Undefined provider, valuation, ratio and fee parameters block only dependent mechanisms, never independent confirmed delivery.
 
 Implement the confirmed whole-receipt trading, Oracle registration, segment settlement and suffix rollback model, then Linux integration and Sepolia demonstrations. Commercial pricing, legal advice and real-asset admission remain local later decisions. Six stages define development and acceptance scopes. CI and exact-head acceptance are verified separately before merge. A source file, HTTP 200 or CI success alone is not delivery.
 
@@ -30,19 +30,19 @@ Provide an ordered chain of whole-receipt trades while off-chain registration ma
 | EX-SCOPE-04 | Support 8415Wallet V3 or any wallet satisfying the same authorization and control semantics; no exclusive wallet binding. |
 | EX-SCOPE-05 | Every Agent operation comes from verifiable bounded human wallet authority. |
 | EX-SCOPE-06 | The buyer pays its transaction gas and assigned rollback gas in ETH only. Warn and refuse a new trade when ETH is absent or insufficient. Agent service fees remain a separate later decision. |
-| EX-SCOPE-07 | No arbitrary compulsory custody or instant liquidation; normal conditional funds escrow and agreed asset-return control remain. |
+| EX-SCOPE-07 | No arbitrary compulsory custody or instant liquidation. Normal conditional funds escrow and agreed asset-return control remain. Only the explicitly consented deferred-mode debt and recovery-gas liquidation in section 7.1 is added. |
 | EX-SCOPE-08 | Transfer the mapped bill of lading only; physical collection belongs to the parties named in its terms. |
 | EX-SCOPE-09 | The off-chain change voucher is itself the registration receipt; Oracle alone ingests, verifies and records it on chain. |
 | EX-SCOPE-10 | Align ArtFi whole artwork and EX backend; direct, electronic and intermediary registration are transaction sources with middleware and frontend paths. |
 
-Non-goals: operating a CEX, customer-funds general ledger or platform custody account, guaranteed returns or unconfirmed financing/leverage/liquidation, receipt fragmentation, cross-chain or new real-asset commercial admission. Reuse and alignment of existing whole-artwork, wallet, Oracle, journal and settlement components remain required. Charity shares are excluded. Collection terms remain in the bill; EX does not perform collection, transport, warehouse exit or collection-driven burn. No license, institutional cooperation, legal effect, fee rate or revenue distribution is presumed.
+Non-goals: operating a CEX, customer-funds general ledger or platform custody account, guaranteed returns or unconfirmed financing/leverage/liquidation, receipt fragmentation, arbitrary cross-chain routes or new real-asset commercial admission. The explicitly agreed deferred mode in section 7.1 is included; it is not an EX loan. Reuse and alignment of existing whole-artwork, wallet, Oracle, journal and settlement components remain required. Charity shares are excluded. Collection terms remain in the bill; EX does not perform collection, transport, warehouse exit or collection-driven burn. No license, institutional cooperation, legal effect, fee rate or revenue distribution is presumed.
 
 | ID | Requirement |
 | --- | --- |
-| EX-SCOPE-11 | NFT0 fixes one or more allowed price currencies at mint. Each order explicitly selects one member; insufficient selected-currency funds warn and refuse. EX does not exchange, auto-select, combine currency balances or substitute assets for principal or ETH gas. Holder remint creates a new NFT and never edits the old allowed set. |
+| EX-SCOPE-11 | For prepaid mode: NFT0 fixes one or more allowed price currencies at mint. Each order explicitly selects one member; insufficient selected-currency funds warn and refuse. EX does not exchange, auto-select, combine currency balances or substitute assets for principal or ETH gas. Holder remint creates a new NFT and never edits the old allowed set. For explicitly selected deferred mode, section 7.1 substitutes verified reserved collateral allowance for principal prefunding, not for gas or currency identity. |
 | EX-SCOPE-12 | A holder possessing the original NFT may atomically burn it and mint a replacement under the remint conditions. New terms may be added, removed or changed before the new mint; retain bidirectional identity and complete history. |
 | EX-SCOPE-13 | Demonstrate hedging, collateral and arbitrage scenarios involving BTC/ETH and whole soybean/iron-ore receipts; labels do not authorize financing, futures or guaranteed returns. |
-| EX-SCOPE-14 | Both cryptocurrency and commodity warehouse-receipt NFTs are confirmed collateral choices; do not restrict the scenario to crypto collateral only. Economic and execution parameters remain D-14. |
+| EX-SCOPE-14 | Both cryptocurrency and commodity warehouse-receipt NFTs are confirmed collateral choices; do not restrict the scenario to crypto collateral only. Deferred crypto-collateral terms are specified in section 7.1; other economic and execution parameters remain D-14. |
 | EX-SCOPE-15 | Continuously read and refresh real public commodity spot reference prices with traceable source values/times and fetch times. NFT quotes/trades may be simulated but must not impersonate external references. |
 | EX-SCOPE-16 | Market makers may submit ordinary quotes under the same currency, price-priority, FIFO and authorization rules; no privileged priority, AMM, incentives or return promise is implied. |
 | EX-SCOPE-17 | EX frontend covers markets, NFTs, trades and evidence. Exclude wallet asset overview, account, security, validator and Agent-permission-management pages while retaining transaction authorization and balance/fee checks. |
@@ -124,9 +124,9 @@ Equality and possession are the confirmed EX remint business predicate, not an E
 
 ## 7. Continuous trading, registration and cutoff
 
-A starts as owner/holder. Independent A/B orders match by price/FIFO/best executable price with valid signed terms, receipt/deadline checks and buyer-confirmed gas disclosure. B's principal and maximum gas amount are independently frozen before transfer/registration admission. Owner advances to B; B may resell to C, then C to D under the same conditions without waiting for holder. Each hop retains its own transfer, grant, freeze and registration task.
+A starts as owner/holder. Independent A/B orders match by price/FIFO/best executable price with valid signed terms, receipt/deadline checks and buyer-confirmed gas disclosure. In prepaid mode, B's principal and maximum gas amount are independently frozen before transfer/registration admission. In the separately selected deferred mode, section 7.1 replaces only the principal-prefunding obligation with verified reserved collateral-backed allowance; the original new-trade gas gate remains. Owner advances to B; B may resell to C, then C to D under the same conditions without waiting for holder. Each hop retains its own transfer, grant, freeze and registration task.
 
-Oracle verifies the mint-format voucher and writes the one chain record; holder advances A/B/C/D contiguously. EX rebuilds missing/reordered index observations from authority instead of local arrival order. Release a segment when both ordered owner and holder have reached its buyer or beyond and registration is timely. Owner D/holder B makes AB eligible, not BC/CD. No second buyer payment.
+Oracle verifies the mint-format voucher and writes the one chain record; holder advances A/B/C/D contiguously. EX rebuilds missing/reordered index observations from authority instead of local arrival order. Release a segment when both ordered owner and holder have reached its buyer or beyond and registration is timely. Owner D/holder B makes AB eligible, not BC/CD. No second buyer payment in prepaid mode; deferred payment remains governed by section 7.1.
 
 | ID | Requirement |
 | --- | --- |
@@ -142,11 +142,11 @@ Oracle verifies the mint-format voucher and writes the one chain record; holder 
 | EX-INV-10 | Record business finality separately from chain observation; reorg or duplicate events never create a second funds action. |
 | EX-INV-11 | Holder changes with the same Oracle registration record, never as a separate asynchronous business fact or second receipt. |
 | EX-INV-12 | Matching respects price priority, equal-price FIFO and best executable price; eligibility cannot grant queue priority. |
-| EX-SETTLE-01 | Before a trade, fully freeze its own buyer principal in the one explicitly selected NFT0-allowed currency and the buyer-confirmed maximum ETH gas separately. No conversion, currency substitution or duplicate use of funds. Original effective freezes are reconciled, never debited again after registration. |
-| EX-SETTLE-02 | Release each eligible segment by ordered owner/holder positions and remove its rollback control without waiting for the entire chain. |
-| EX-SETTLE-03 | Keep seller, buyer, price, asset, registration sequence, principal, fees and rollback per segment; no later-funds subsidy. |
+| EX-SETTLE-01 | In prepaid mode fully freeze each buyer's selected NFT0-allowed principal and confirmed maximum ETH gas separately before trading. Deferred mode instead requires the section 7.1 verified collateral allowance for principal; it still requires separate new-trade gas. Never double-use principal, collateral capacity or a confirmed freeze. |
+| EX-SETTLE-02 | At the authoritative registered buyer cut, permanently remove that segment's NFT rollback control without waiting for the suffix. Release its prepaid funds; in deferred mode retain B's separate payment obligation until actual settlement, without reviving the completed NFT rollback. |
+| EX-SETTLE-03 | Keep seller, buyer, price, asset, registration sequence, principal, fees and rollback per segment. Prepaid mode cannot use later-funds subsidy. Explicit deferred mode may allocate B's resale proceeds to its escrow under section 7.1, preserving refundable suffix obligations and preventing double allocation. |
 | EX-SETTLE-04 | Bind release to genuine authorized Oracle chain source, asset, transfer and journal; historical registration and current holder observations remain distinguishable. |
-| EX-SETTLE-05 | Release already frozen principal; no second buyer payment or business-payment failure branch. Technical recovery cannot duplicate debit, release or gas. |
+| EX-SETTLE-05 | Prepaid mode releases already frozen principal without a second buyer payment. Deferred mode permits the explicitly agreed later payment, top-up and deadline liquidation in section 7.1. Technical recovery never duplicates debit, payment, release or gas. |
 | EX-TIME-01 | Record both deadlines at mint; stop new trading at the declared cutoff. |
 | EX-TIME-02 | Registration beyond trading cutoff fails the unregistered suffix and returns owner to effective holder; registration must also satisfy its own mint deadline. |
 | EX-TIME-03 | Use mint rules and authoritative Oracle ordering for deadline decisions; protect registered/settled prefix; no late-voucher grace or second-receipt wait. |
@@ -156,14 +156,35 @@ Oracle verifies the mint-format voucher and writes the one chain record; holder 
 
 Before mint cutoffs, show genuine pending status; absent local notification is neither success nor refusal. Deadline, registration and rollback races need atomic preconditions against one ordered authority. Technical log replay does not create a holder-first/receipt-later business state. Same identity/same content is idempotent; same identity/different content conflicts. Old messages cannot revive failed segments. Registered holder stays effective during technical recovery. After recovery an otherwise valid, unexpired and authorized NFT may begin a new chain; expiry cannot be bypassed by recovery. Actual off-chain collection rights are unaffected by test cutoff, and no forced disposal follows expiry.
 
-One or more allowed price currencies are declared immutably by NFT0 at mint; each order explicitly selects one member and carries that selection through the signed order, each principal freeze, release and refund. EX never selects a fallback currency, performs exchange, automatically buys ETH or converts principal to cover gas. Principal balance is checked in its own asset and smallest unit; gas is checked independently in ETH wei. If the designated price currency is ETH, the two liabilities remain separately reserved so one balance is not counted twice. Native execution rechecks original funds/reservations/nonce/UNKNOWN atomically. Missing or insufficient funds on either side warns and refuses; no balance or denomination is inferred from a label.
+One or more allowed price currencies are declared immutably by NFT0 at mint; each order explicitly selects one member and carries that selection through the signed order, each principal freeze, release and refund. Ordinary prepaid trading never selects a fallback currency, performs exchange, automatically buys ETH or converts principal to cover gas. The deferred collateral liquidation routes in section 7.1 are separately authorized, explicitly denominated recovery actions, not principal substitution. Principal balance is checked in its own asset and smallest unit; gas is checked independently in ETH wei. If the designated price currency is ETH, the two liabilities remain separately reserved so one balance is not counted twice. Native execution rechecks original funds/reservations/nonce/UNKNOWN atomically. In prepaid mode, missing or insufficient funds on either side warns and refuses; deferred mode verifies its reserved collateral allowance instead of cash principal. No balance or denomination is inferred from a label.
 
 | ID | Requirement |
 | --- | --- |
 | EX-SETTLE-06 | Quote, freeze, release and refund each leg in the one currency explicitly selected from its immutable NFT0 allowed set. Keep principal and ETH gas accounts separate; no conversion, substitution or summed multi-currency payment. ETH-priced principal and gas cannot consume the same funds twice. |
-| EX-SETTLE-07 | If available selected-currency funds cannot fully freeze the price, warn and stop before signing, execution and broadcast. Adequate ETH gas or other allowed currencies cannot replace this order principal. |
-| EX-INV-13 | One or more allowed currencies are immutable per minted NFT and each order binds one through its whole principal lifecycle. Principal or ETH gas shortage forms no new trade. No currency conversion, aggregate currency payment or third-party subsidy bypass; old and replacement identities remain distinct. |
+| EX-SETTLE-07 | For prepaid mode: If available selected-currency funds cannot fully freeze the price, warn and stop before signing, execution and broadcast. Adequate ETH gas or other allowed currencies cannot replace this order principal. For explicitly selected deferred mode, section 7.1 substitutes verified reserved collateral allowance for principal prefunding, not for gas or currency identity. |
+| EX-INV-13 | For prepaid mode: One or more allowed currencies are immutable per minted NFT and each order binds one through its whole principal lifecycle. Principal or ETH gas shortage forms no new trade. No currency conversion, aggregate currency payment or third-party subsidy bypass; old and replacement identities remain distinct. For explicitly selected deferred mode, section 7.1 substitutes verified reserved collateral allowance for principal prefunding, not for gas or currency identity. |
 | EX-INV-14 | Remint never leaves both old and new valid or loses the valid asset through a one-sided burn. Existing history, funds and registration obligations survive the replacement. |
+
+### 7.1 Optional cross-chain collateral-backed deferred mode
+
+This scoped mode supersedes prepaid-only and no-liquidation language only for explicitly selected deferred trades. All other authorization, Oracle, NFT0, audit, privacy and registered-prefix rules remain. No production deployment or financial execution is authorized by publication.
+
+| ID | Requirement |
+| --- | --- |
+| EX-DEFER-01 | Deferred mode is optional and seller-consented, with an exact T+n deadline or 72 hours before the registration deadline; retain prepaid mode. Only NFT0-allowed USD stablecoins may be principal. EX grants secured trading allowance, not a cash loan, and charges no interest spread. |
+| EX-DEFER-02 | Accept BTC/ETH as product collateral; test only Hoodi ETH collateral with Sepolia PYUSD principal and Sepolia ETH gas. Hoodi operations need separately accounted Hoodi gas. No unimplemented Bitcoin custody or cross-chain bridge is inferred. |
+| EX-DEFER-03 | Verify canonical finalized collateral lock evidence and its chain, vault, asset, borrower, amount and unique identity before granting destination allowance. Authenticated proof validation, valuation freshness/denomination and explicit ratio policy are required; 50 percent is only an example. |
+| EX-DEFER-04 | Reserve collateral-backed allowance per obligation atomically and durably; reject duplicate pledges, replay, conflicting observations and concurrent over-allocation. A UI balance or caller verified flag is not authority. |
+| EX-DEFER-05 | For A-B-C, B may resell before paying A. C's principal enters B's escrow, with original refundable segment encumbrances preserved and no double allocation. B may deposit the correctly denominated difference before the agreed deadline. |
+| EX-DEFER-06 | If the settlement deadline arrives before AB registration completes, treat AB as incomplete and initiate the existing eligible rollback, preserving registered prefix. Do not extend the payment wait or pay A as if registration succeeded. |
+| EX-DEFER-07 | If AB registration completes first, its NFT rollback responsibility permanently detaches under the original ordered-cut rule even if A is unpaid. B independently owes A; later debt, liquidation or payment failure cannot reverse that completed cut or make C responsible. |
+| EX-DEFER-08 | Allow early manual settlement only with the original registration and authorization conditions. At registered-debt maturity, settle from available B escrow; liquidate pledged collateral for a remaining shortfall. No automatic unapproved margin-call threshold or guaranteed recovery is added. |
+| EX-DEFER-09 | When B cannot fund gas needed for eligible rollback, allow collateral liquidation to cover that verified gas shortfall. Keep debt principal, fee, Sepolia recovery gas, Hoodi execution gas and residual collateral separate; do not treat Hoodi ETH as Sepolia gas. |
+| EX-DEFER-10 | Liquidation request, source execution and destination receipt are distinct. Only verified destination PYUSD satisfies seller-payment funds; only verified destination ETH satisfies recovery-gas funding. Missing liquidity/provider, partial proceeds or unknown outcome remain unresolved, never fabricated conversion. |
+| EX-DEFER-11 | Persist operation identity, exact payload and reservation before dispatch; reconcile ambiguous outcomes without blind replay. Confirm actual payment/refund/release once, preserve restart/concurrency safety and prohibit collateral unlock while secured obligations or unknown effects remain. |
+| EX-DEFER-12 | Reuse existing UI rather than create a duplicate. Bind implementation, exact-head CI and main merge to the module contract before downstream wiring/testing/deployment acceptance. Report simulation, CI, actual cross-chain and served acceptance separately. |
+
+The complete module specification is [cross-chain deferred settlement](docs/cross-chain-deferred-settlement.md). It preserves deadline-first rollback versus registration-first independent debt, and the separately authorized rollback-gas liquidation exception. No new UI is requested.
 
 ## 8. Conditional funds, suffix rollback and gas
 
@@ -178,7 +199,7 @@ AB, BC and CD have separate prices and original-buyer funds; do not assume equal
 | EX-ROLLBACK-05 | Rollback does not burn the NFT; valid unexpired authorized assets may start a new chain from recovered owner equal to effective holder. |
 | EX-GAS-01 | Each leg buyer pays the actual gas assigned to its trade, refund and NFT return in ETH, without shifting liability merely because another party refused registration. |
 | EX-GAS-02 | Do not charge one shared actual operation in full to multiple segments; allocation method remains D-04. |
-| EX-GAS-03 | ETH is the sole gas settlement asset. Warn and refuse a new trade if ETH is absent or insufficient after reservations. Validate and account for NFT0 price-currency funds separately; neither balance substitutes for the other. No gas-shortage temporary custody, redemption deadline, forced sale or instant liquidation. |
+| EX-GAS-03 | ETH is the sole gas settlement asset. Refuse a new trade if ETH is absent or insufficient after reservations; principal and gas balances cannot substitute for one another. Deferred-mode rollback may liquidate the borrower's collateral to cover a verified recovery-gas shortfall, without waiving the original new-trade gate or inventing a custody/redemption deadline. |
 | EX-GAS-04 | Before trading disclose both the maximum gas amount and median estimate in ETH and contemporaneous ETH/USD display values for buyer confirmation. USD is display only. An estimate disclaimer does not replace numeric amounts. |
 | EX-GAS-05 | Confirmed cap constrains the approved action scope together with the wallet grant; stop and obtain a new confirmation before exceeding it; no invented percentage or unlimited authority. |
 | EX-GAS-06 | Use real applicable verifiable median samples with algorithm, population, count, window, observation time, network, action and source; no fabricated sample, fake zero or single prediction as P50. |
@@ -333,7 +354,7 @@ Only authoritative permitted Oracle chain evidence bound to asset/segment/journa
 
 Missing CI route affects that candidate's CI/merge, not independent models. Missing wallet support, Oracle authority, asset-return control, gas interface, verified test-token address or target affects the respective real path only. Continue contracts, fixtures, implementation and packages independent of it. First search existing source/config/evidence; escalate only a precise genuine product/permission decision. The confirmed commodity-market UI and both collateral choices are required; undefined economic mechanisms alone remain local open items.
 
-Additional dependencies remain local: feed access/method/specification/unit/cadence affects actual reference integration; undefined collateral valuation/financing/liquidation/revenue parameters affect only dependent mechanisms; unverified live locale behavior affects only live-alignment claims. Implement independent contracts, honest unavailable states, both collateral choices, market UI and fixed candidate language resources without waiting.
+Additional dependencies remain local: feed access/method/specification/unit/cadence affects actual reference integration; unsupplied collateral valuation/provider/fee parameters affect only dependent mechanisms; unverified live locale behavior affects only live-alignment claims. Implement independent contracts, honest unavailable states, both collateral choices, market UI and fixed candidate language resources without waiting.
 
 ## 14. Three simulated registration sources
 
@@ -393,7 +414,7 @@ Cases: T-24, T-25, T-32, T-33, T-44.
 
 | ID | Requirement |
 | --- | --- |
-| EX-DEMO-01 | Use Ethereum Sepolia chain 11155111 for the demonstration test path. The designated Sepolia PYUSD fixture must be a member of fixture NFT0 mint-time currencies and explicitly selected by scenario orders; gas is test ETH. Do not borrow the separate Wallet Hoodi configuration or make PYUSD a universal product currency. |
+| EX-DEMO-01 | The settlement demonstration uses Ethereum Sepolia 11155111 and test ETH gas, with verified designated test PYUSD permitted by fixture NFT0 and explicitly selected by orders. Deferred cross-chain tests additionally lock Hoodi ETH on Hoodi 560048; Hoodi does not replace Sepolia settlement, its gas or principal. Do not copy unrelated Wallet configuration. |
 | EX-DEMO-02 | Deliver all six revised scenarios with actual steps, state assertions and execution evidence. |
 | EX-DEMO-03 | Deliver an operable trading demo, editable PPT proposal and playable film, clearly labelling real test-chain activity, simulated registrars and animation. |
 
@@ -460,7 +481,7 @@ Entry: Segment model is verified; genuine rollback needs existing authorized con
 - Recover interruption, retries, obsolete/duplicate events, insufficient budget and unknown results; do not invent late-receipt waits.
 - Re-trade valid unexpired assets from recovered owner=holder; ordinary resale still permits owner ahead of holder.
 - Integrate gas statistical disclosure, confirmation/cap, maximum prefreeze, actual debit, unused unfreeze and reconfirmed top-up; D-04 allocation only remains pending.
-- No gas-shortage custody, redemption deadline, forced sale or liquidation.
+- No gas-shortage custody or invented redemption deadline. The section 7.1 deferred rollback-gas exception does not waive new-trade gas admission.
 
 Deliverables: Rollback, fee/reconciliation records, recovery flow and Linux fault-injection evidence.
 
@@ -491,7 +512,7 @@ An exit condition defines the evidence required for stage acceptance.
 Entry: Affected model/integration checks and exact runtime configuration, permissions, asset control and designated test asset are verified for each real path.
 
 - Deploy exact candidate using project-supported Linux process; absent target blocks that deployment only while packaging proceeds.
-- Execute six revised scenarios on Sepolia 11155111 with actual chain records and explicitly simulated registrars, never Hoodi substitution.
+- Execute six revised scenarios on Sepolia 11155111 with actual chain records and explicitly simulated registrars, never Hoodi settlement substitution; use Hoodi only as the explicit deferred collateral source.
 - Cover all three source/Oracle contracts and record each scenario's chosen main source.
 - Verify whole-artwork backend alignment, each middleware route and frontend; join actual Oracle, funds and UI evidence.
 - Generate demo, editable PPT and playable film from final verified demo; distinguish real chain, simulated institutional roles and animation.
@@ -505,15 +526,15 @@ An exit condition defines the evidence required for stage acceptance.
 
 Stage 4 also includes authorized holder replacement mint: possession plus holder=owner, atomic old burn/new mint, editable new terms, retained old/new history and UNKNOWN/concurrency recovery. No extra cleanup/refund/unfreeze/migration approval gate is introduced. Ordinary transfer remains independent of holder equality, gap closure and current finality. Stage 5 integrates T-52 through T-68 with all source paths and real evidence.
 
-Stage 0 also verifies v1.4 document identity, current design and exact base, protects valid concurrent increments, and identifies feed/locale/parameter gaps without making global gates. Historical v1.3 loaders/locks cannot certify v1.4 or inherit acceptance.
+Stage 0 also verifies v1.5 document identity, current design and exact base, protects valid concurrent increments, and identifies feed/locale/parameter gaps without making global gates. Historical v1.3 loaders/locks cannot certify v1.5 or inherit acceptance.
 
 Stage 1 additionally implements the full commodity/crypto market, individual quote cards and gap details, complete identity-free signed-business-terms projections, actual independent positions and per-position signature evidence, long-chain interactions, six candidate languages, real reference adapter/freshness states, both collateral choices and ordinary market-maker participation. T-69..84 apply where relevant; actual feed/browser evidence stays NOT_RUN/NOT_VERIFIED until genuinely obtained. A missing feed cannot stop independent trading or registration work.
 
-Stage 5 additionally supplies real UI/data evidence for T-69..84: continuous source reading/refresh/failure recovery, simulation separation, individual gap/terms/positions/signatures/privacy, six-language responsive navigation, market-maker ordering and both collateral scenarios. Undefined financing/liquidation/revenue mechanisms remain honestly open. A model, design or historical loader pass cannot replace these results.
+Stage 5 additionally supplies real UI/data evidence for T-69..84: continuous source reading/refresh/failure recovery, simulation separation, individual gap/terms/positions/signatures/privacy, six-language responsive navigation, market-maker ordering and both collateral scenarios. Only the section 7.1 deferred mechanism is confirmed; unsupplied execution/provider/fee parameters remain explicitly open. A model, design or historical loader pass cannot replace these results.
 
 ## 17. Acceptance matrix
 
-The complete matrix retains T-01 through T-68 with revised semantics and extends through T-84. A row is an obligation, not a passing result. Parameterized/property cases may cover multiple rows. First stage is the latest initial inclusion point, not a prohibition on earlier work. Preserve exact source/run/evidence; never inherit historical green into revised assertions.
+The complete matrix retains T-01 through T-68 with revised semantics and extends through T-96, including the scoped deferred-mode cases T-85..96. A row is an obligation, not a passing result. Parameterized/property cases may cover multiple rows. First stage is the latest initial inclusion point, not a prohibition on earlier work. Preserve exact source/run/evidence; never inherit historical green into revised assertions.
 
 | Case | Assertion | Requirements | First stage / later integration |
 | --- | --- | --- | --- |
@@ -527,9 +548,9 @@ The complete matrix retains T-01 through T-68 with revised semantics and extends
 | T-08 | Account switching, disconnect or lost session must not reuse the previous account's authorization. | EX-AUTH-01 / EX-AUTH-03 | 1 |
 | T-09 | Independently submitted bids and asks follow price priority, equal-price FIFO and best executable price; no queue jumping, altered limits or specified-counterparty substitution. | EX-MATCH-01 / EX-INV-12 | 1 |
 | T-10 | All three Oracle adapters satisfy one registration contract using mint-declared formats; holder follows the same receipt; simulated roles are labelled. | EX-INV-05 / EX-SCOPE-09 / EX-MINT-05 | 1 |
-| T-11 | Principal uses the explicit selected member of the immutable NFT0 set through freeze/release/refund. Refuse missing/changed currency, conversion/substitution and insufficient/unknown selected-currency balance even with sufficient ETH gas. Freeze each liability separately before trade; no second principal debit after registration. | EX-SETTLE-01 / EX-SETTLE-05 | 2 |
+| T-11 | Prepaid-mode regression: Principal uses the explicit selected member of the immutable NFT0 set through freeze/release/refund. Refuse missing/changed currency, conversion/substitution and insufficient/unknown selected-currency balance even with sufficient ETH gas. Freeze each liability separately before trade; no second principal debit after registration. | EX-SETTLE-01 / EX-SETTLE-05 | 2 |
 | T-12 | Release eligible AB without waiting for C or D. | EX-SETTLE-02 / EX-INV-03 | 2 |
-| T-13 | Keep every segment's price and funds separate; pending later funds cannot subsidize an earlier release. | EX-SETTLE-01 / EX-SETTLE-03 | 2 |
+| T-13 | Prepaid-mode regression: Keep every segment's price and funds separate; pending later funds cannot subsidize an earlier release. | EX-SETTLE-01 / EX-SETTLE-03 | 2 |
 | T-14 | Reject wrong asset/segment/journal/network/source and bind chain/token contract/tokenId/registerId/verificationProfile/authority to the remote finalized record. Any account may relay valid proof; caller allowlists and ordinary signatures do not replace proof verification. | EX-INV-05 / EX-SETTLE-04 | 2 |
 | T-15 | Historical C and current D coexist correctly. Historical finality holds first.effectiveAt <= t < latest.effectiveAt; latest and later remain provisional. Earlier-than-first holderAsOf/entryAsOf revert and isFinalAsOf is false. Cancellation adds no finality; EX prefix completion is distinct. | EX-SETTLE-04 | 2 |
 | T-16 | Recover unknown RPC or execution results for release of already frozen funds idempotently; no new buyer-payment business failure, duplicate debit or gas charge. | EX-SETTLE-05 / EX-INV-04 / EX-NFR-04 | 2 |
@@ -551,7 +572,7 @@ The complete matrix retains T-01 through T-68 with revised semantics and extends
 | T-32 | Trace bill-of-lading terms, original Oracle registration, holder and funds. Physical collection or collection-driven destruction is not completion; authorized remint separately preserves old/new NFT links and existing evidence. | EX-EXIT-02 / EX-EXIT-03 / EX-SCOPE-09 / EX-REMINT-04 | 4 / 5 |
 | T-33 | Reject duplicate valid mappings, transfer replay and repeated funds actions; failed old segments stay dead, valid NFTs can start a new chain, history remains. | EX-EXIT-03 / EX-ROLLBACK-05 | 4 |
 | T-34 | Agent actions already authorized in the wallet need no extra platform step approval; refuse out-of-scope actions. | EX-AUTH-01 / EX-AUTH-05 | 1 |
-| T-35 | Sepolia 11155111 only; fixture NFT0 immutably permits the verified designated test PYUSD and each scenario order explicitly selects it; gas is test ETH. Refuse wrong chain/asset/NFT0 selection before sending, without currency substitution, conversion or Hoodi. | EX-DEMO-01 / EX-SCOPE-11 / EX-GAS-09 | 5 |
+| T-35 | Sepolia remains the execution/principal chain with verified NFT0-permitted selected PYUSD and test ETH gas. Reject accidental chain/asset substitution; allow Hoodi only for the separately specified deferred collateral source, never as settlement or gas replacement. | EX-DEMO-01 / EX-SCOPE-11 / EX-GAS-09 | 5 |
 | T-36 | All six scenarios have matching actual transactions, simulated registration evidence, UI states and final assertions. | EX-DEMO-02 | 5 |
 | T-37 | Demo, PPT and playable film consistently label real test-chain actions, simulated roles and animation; no implied institutional cooperation. | EX-DEMO-03 | 5 |
 | T-38 | Required CI belongs to exact head; actual deployed commit matches; read back artifact bytes and hashes. | EX-NFR-07 | 5 |
@@ -572,12 +593,12 @@ The complete matrix retains T-01 through T-68 with revised semantics and extends
 | T-53 | Check available ETH at zero, one wei below the maximum, exactly the maximum and above it, after other reservations. Sufficient P50 but insufficient cap refuses; sufficient funds proceed only when all other conditions hold. | EX-GAS-05 / EX-GAS-07 / EX-GAS-10 | 1 / 3 / 5 |
 | T-54 | Gas quote confirmation, freeze, debit and unused unfreeze settle in ETH; USD is display only. Refuse PYUSD/WETH/other gas assets, conversion, non-ETH-principal gas deductions and subsidy bypass. Preserve cap/median and consumption idempotence. | EX-GAS-04 / EX-GAS-07 / EX-GAS-08 / EX-GAS-09 / EX-SCOPE-11 | 1 / 2 / 3 / 5 |
 | T-55 | Recheck changed account/chain, concurrent ETH use, invalid freeze, old-signature replay and retries before signing/broadcast. Direct backend calls cannot bypass; prebroadcast refusal cannot invent consumed gas. | EX-GAS-10 / EX-AUTH-02 / EX-AUTH-04 / EX-INV-04 | 1 / 3 / 5 |
-| T-56 | Sufficient original frozen ETH for the same approved rollback obligation remains usable with zero unfrozen cash. No second prepayment, early unfreeze or cancelled rollback. A remaining shortage uses the original confirmed replenishment flow; no automatic exchange/subsidy. | EX-ROLLBACK-04 / EX-GAS-05 / EX-GAS-07 / EX-GAS-08 | 3 / 5 |
+| T-56 | Sufficient original frozen ETH for the same approved rollback obligation remains usable with zero unfrozen cash. No second prepayment, early unfreeze or cancelled rollback. A remaining shortage uses the original confirmed replenishment flow in prepaid mode; deferred rollback may use the explicitly authorized collateral gas-recovery route in section 7.1. | EX-ROLLBACK-04 / EX-GAS-05 / EX-GAS-07 / EX-GAS-08 | 3 / 5 |
 | T-57 | Each order selects one immutable NFT0-allowed currency; both intents and leg freeze/release/refund match it. Wrong currency refuses consistently across three sources and UI/API/Agent, without conversion or substitution. | EX-SCOPE-11 / EX-MINT-07 / EX-MATCH-01 / EX-SETTLE-06 / EX-INV-13 | 1 / 2 / 3 / 5 |
 | T-58 | Absent, conflicting, changed or unverifiable NFT0 currencies or an order without explicit selection refuse. No ETH/PYUSD default or balance-based automatic choice. PYUSD fixtures require mint-time membership and explicit selection. | EX-MINT-07 / EX-SCOPE-11 / EX-DEMO-01 | 1 / 5 |
 | T-59 | When selected principal is ETH, independently cover and account for principal and maximum gas. Refuse coverage of only one or counting the same balance/freeze twice. Reconcile principal refund and unused gas separately without restoring consumed gas. | EX-SETTLE-06 / EX-SETTLE-07 / EX-GAS-07 / EX-GAS-08 / EX-INV-13 | 1 / 2 / 3 |
 | T-60 | Mint-time one-currency and multiple-currency sets are recorded/read correctly. No later UI/API/Agent/contract/admin path can add, remove or replace the same NFT set. Valid remint creates a new NFT while atomically burning the old one. | EX-MINT-07 / EX-SCOPE-11 / EX-INV-13 / EX-REMINT-03 | 1 / 4 / 5 |
-| T-61 | Warn and refuse selected-currency principal at zero or one smallest unit short before signing/broadcast, despite sufficient other currencies/gas. Exact sufficiency may proceed under other conditions. Exclude concurrent reservations; reuse only this operation own effective freeze. | EX-SETTLE-07 / EX-SETTLE-06 / EX-GAS-07 / EX-INV-13 | 1 / 2 / 3 / 5 |
+| T-61 | Prepaid-mode regression: Warn and refuse selected-currency principal at zero or one smallest unit short before signing/broadcast, despite sufficient other currencies/gas. Exact sufficiency may proceed under other conditions. Exclude concurrent reservations; reuse only this operation own effective freeze. | EX-SETTLE-07 / EX-SETTLE-06 / EX-GAS-07 / EX-INV-13 | 1 / 2 / 3 / 5 |
 | T-62 | For multiple allowed currencies, both orders select the same currency; verify price priority/FIFO/best executable price independently inside each currency. No raw cross-currency numeric comparison, FX ranking, mixed principal sum or automatic conversion. | EX-MATCH-01 / EX-SCOPE-11 / EX-SETTLE-06 / EX-INV-12 | 1 / 5 |
 | T-63 | A holder possessing the original NFT with holder equal to owner may remint under valid existing wallet authority. Refuse non-holder, no possession, unequal owner, admin-only identity and invalid/revoked/replayed authority. | EX-REMINT-01 / EX-AUTH-01 / EX-AUTH-04 | 4 / 5 |
 | T-64 | Successful remint atomically burns the old NFT and validly mints the new one. Failure of either leaves no one-sided asset loss or two simultaneously valid bills; retain same-operation evidence. | EX-REMINT-02 / EX-INV-14 | 4 / 5 |
@@ -599,8 +620,21 @@ The complete matrix retains T-01 through T-68 with revised semantics and extends
 | T-80 | All six candidate languages cover markets/cards/terms/timeline/unknown/errors/principal/gas without mixed language or clipping. Preserve protocol identifiers and exact openGapOF=YES/NO with YES red/NO green; unknown stays unknown and original signed language remains unchanged. | EX-SCOPE-18 / EX-I18N-01 / EX-I18N-02 / EX-I18N-03 | 1 / 5 |
 | T-81 | No wallet asset/account/security/validator/Agent-permission-management routes; per-trade authority, balance/freeze and gas confirmation remain enforced. | EX-UI-06 / EX-AUTH-01 / EX-GAS-10 | 1 / 5 |
 | T-82 | Separate external references, simulated NFT quotes/trades and real chain evidence. A per-tonne reference cannot replace whole-receipt price or trigger FX-based cross-currency matching/payment/gas conversion. | EX-PRICE-04 / EX-MATCH-01 / EX-SCOPE-11 | 1 / 5 |
-| T-83 | Documents/design/code/runtime have independent identities. v1.4 cannot inherit a historical loader pass or clickable design as runtime acceptance; preserve T-01..68, six stages/demos and the current product edition. | EX-NFR-09 / Section 18 | 0 / all |
+| T-83 | Documents/design/code/runtime have independent identities. v1.5 cannot inherit a historical loader pass or clickable design as runtime acceptance; preserve T-01..68, six stages/demos and the current product edition. | EX-NFR-09 / Section 18 | 0 / all |
 | T-84 | Responsive market/details navigation and loading/error/empty/long-chain states recover; all three sources share real states and six-language rules. Missing feed/original terms stays explicit, never overall-complete. | EX-ARCH-03 / EX-UI-01 / EX-UI-04 / EX-PRICE-03 / EX-I18N-02 | 1 / 5 |
+| T-85 | Deferred mode is optional and seller-consented, with an exact T+n deadline or 72 hours before the registration deadline; retain prepaid mode. Only NFT0-allowed USD stablecoins may be principal. EX grants secured trading allowance, not a cash loan, and charges no interest spread. | EX-DEFER-01 | 1 / 5 |
+| T-86 | Accept BTC/ETH as product collateral; test only Hoodi ETH collateral with Sepolia PYUSD principal and Sepolia ETH gas. Hoodi operations need separately accounted Hoodi gas. No unimplemented Bitcoin custody or cross-chain bridge is inferred. | EX-DEFER-02 | 1 / 5 |
+| T-87 | Verify canonical finalized collateral lock evidence and its chain, vault, asset, borrower, amount and unique identity before granting destination allowance. Authenticated proof validation, valuation freshness/denomination and explicit ratio policy are required; 50 percent is only an example. | EX-DEFER-03 | 1 / 5 |
+| T-88 | Reserve collateral-backed allowance per obligation atomically and durably; reject duplicate pledges, replay, conflicting observations and concurrent over-allocation. A UI balance or caller verified flag is not authority. | EX-DEFER-04 | 1 / 5 |
+| T-89 | For A-B-C, B may resell before paying A. C's principal enters B's escrow, with original refundable segment encumbrances preserved and no double allocation. B may deposit the correctly denominated difference before the agreed deadline. | EX-DEFER-05 | 1 / 5 |
+| T-90 | If the settlement deadline arrives before AB registration completes, treat AB as incomplete and initiate the existing eligible rollback, preserving registered prefix. Do not extend the payment wait or pay A as if registration succeeded. | EX-DEFER-06 | 1 / 5 |
+| T-91 | If AB registration completes first, its NFT rollback responsibility permanently detaches under the original ordered-cut rule even if A is unpaid. B independently owes A; later debt, liquidation or payment failure cannot reverse that completed cut or make C responsible. | EX-DEFER-07 | 1 / 5 |
+| T-92 | Allow early manual settlement only with the original registration and authorization conditions. At registered-debt maturity, settle from available B escrow; liquidate pledged collateral for a remaining shortfall. No automatic unapproved margin-call threshold or guaranteed recovery is added. | EX-DEFER-08 | 1 / 5 |
+| T-93 | When B cannot fund gas needed for eligible rollback, allow collateral liquidation to cover that verified gas shortfall. Keep debt principal, fee, Sepolia recovery gas, Hoodi execution gas and residual collateral separate; do not treat Hoodi ETH as Sepolia gas. | EX-DEFER-09 | 1 / 5 |
+| T-94 | Liquidation request, source execution and destination receipt are distinct. Only verified destination PYUSD satisfies seller-payment funds; only verified destination ETH satisfies recovery-gas funding. Missing liquidity/provider, partial proceeds or unknown outcome remain unresolved, never fabricated conversion. | EX-DEFER-10 | 1 / 5 |
+| T-95 | Persist operation identity, exact payload and reservation before dispatch; reconcile ambiguous outcomes without blind replay. Confirm actual payment/refund/release once, preserve restart/concurrency safety and prohibit collateral unlock while secured obligations or unknown effects remain. | EX-DEFER-11 | 1 / 5 |
+| T-96 | Reuse existing UI rather than create a duplicate. Bind implementation, exact-head CI and main merge to the module contract before downstream wiring/testing/deployment acceptance. Report simulation, CI, actual cross-chain and served acceptance separately. | EX-DEFER-12 | 1 / 5 |
+
 
 ## 18. Engineering delivery and exact-source acceptance
 
@@ -623,7 +657,7 @@ Confirmed or removed requirements cannot remain open-choice blockers. Only the s
 | D-03 | CONFIRMED | Overdue unregistered suffix fails at cutoff; return owner to effective holder and preserve prefix; no late-receipt grace. | Verify actual time, Oracle ordering and concurrency boundaries; not a new product choice. |
 | D-04 | PARTIALLY_PENDING | Cap/P50 ETH and contemporaneous USD, confirmation, cap-sized freeze, actual debit and unused unfreeze are fixed. | Only allocation of one genuinely shared operation remains a product decision; actual send/payment interfaces require engineering verification. |
 | D-05 | ENGINEERING_VERIFICATION | Real owner return uses existing authorized asset control and wallet grant. | Only actual rollback lacking verified authority or interface; models and settled business rules proceed. |
-| D-06 | CLOSED | Principal is frozen before trade; registration releases that original position; no second buyer payment business branch. | Only technical unknown-result and idempotent recovery remain. |
+| D-06 | CONFIRMED | Prepaid mode freezes principal before trade and registration releases that position without a second payment. The separately selected deferred mode follows section 7.1: collateral allowance, registration-independent B debt, exact deadline and recovery rules. | Implementation and exact-version acceptance remain; no EX lending obligation is added. |
 | D-07 | CONFIRMED | Physical fulfillment remains outside EX; holder possession/equality, authorized atomic remint and new terms are in scope without additional cleanup/migration decisions. | No physical-delivery gate; implement confirmed remint. |
 | D-08 | ENGINEERING_VERIFICATION | Bind original Oracle source, journal, asset, segment and actual deployment interfaces. | Only the concrete missing integration path; other paths proceed. |
 | D-09 | ENGINEERING_VERIFICATION | Verify wallet compatibility from real semantics and interfaces. | Only unverified wallet execution; supported paths and contract checks proceed. |
@@ -636,13 +670,13 @@ A funded account is not a gas-policy decision; a token/provider interface is not
 
 | ID | Status | Current rule | Narrow dependency |
 | --- | --- | --- | --- |
-| D-14 | PARTLY_CONFIRMED | Crypto and warehouse-NFT collateral and hedging/collateral/arbitrage scenes are confirmed; valuation, ratios, financing, liquidation and returns remain undefined. | Only dependent mechanisms/economic calculations; do not block choices, market, references, spot or settlement. |
+| D-14 | PARTLY_CONFIRMED | Crypto and warehouse-NFT choices remain. Section 7.1 confirms optional BTC/ETH-backed deferred stablecoin settlement, deadline debt liquidation and rollback-gas recovery, without EX lending. Exact ratio, valuation/finality/provider and fee parameters must be explicitly configured; no invented defaults or returns. | Only unsupplied dependent mechanisms; do not block independent spot/UI work. |
 | D-15 | ENGINEERING_OPEN | Continuous references are confirmed; verify actual permitted feed method/endpoints/display rights/cadence. Public pages do not prove integration. | Actual provider integration/acceptance only; contracts and unavailable-state UI continue. |
 | D-16 | ENGINEERING_VERIFICATION | Verify live six-language alignment safely; source candidates en/zh-Hans/zh-Hant/fr/es/ja remain implementable. | Unverified live-alignment claim only, not independent delivery. |
 
 ## 20. Source and decision traceability
 
-This edition synchronizes the complete v1.4 product baseline, including the 2026-10-18 UI-literal and ERC semantic corrections. GitHub Actions is permitted for CI.
+This edition preserves the complete v1.4 baseline and adds the 2026-10-20 deferred cross-chain collateral requirements, including deadline-first rollback and recovery-gas liquidation. GitHub Actions is permitted for CI.
 
 | Source group | Preserved product scope |
 | --- | --- |
@@ -667,7 +701,7 @@ This edition synchronizes the complete v1.4 product baseline, including the 2026
 | SRC-15 | Public commodity source/service references in section 11.1; access rights and actual integration remain separately verified. |
 | SRC-16 / SRC-17 | Existing design and document/source revision provenance, not code/runtime acceptance; exact current candidates must be independently verified. |
 
-Conflicting old minimum-console-only, no-market-maker, agriculture-later, collateral-placeholder-only, physical-collection/burn, second-payment, second-receipt, late-grace and forced-sale mechanisms are retired. Wallet-only ALL ON or generalized multichain defaults are not silently imported into EX.
+Outside the expressly scoped section 7.1 deferred mode, conflicting old minimum-console-only, no-market-maker, agriculture-later, collateral-placeholder-only, physical-collection/burn, second-payment, second-receipt, late-grace and forced-sale mechanisms are retired. Wallet-only ALL ON or generalized multichain defaults are not silently imported into EX.
 
 ## 21. Definition of done
 
@@ -677,8 +711,10 @@ Physical collection, transport, warehouse exit and collection-driven NFT destruc
 
 The v1.4 completion scope additionally requires all applicable T-69..84: operable crypto/commodity and both collateral scenes, ordinary market-maker ordering, continuous actual public references with traceable freshness isolated from simulated orders, independent NFT gap/detail navigation, complete identity-free business terms verified against unchanged private originals, actual independent positions and role-bound signatures, no frontend wallet identities, and complete responsive six-language interaction. Undefined financing/valuation/liquidation/revenue parameters stay local and cannot be fabricated into completion. No document edit or CI-only result proves these outcomes.
 
+The deferred module additionally requires T-85..96, exact cross-chain lock and destination-receipt evidence, independent registered-cut/debt behavior, gas-shortfall recovery, durable reconciliation and existing UI wiring. Code and CI alone do not establish these runtime outcomes.
+
 ## Appendix A: migration coverage
 
-Coverage preserves sections 1..21, all six stages/demonstrations, all 111 requirement IDs, T-01..84 and D-01..16. Conflicting old assertions are replaced in their applicable requirements and acceptance cases. Historical machine plans/locks must be reconciled separately and cannot certify this revision; no historical run inherits a revised-case PASS.
+Coverage preserves sections 1..21, all six stages/demonstrations, all 111 prior requirement IDs plus EX-DEFER-01..12, T-01..96 and D-01..16. Conflicting old assertions are replaced in their applicable requirements and acceptance cases. Historical machine plans/locks must be reconciled separately and cannot certify this revision; no historical run inherits a revised-case PASS.
 
-This v1.4 edition preserves all 111 EX-* requirement rows, all T-01 through T-84, all D-01 through D-16, sections 1 through 21, Stage 0 through Stage 5 and DEMO-01 through DEMO-06. No product runtime test, deployment or on-chain action is evidenced by this publication.
+This v1.5 edition contains 123 EX-* requirement rows and T-01 through T-96, preserving the prior 111 requirements and T-01 through T-84, all D-01 through D-16, sections 1 through 21, Stage 0 through Stage 5 and DEMO-01 through DEMO-06. No product runtime test, deployment or on-chain action is evidenced by this publication.
