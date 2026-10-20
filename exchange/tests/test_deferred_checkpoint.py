@@ -135,3 +135,7 @@ class DeferredCheckpointTests(unittest.TestCase):
                 self.service.dispatch_once("pay", calls.append, expected_generation=prepared["generation"])
         self.assertEqual(calls, [])
         self.assertEqual(self.service.read()[1].operations["pay"].status, "PREPARED")
+
+    def test_same_profile_cannot_use_another_ledger_scope_to_replay_capacity(self):
+        with self.assertRaises(DeferredRefused):
+            DeferredCheckpoint(self.store, "another-case", self.fixture.profile, self.fixture.verifier)

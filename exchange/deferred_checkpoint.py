@@ -13,12 +13,14 @@ from .ids import canonical_json
 
 class DeferredCheckpoint:
     COMPONENT = "deferred-settlement"
-    COMMANDS = frozenset({"admit_lock", "reserve", "observe_registration", "credit_escrow",
-                          "deadline", "observe_liquidation_source", "observe_collateral_remainder", "prepare", "observe_gas_requirement", "mark_dispatched", "confirm"})
+    COMMANDS = frozenset({"admit_lock", "reserve", "observe_registration", "observe_rollback_authority", "credit_escrow",
+                          "deadline", "observe_liquidation_source", "observe_collateral_remainder", "prepare", "observe_gas_requirement", "mark_dispatched", "confirm_nonexecution", "confirm"})
 
     def __init__(self, store, scope, profile, verifier):
         if not isinstance(store, AggregateCheckpointStore) or self.COMPONENT not in store.components:
             raise DeferredRefused("existing aggregate with deferred component required")
+        if scope != profile.checkpoint_scope:
+            raise DeferredRefused("exact original profile checkpoint scope required")
         self.store, self.scope, self.profile, self.verifier = store, scope, profile, verifier
 
     def initialize(self, *, original_components):
@@ -41,6 +43,10 @@ class DeferredCheckpoint:
         except (ValueError, TypeError, KeyError, UnicodeError) as error:
             raise DeferredRefused("invalid deferred checkpoint") from error
         return row, model
+
+    def view(self, obligation_id):
+        row, model = self.read()
+        return {"generation": row["generation"], "projection": model.public_status(obligation_id)}
 
     def apply(self, command, *args, expected_generation, **kwargs):
         if command not in self.COMMANDS:
