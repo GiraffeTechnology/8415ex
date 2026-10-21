@@ -1,5 +1,9 @@
 """Optional source evidence survives existing feed and six-language display."""
 from datetime import datetime, timezone
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+from scenarios.observations import secret_scan
 import unittest
 
 from exchange.reference_feed import CommodityReferenceFeed
@@ -111,6 +115,43 @@ class ReferenceSourceEvidenceTests(unittest.TestCase):
         self.assertNotEqual(first["fetchedAt"], second["fetchedAt"])
         self.assertFalse(second["executableOrder"])
 
+
+    def test_future_publication_uses_completed_fetch_date_in_source_zone(self):
+        for publication in ("2026-10-21", "9999-12-31"):
+            with self.subTest(publication=publication):
+                value = self.feed([dict(self.row, publicationDate=publication)]).refresh()
+                self.assertEqual(value["status"], "unavailable")
+                self.assertIsNone(value["price"])
+        self.policy["sourceTimezone"] = "Pacific/Honolulu"
+        self.now = datetime(2026, 10, 20, 5, tzinfo=timezone.utc)
+        value = self.feed([dict(self.row, publicationDate="2026-10-20")]).refresh()
+        self.assertEqual(value["status"], "unavailable")
+
+    def test_declared_clock_skew_allows_only_the_resulting_source_calendar_date(self):
+        self.policy["maxClockSkewSeconds"] = 10
+        self.now = datetime(2026, 10, 20, 23, 59, 50, tzinfo=timezone.utc)
+        value = self.feed([dict(self.row, publicationDate="2026-10-21")]).refresh()
+        self.assertEqual(value["sourceEvidence"]["publicationDate"], "2026-10-21")
+        self.policy["maxClockSkewSeconds"] = 9
+        self.assertEqual(self.feed([dict(self.row, publicationDate="2026-10-21")]).refresh()["status"], "unavailable")
+
+    def test_source_scanner_classifies_only_literal_translations_and_keeps_private_checks(self):
+        name = "exchange/reference_provenance_page.py"
+        source = (Path(__file__).resolve().parents[1] / name).read_text(encoding="utf-8")
+        enumeration = {"ok": True, "state": "complete", "files": [name]}
+        with TemporaryDirectory() as directory:
+            target = Path(directory) / name
+            target.parent.mkdir()
+            target.write_text(source, encoding="utf-8")
+            with patch("scenarios.observations.tracked_files", return_value=enumeration):
+                self.assertTrue(secret_scan(directory)["clean"])
+                private = secret_scan(directory, private_markers=["Source publication date"])
+                self.assertFalse(private["clean"])
+                self.assertTrue(any(item["kind"] == "private-content" for item in private["findings"]))
+                target.write_text(source + "\n# " + chr(0x4E2D) + "\n", encoding="utf-8")
+                prose = secret_scan(directory)
+                self.assertFalse(prose["clean"])
+                self.assertTrue(any(item["kind"] == "non-english" for item in prose["findings"]))
 
 if __name__ == "__main__":
     unittest.main()

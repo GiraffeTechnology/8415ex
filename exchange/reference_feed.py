@@ -90,6 +90,10 @@ class CommodityReferenceFeed:
                     published = datetime.fromisoformat(publication).date()
                     if published < start.astimezone(self._source_zone).date():
                         raise ValueError("source publication precedes observation")
+                    publication_limit = (completed + timedelta(
+                        seconds=self._policy["maxClockSkewSeconds"])).astimezone(self._source_zone).date()
+                    if published > publication_limit:
+                        raise ValueError("source publication exceeds fetch date")
                     evidence["publicationDate"] = publication
                 if evidence:
                     result["sourceEvidence"] = evidence

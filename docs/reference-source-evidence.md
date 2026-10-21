@@ -6,7 +6,8 @@ The original observation date, date precision, fetch time, source age and state
 remain distinct. A source URL supplied by a reader must match the original
 policy URL. A digest must be lower-case SHA-256 text; a publication date must be
 a calendar date no earlier than the source observation in the configured source
-time zone.
+time zone and no later than the completed fetch date plus configured clock skew
+in that same zone.
 
 These are optional observation fields. An existing reader without them keeps its
 existing behavior, and the UI says they were not provided. A digest records byte

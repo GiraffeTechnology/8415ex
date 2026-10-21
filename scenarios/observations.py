@@ -210,7 +210,7 @@ PYTHON_DISPLAY_TABLES = {
     "exchange/market_page.py": ("BASE_UNITS", "WORDS", "STATES", "EMPTY_MODE"),
     "exchange/nft_detail_page.py": ("LOCALES", "QUOTE_LABELS"),
     "exchange/queue_status_page.py": ("TEXT", "CONTROL_TEXT"),
-    "exchange/reference_provenance_page.py": ("LABELS", "VALUES"),
+    "exchange/reference_provenance_page.py": ("LABELS", "VALUES", "EVIDENCE_LABELS"),
     "exchange/register_projection_page.py": ("BLOCK_TIME", "LABELS"),
     "exchange/registration_source_locales.py": ("WORDS",),
     "exchange/remint_draft_workbench.py": ("WORDS",),

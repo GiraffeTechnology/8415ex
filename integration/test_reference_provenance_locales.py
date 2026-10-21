@@ -4,7 +4,7 @@ from html.parser import HTMLParser
 import unittest
 
 from exchange.market_page import render_market
-from exchange.reference_provenance_page import render_reference_fields
+from exchange.reference_provenance_page import EVIDENCE_LABELS, render_reference_fields
 
 
 def reference():
@@ -52,7 +52,9 @@ class ReferenceProvenanceLocalesTests(unittest.TestCase):
             with self.subTest(locale=locale):
                 body = render_market([], observation, locale)
                 rendered = Terms(body).labels
-                self.assertEqual(len(rendered), 15)
+                self.assertEqual(len(rendered), 17)
+                for evidence_label in EVIDENCE_LABELS[locale]:
+                    self.assertIn(evidence_label, rendered)
                 for label in labels:
                     self.assertIn(label, rendered)
                 for value in ("987.65", "GRADE-3", "PORT-2", "SERIES-7", "Asia/Shanghai", "2026-10-16"):
