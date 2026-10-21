@@ -28,7 +28,7 @@ def compose_eia_reference_catalogue(*, policy, verify_policy, reader_options,
     # Preserve explicitly supplied callable clocks even when they are falsey.
     clock = (lambda: feed_clock()) if feed_clock is not None else None
     feed = CommodityReferenceFeed(deepcopy(policy), reader, verify_policy,
-                                  clock=clock)
+                                  clock=clock, observe_transport=reader.transport_observation)
     try:
         return compose_reference_catalogue(feed, **server_options)
     except BaseException as primary:
