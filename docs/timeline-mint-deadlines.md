@@ -1,0 +1,13 @@
+# Original mint cutoffs on the trade timeline
+
+The existing native and integrated timeline routes now display the recorded trade cutoff and, when available, the original mint declaration's registration cutoff and time semantics. They use the same receipt observation that already supplies the timeline. No new reader, clock, endpoint, provider, execution gateway or state store is introduced.
+
+The identity-excluding projection reads only numeric cutoffs and fixed time/comparison literals. To expose declaration semantics, it requires the original declaration and canonical receipt IDs to match the bound receipt, both copies of the trade cutoff to match the receipt observation, valid integer times after mint, and the original unix-second/UTC/integer, LT trade comparison and LT-or-LTE registration comparison. The additional registration-effective-time upper bound against trade cutoff is retained. Registration deadline may exceed trade cutoff; that does not remove the independent upper bound.
+
+Absent declarations remain not provided. Malformed or conflicting declarations make only the added deadline semantics unavailable; unrelated valid timeline legs, original predecessor positions and withdrawn branches remain visible. Missing values are unknown, never a zero or a fabricated UTC/precision label. The independently recorded receipt trade cutoff may remain visible while declaration semantics are unavailable.
+
+Six fixed language resources explain the two comparisons and their separate meanings. Exact numbers and protocol units remain unchanged. The page does not apply the user's wall clock, infer an effective Oracle result, mark registration complete, grant trade permission or execute cutoff recovery. A registration request's commitment window is separate from the mint registration deadline and is not substituted for it. The existing simulation and chain-acceptance boundaries remain visible.
+
+Private declaration fields, original mappings, accounts and arbitrary diagnostics never enter this allowlisted projection or HTML. This does not publish the complete mint declaration or change any deadline, refund, return, signature or authority rule.
+
+Eight regression definitions cover original time semantics, legacy/missing values, source conflicts, LT/LTE distinction, single-read observation binding, preserved branch history, six-language privacy and both existing HTTP compositions. Author product tests and browser execution are **NOT_RUN**. Real original declaration, Oracle effective-time, native recovery and full acceptance remain **OPEN**; source publication is not deployment or chain acceptance.
