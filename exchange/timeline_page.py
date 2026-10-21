@@ -134,10 +134,27 @@ def _render_deadlines(value, locale):
 
 
 
+EXECUTION_WORDS = {
+    "en": ("Trade observation", "Recorded execution time", "Trade execution recorded in domain",
+           "A recorded trade is separate from registration, funding and native transaction completion. The recorded time is not a block timestamp or protocol finality."),
+    "zh-Hans": ("交易执行观察", "已记录的执行时间", "领域中已记录交易执行",
+                "交易记录与登记、资金和原生交易完成分别展示。记录时间不是区块时间或协议 finality。"),
+    "zh-Hant": ("交易執行觀察", "已記錄的執行時間", "領域中已記錄交易執行",
+                "交易記錄與登記、資金和原生交易完成分別展示。記錄時間不是區塊時間或協定 finality。"),
+    "fr": ("Observation de l’échange", "Instant d’exécution consigné", "Exécution de l’échange consignée dans le domaine",
+           "L’échange consigné est distinct de l’enregistrement, des fonds et de la transaction native achevée. L’instant consigné n’est ni un horodatage de bloc ni la finalité du protocole."),
+    "es": ("Observación de la operación", "Instante de ejecución registrado", "Ejecución registrada en el dominio",
+           "La operación registrada es independiente del registro, los fondos y la transacción nativa completada. El instante registrado no es una marca temporal de bloque ni la finalidad del protocolo."),
+    "ja": ("取引実行の観測", "記録済みの実行時刻", "ドメインに取引実行を記録済み",
+           "取引記録は登記、資金、ネイティブ取引の完了と別に表示します。記録時刻はブロック時刻やプロトコルの finality ではありません。"),
+}
+
+
 def render_timeline(exchange, receipt_id, *, locale='en', now=None):
     if locale not in WORDS:
         raise ValueError('supported timeline locale required')
     w, q = WORDS[locale], QUEUE_WORDS[locale]
+    execution_words = EXECUTION_WORDS[locale]
     value = timeline_projection(exchange, receipt_id, now=now)
     registration_evidence = SIMULATION[locale] if value['simulatedRegistration'] else w['unknown']
 
@@ -152,17 +169,21 @@ def render_timeline(exchange, receipt_id, *, locale='en', now=None):
         price = (leg['price'] + ' ' + leg['currency'] + ' (' + w['units'] + ')'
                  if leg['price'] is not None and leg['currency'] is not None else w['unknown'])
         cells = (str(leg['legIndex']), number(leg['fromPosition']), number(leg['toPosition']),
-                 price, registration, funding, recovery, w['active'] if leg['active'] else w['withdrawn'])
+                 price, execution_words[2] if leg['executionStatus'] == 'executed' else w['unknown'],
+                 number(leg['executedAt']), registration, funding, recovery,
+                 w['active'] if leg['active'] else w['withdrawn'])
         rows.append('<tr>' + ''.join('<td>' + escape(cell) + '</td>' for cell in cells) + '</tr>')
     if not rows:
-        rows.append('<tr><td colspan="8">' + escape(w['empty']) + '</td></tr>')
-    header = '<tr>' + ''.join('<th>' + escape(w[key]) + '</th>' for key in
-                              ('leg', 'source', 'destination', 'price', 'registration', 'funding', 'recovery', 'path')) + '</tr>'
+        rows.append('<tr><td colspan="10">' + escape(w['empty']) + '</td></tr>')
+    headings = (w['leg'], w['source'], w['destination'], w['price'],
+                execution_words[0], execution_words[1], w['registration'],
+                w['funding'], w['recovery'], w['path'])
+    header = '<tr>' + ''.join('<th scope="col">' + escape(label) + '</th>' for label in headings) + '</tr>'
     summary = '<dl>' + ''.join('<dt>' + escape(w[key]) + '</dt><dd>' + escape(number(value[field])) + '</dd>'
                                for key, field in (('owner', 'ownerPosition'), ('holder', 'holderPosition'),
                                                   ('observed', 'observedAt'))) + '</dl>'
     return ('<section lang="' + locale + '"><h2>' + escape(w['heading']) + '</h2><p>'
             + escape(w['boundary']) + '</p><p>' + escape(w['basis']) + '</p><p>'
             + escape(w['registration']) + ': ' + escape(registration_evidence) + '</p>' + summary
-            + _render_deadlines(value, locale)
+            + _render_deadlines(value, locale) + '<p>' + escape(execution_words[3]) + '</p>'
             + '<table>' + header + ''.join(rows) + '</table></section>')

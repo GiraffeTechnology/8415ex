@@ -110,6 +110,7 @@ def timeline_projection(exchange, receipt_id, *, now=None):
                      'registrationStatus': state(entry.get('registrationStatus')),
                      'fundingStatus': state(entry.get('fundingStatus')),
                      'rollbackStatus': state(entry.get('rollbackStatus')),
+                     'executionStatus': 'executed' if entry.get('executionStatus') == 'executed' else 'unknown',
                      'executedAt': integer(entry.get('executedAt'))})
     return {'schema': '8415ex-domain-timeline/1', 'legs': rows,
             'ownerPosition': integer(view.get('owner', {}).get('position')),
