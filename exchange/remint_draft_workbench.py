@@ -1,5 +1,8 @@
 """Unsigned bill-term editing on the original serialized native workbench."""
 from copy import deepcopy
+from dataclasses import asdict, replace
+import hashlib
+import json
 from html import escape
 import re
 import secrets
@@ -149,6 +152,58 @@ def _attribute_updates(seed, fields):
     return tuple((name, values[name]) for name in ordered)
 
 
+REPLACEMENT_WORDS = {
+    "en": ("Template and registration format", "Load selected draft",
+        "Loading a choice resets unsaved proposed values to that original draft."),
+    "zh-Hans": ("商品模板与登记凭证格式", "载入所选草稿", "载入选项会将未保存的拟新值重置为该原始草稿。"),
+    "zh-Hant": ("商品模板與登記憑證格式", "載入所選草稿", "載入選項會將未儲存的擬新值重設為該原始草稿。"),
+    "fr": ("Modèle et format d'enregistrement", "Charger le brouillon choisi",
+        "Le chargement réinitialise les valeurs proposées non enregistrées."),
+    "es": ("Plantilla y formato de registro", "Cargar el borrador elegido",
+        "La carga restablece los valores propuestos no guardados al borrador original."),
+    "ja": ("商品テンプレートと登録証明書形式", "選択した下書きを読み込む",
+        "読み込み時に未保存の提案値を選択した元の下書きに戻します。"),
+}
+
+
+class RemintChoiceRefused(ValueError):
+    pass
+
+
+def _replacement_key(specification):
+    # Public template/voucher descriptions only. Not a private fact digest,
+    # signing ABI, grant or independent source/metadata attestation.
+    public = {"template": asdict(specification.template),
+              "voucherFormat": asdict(specification.voucher_format)}
+    raw = json.dumps(public, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _replacement_options(seed, alternatives):
+    if type(alternatives) is not tuple or len(alternatives) > 31:
+        raise ValueError("bounded original typed replacement alternatives required")
+    rows = [(seed.template.commodity_scope, seed)] + list(alternatives)
+    result = {}
+    for row in rows:
+        if type(row) is not tuple or len(row) != 2 or type(row[1]) is not MintSpecification:
+            raise ValueError("label and original typed replacement required")
+        label, candidate = row
+        _business_text(label)
+        # A choice can replace only the original template, voucher/path and
+        # their public attribute defaults. No identity, account, currency-set,
+        # business scalar or private mapping may be selected through this list.
+        normalized = replace(candidate, template=seed.template,
+            voucher_format=seed.voucher_format, public_attributes=seed.public_attributes,
+            receipt=replace(candidate.receipt, registration_path=seed.receipt.registration_path))
+        if normalized != seed:
+            raise ValueError("replacement choice changes fixed original fields")
+        key = _replacement_key(candidate)
+        if key in result:
+            raise ValueError("duplicate original template/format choice")
+        result[key] = (label, candidate)
+    return result
+
+
 class RemintDraftUnavailable(ValueError):
     pass
 
@@ -168,17 +223,24 @@ class RemintDraftEditorBinding:
     This is an unsigned editing aid, not an authorization or qualification gate.
     """
     def __init__(self, access, receipt_id, read_original_specifications, *,
-                 read_currency_choices=None):
+                 read_currency_choices=None, read_replacement_choices=None):
         if type(access) is not SerializedExchangeAccess or not callable(read_original_specifications):
             raise ValueError("original serialized access and declaration reader required")
         if read_currency_choices is not None and not callable(read_currency_choices):
             raise ValueError("original currency choices reader required when supplied")
+        if read_replacement_choices is not None and not callable(read_replacement_choices):
+            raise ValueError("original replacement choices reader required when supplied")
+        self.read_replacement_choices = read_replacement_choices
         self.read_currency_choices = read_currency_choices
         self.access = access
         self.receipt_id = receipt_id
         self.read_original_specifications = read_original_specifications
 
-    def draft(self, bill_terms=None, allowed_currencies=None, business_fields=None, attribute_fields=None):
+    def draft(self, bill_terms=None, allowed_currencies=None, business_fields=None, attribute_fields=None,
+              replacement_choice=None):
+        if replacement_choice is not None and (type(replacement_choice) is not str
+                or re.fullmatch(r"[0-9a-f]{64}", replacement_choice) is None):
+            raise RemintChoiceRefused("original replacement choice required")
         with self.access._lock:
             try:
                 pair = deepcopy(self.read_original_specifications(self.receipt_id))
@@ -187,6 +249,14 @@ class RemintDraftEditorBinding:
                         or pair[0].receipt.receipt_id != self.receipt_id):
                     raise RemintDraftUnavailable("original bound declaration pair required")
                 old, seed = pair
+                template_options = (None if self.read_replacement_choices is None else
+                    _replacement_options(seed, deepcopy(self.read_replacement_choices(self.receipt_id))))
+                selected_choice = _replacement_key(seed) if template_options is not None else None
+                if replacement_choice is not None:
+                    if template_options is None or replacement_choice not in template_options:
+                        raise RemintChoiceRefused("original replacement choice unavailable")
+                    selected_choice = replacement_choice
+                    seed = template_options[selected_choice][1]
                 old_text = _business_text(old.bill_terms)
                 seed_text = _business_text(seed.bill_terms)
                 old_fields = _business_values(old)
@@ -201,6 +271,8 @@ class RemintDraftEditorBinding:
                     _currency_choices(seed.receipt.allowed_price_currencies)
                     if not set(seed.receipt.allowed_price_currencies) <= set(choices):
                         raise RemintDraftUnavailable("original replacement currencies outside choices")
+            except RemintChoiceRefused:
+                raise
             except Exception:
                 raise RemintDraftUnavailable("original business terms unavailable") from None
             text = seed_text if bill_terms is None else _business_text(bill_terms)
@@ -218,6 +290,9 @@ class RemintDraftEditorBinding:
                 result = edit_remint_draft(old, seed, updates)
             except (DomainError, ValueError):
                 raise ValueError("unsigned business terms refused") from None
+            result["replacementChoices"] = (None if template_options is None else
+                tuple((key, row[0]) for key, row in template_options.items()))
+            result["replacementChoice"] = selected_choice
             result["attributeNames"] = attribute_names
             result["originalAttributes"] = old_attributes
             result["proposedAttributes"] = _attribute_values(result["specification"])
@@ -229,9 +304,9 @@ class RemintDraftEditorBinding:
         return old_text, result
 
     def render(self, csrf, locale="en", bill_terms=None, allowed_currencies=None, business_fields=None,
-               attribute_fields=None):
+               attribute_fields=None, replacement_choice=None):
         words = WORDS[locale]
-        original, result = self.draft(bill_terms, allowed_currencies, business_fields, attribute_fields)
+        original, result = self.draft(bill_terms, allowed_currencies, business_fields, attribute_fields, replacement_choice)
         proposed = result["specification"].bill_terms
         preview = ("" if bill_terms is None else '<section><h2>' + escape(words[4])
             + '</h2><pre>' + escape(proposed) + '</pre></section>')
@@ -273,13 +348,28 @@ class RemintDraftEditorBinding:
                 + '" maxlength="16384"'
                 + (' required' if name in result["requiredAttributeNames"] else '') + '></label>')
         attribute_form += '</fieldset>'
+        choice_form = ""
+        choice_hidden = ""
+        if result["replacementChoices"] is not None:
+            labels = REPLACEMENT_WORDS[locale]
+            choice_form = ('<form method="post" action="/remint-draft-choice" autocomplete="off">'
+                + '<input type="hidden" name="csrf" value="' + escape(csrf, quote=True) + '">'
+                + '<input type="hidden" name="lang" value="' + locale + '">'
+                + '<label>' + escape(labels[0]) + '<select name="replacementChoice">'
+                + ''.join('<option value="' + key + '"'
+                    + (' selected' if key == result["replacementChoice"] else '') + '>'
+                    + escape(label) + '</option>' for key, label in result["replacementChoices"])
+                + '</select></label><p>' + escape(labels[2]) + '</p><button type="submit">'
+                + escape(labels[1]) + '</button></form>')
+            choice_hidden = ('<input type="hidden" name="replacementChoice" value="'
+                + result["replacementChoice"] + '">')
         # Only complete public business fields and currency codes are rendered. No raw model,
         # account, asset address, mapping, fact hash or local diagnostic is served.
         return ('<p>' + escape(words[5]) + '</p><section><h2>' + escape(words[1])
-            + '</h2><pre>' + escape(original) + '</pre></section>'
+            + '</h2><pre>' + escape(original) + '</pre></section>' + choice_form
             + '<form method="post" action="/remint-draft" autocomplete="off">'
             + '<input type="hidden" name="csrf" value="' + escape(csrf, quote=True) + '">'
-            + '<input type="hidden" name="lang" value="' + locale + '">'
+            + '<input type="hidden" name="lang" value="' + locale + '">' + choice_hidden
             + '<label>' + escape(words[2]) + '<textarea name="billTerms" rows="16" '
             + 'maxlength="16384" required>' + escape(proposed) + '</textarea></label>'
             + business_form + attribute_form + currency_form + '<button type="submit">' + escape(words[3]) + '</button></form>' + preview)
@@ -304,9 +394,10 @@ class RemintDraftWorkbenchHandler(RemintReviewWorkbenchHandler):
             + '<nav><a href="/remint-draft?lang=' + locale + '">'
             + escape(WORDS[locale][0]) + '</a></nav>')
 
-    def _draft_page(self, locale, text=None, currencies=None, business_fields=None, attribute_fields=None):
+    def _draft_page(self, locale, text=None, currencies=None, business_fields=None, attribute_fields=None,
+                    replacement_choice=None):
         return self._page(WORDS[locale][0],
-            self.server.draft_editor.render(self.server.csrf, locale, text, currencies, business_fields, attribute_fields), locale,
+            self.server.draft_editor.render(self.server.csrf, locale, text, currencies, business_fields, attribute_fields, replacement_choice), locale,
             language_path="/remint-draft")
 
     def _refuse(self, status, locale="en"):
@@ -341,7 +432,7 @@ class RemintDraftWorkbenchHandler(RemintReviewWorkbenchHandler):
 
     def do_POST(self):
         request = urlsplit(self.path)
-        if request.path != "/remint-draft":
+        if request.path not in ("/remint-draft", "/remint-draft-choice"):
             return super().do_POST()
         if not self.host_ok() or self.headers.get("Origin") != self.server.origin:
             return self._refuse(403)
@@ -357,10 +448,29 @@ class RemintDraftWorkbenchHandler(RemintReviewWorkbenchHandler):
             if len(raw) != length:
                 raise ValueError("incomplete body")
             fields = parse_qs(raw.decode("utf-8"), strict_parsing=True,
-                keep_blank_values=True, max_num_fields=110, errors="strict")
+                keep_blank_values=True, max_num_fields=111, errors="strict")
+            if request.path == "/remint-draft-choice":
+                if (set(fields) != {"csrf", "lang", "replacementChoice"}
+                        or any(len(value) != 1 for value in fields.values())):
+                    raise ValueError("exact original choice fields required")
+                locale = fields["lang"][0]
+                if locale not in WORDS:
+                    locale = "en"
+                    raise ValueError("supported locale required")
+                token = fields["csrf"][0]
+                if not token.isascii() or not secrets.compare_digest(token, self.server.csrf):
+                    return self._refuse(403, locale)
+                return self.send_body(200, self._draft_page(locale,
+                    replacement_choice=fields["replacementChoice"][0]))
+            replacement_choice = fields.get("replacementChoice", [None])[0]
+            if ("replacementChoice" in fields and
+                    (len(fields["replacementChoice"]) != 1
+                     or self.server.draft_editor.read_replacement_choices is None)):
+                raise ValueError("one original replacement choice required")
             enabled = self.server.draft_editor.read_currency_choices is not None
             required = {"csrf", "lang", "billTerms"}
-            base_fields = required | ({"priceCurrency"} if enabled else set())
+            base_fields = (required | ({"priceCurrency"} if enabled else set())
+                           | ({"replacementChoice"} if replacement_choice is not None else set()))
             has_business_fields = bool(set(fields) & set(BUSINESS_FIELDS))
             attribute_keys = {key for key in fields if key.startswith("attribute.")}
             if (len(attribute_keys) > 64
@@ -388,7 +498,7 @@ class RemintDraftWorkbenchHandler(RemintReviewWorkbenchHandler):
             if not token.isascii() or not secrets.compare_digest(token, self.server.csrf):
                 return self._refuse(403, locale)
             text = _business_text(fields["billTerms"][0])
-            self.send_body(200, self._draft_page(locale, text, currencies, business_fields, attribute_fields))
+            self.send_body(200, self._draft_page(locale, text, currencies, business_fields, attribute_fields, replacement_choice))
         except RemintDraftUnavailable:
             self.close_connection = True
             self.send_body(503, WORDS[locale][6], Connection="close")
