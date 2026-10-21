@@ -48,6 +48,10 @@ QUOTE_LABELS = {
     "es": ("unidades mínimas / NFT completo", "Cotización simulada", "Cotización de la orden original", "El gas ETH se verifica por separado. EX no convierte divisas."),
     "ja": ("最小単位 / NFT 全体", "模擬見積り", "元の注文の見積り", "ETH gas は別途確認します。EX は通貨を交換しません。"),
 }
+SIGNATURE_OBSERVATION_LABELS = {
+    "en": "Signature observation", "zh-Hans": "签署观察记录", "zh-Hant": "簽署觀察記錄",
+    "fr": "Observation de signature", "es": "Observación de firma", "ja": "署名の観測記録",
+}
 STYLE = """
 :root{color-scheme:dark;--bg:#0b1012;--surface:#121a1d;--raised:#1a2529;--line:#2a363a;--ink:#edf3ef;--muted:#91a3a3;--accent:#c4ee8b;--gold:#c4a574}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px Inter,system-ui,sans-serif;line-height:1.5}
@@ -76,13 +80,29 @@ def render_detail(detail, locale="en", *, nft_key=None, choices=(), market_query
                       + e(positions[key] if positions[key] is not None else t[8]) + '</span></div>'
                       for i, key in enumerate(("current", "owner", "holder")))
     signature = {item["position"]: item["status"] for item in detail["signatureStatusByPosition"]}
-    known_positions = sorted(set(signature) | {value for value in positions.values() if value is not None})
+    observations = {}
+    for item in detail.get("signatureObservations", ()):
+        observations.setdefault(item["position"], []).append(item)
+    known_positions = sorted(set(signature) | set(observations)
+                             | {value for value in positions.values() if value is not None})
     nodes = []
     for position in known_positions:
         roles = [t[5 + i] for i, key in enumerate(("current", "owner", "holder")) if positions[key] == position]
         state = {"signed": t[9], "unsigned": t[10], "pending": t[11], "unknown": t[8]}.get(signature.get(position), t[8])
+        records = observations.get(position)
+        if records:
+            states = []
+            for index, record in enumerate(records, 1):
+                label = SIGNATURE_OBSERVATION_LABELS[locale] + " " + str(index)
+                observed = {"signed": t[9], "unsigned": t[10], "pending": t[11], "unknown": t[8]}.get(
+                    record.get("status"), t[8])
+                states.append('<li><span>' + e(label) + '</span>: <span>'
+                              + e(observed) + '</span></li>')
+            status_html = '<ol class="signature-observations">' + ''.join(states) + '</ol>'
+        else:
+            status_html = '<p class="muted">' + e(state) + '</p>'
         nodes.append('<li class="node"><span class="position">' + e(position) + '</span><div><p>'
-                     + e(" / ".join(roles)) + '</p><p class="muted">' + e(state) + '</p></div></li>')
+                     + e(" / ".join(roles)) + '</p>' + status_html + '</div></li>')
     clauses = detail["terms"].get("clauses", [])
     terms = ''.join('<article><h3>' + e(clause["label"]) + '</h3><p class="terms">'
                     + e(clause["text"]) + '</p></article>' for clause in clauses)
