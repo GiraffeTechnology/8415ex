@@ -6,7 +6,7 @@ from .remint_draft_workbench import RemintDraftEditorBinding, mount_remint_draft
 
 
 def compose_recovered_workbench_ui(checkpoint, scope, runtime, receipt_id, *,
-        read_draft_specifications=None, collateral_selection=False,
+        read_draft_specifications=None, read_draft_currency_choices=None, collateral_selection=False,
         scenario_selection=False, **original_options):
     """Construct without serving, executing, initializing or saving state.
 
@@ -18,6 +18,8 @@ def compose_recovered_workbench_ui(checkpoint, scope, runtime, receipt_id, *,
         raise ValueError("explicit selector options required")
     if read_draft_specifications is not None and not callable(read_draft_specifications):
         raise ValueError("original declaration reader required when supplied")
+    if read_draft_currency_choices is not None and not callable(read_draft_currency_choices):
+        raise ValueError("original currency choices reader required when supplied")
     loaded = compose_checkpoint_workbench(checkpoint, scope, runtime, receipt_id,
                                           **original_options)
     server = loaded.server
@@ -25,8 +27,10 @@ def compose_recovered_workbench_ui(checkpoint, scope, runtime, receipt_id, *,
         # The original editor installs its base handler. Mount it first, then
         # wrap that handler with the independent selectors so no route is lost.
         if read_draft_specifications is not None:
+            editor_options = ({} if read_draft_currency_choices is None else
+                              {"read_currency_choices": read_draft_currency_choices})
             editor = RemintDraftEditorBinding(loaded.checkpoint.access, receipt_id,
-                                             read_draft_specifications)
+                                             read_draft_specifications, **editor_options)
             mount_remint_draft(server, editor)
         if collateral_selection:
             mount_collateral_selection(server)
