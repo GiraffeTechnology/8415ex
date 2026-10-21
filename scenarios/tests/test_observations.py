@@ -589,3 +589,60 @@ class PythonLocalizedUIClassification(unittest.TestCase):
                 scan = self._scan({"exchange/authorization_page.py": source})
                 self.assertFalse(scan["clean"])
                 self.assertIn(label, {item["pattern"] for item in scan["findings"]})
+
+
+
+class QueueDeadlineLocalizedUIClassification(unittest.TestCase):
+    """Only the fixed six-locale request-window display table is UI data."""
+    _scan = LocalizedUIClassification._scan
+
+    @staticmethod
+    def _source(value=None):
+        value = chr(0x4E2D) if value is None else value
+        return "WINDOW_TEXT = " + repr({
+            locale: (value, value, value)
+            for locale in sorted(observations.DISPLAY_LOCALES)
+        }) + "\n"
+
+    def test_complete_window_table_is_display_data_with_full_scan_coverage(self):
+        scan = self._scan({"exchange/queue_status_page.py": self._source()})
+        self.assertTrue(scan["clean"], scan["findings"])
+        self.assertEqual(scan["coverage"]["scanned"], 1)
+        self.assertEqual(scan["coverage"]["skipped"], [])
+        self.assertEqual(scan["coverage"]["notReadInFull"], [])
+
+    def test_comments_and_unrelated_assignments_remain_findings(self):
+        for suffix in ("# " + chr(0x4E2D), "other = " + repr(chr(0x4E2D))):
+            with self.subTest(suffix=suffix):
+                scan = self._scan({"exchange/queue_status_page.py": self._source() + suffix})
+                self.assertFalse(scan["clean"])
+                self.assertTrue(any(row["kind"] == "non-english"
+                                    for row in scan["findings"]))
+
+    def test_incomplete_dynamic_or_wrong_file_window_tables_are_not_classified(self):
+        for path, source in (
+            ("exchange/queue_status_page.py", self._source().replace("'ja':", "'other':")),
+            ("exchange/queue_status_page.py", "WINDOW_TEXT = make(" + repr(chr(0x4E2D)) + ")\n"),
+            ("exchange/queue_status_page.py", self._source().replace("WINDOW_TEXT =", "OTHER_TEXT =")),
+            ("docs/queue_status_page.py", self._source()),
+        ):
+            with self.subTest(path=path, source=source):
+                scan = self._scan({path: source})
+                self.assertFalse(scan["clean"])
+                self.assertTrue(any(row["kind"] == "non-english"
+                                    for row in scan["findings"]))
+
+    def test_credentials_and_private_fingerprints_still_scan_window_literals(self):
+        for label, _ in observations.SECRET_PATTERNS + observations.PRIVATE_CONTENT_PATTERNS:
+            with self.subTest(pattern=label):
+                source = self._source(chr(0x4E2D) + " " + _sample(label))
+                scan = self._scan({"exchange/queue_status_page.py": source})
+                self.assertFalse(scan["clean"])
+                self.assertIn(label, {row["pattern"] for row in scan["findings"]})
+        marker = "fingerprint-" + "w" * 10
+        scan = self._scan({"exchange/queue_status_page.py": self._source(marker)},
+                          markers=(marker,))
+        self.assertFalse(scan["clean"])
+        self.assertIn("configured private fingerprint",
+                      {row["pattern"] for row in scan["findings"]})
+        self.assertNotIn(marker, str(scan))

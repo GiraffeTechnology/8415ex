@@ -120,11 +120,37 @@ CONTROL_TEXT = {
 CONTROLS = {locale: dict(zip(CONTROL_KEYS, values)) for locale, values in CONTROL_TEXT.items()}
 
 
+WINDOW_TEXT = {
+    "en": ("Reported commitment deadline", "Not reported",
+           "Original request-window observation only. A missing or conflicting deadline remains unreported; it is not replaced by the mint registration cutoff or current time. Passing this window does not establish refusal, effective registration or completed recovery."),
+    "zh-Hans": ("报告的承诺截止时间", "未报告",
+                "仅展示原请求窗口观察。缺失或冲突的截止时间保持未报告，不以铸造登记截止或当前时间替代。窗口已过不代表拒绝、登记生效或恢复完成。"),
+    "zh-Hant": ("報告的承諾截止時間", "未報告",
+                "僅展示原請求視窗觀測。缺失或衝突的截止時間保持未報告，不以鑄造登記截止或目前時間替代。視窗已過不代表拒絕、登記生效或復原完成。"),
+    "fr": ("Échéance d’engagement rapportée", "Non rapportée",
+           "Observation de la fenêtre de la demande d’origine uniquement. Une échéance absente ou contradictoire reste non rapportée ; ni échéance de création ni heure actuelle ne la remplace. Le dépassement ne prouve ni refus, ni enregistrement effectif, ni reprise achevée."),
+    "es": ("Límite de compromiso informado", "No informado",
+           "Solo observación de la ventana de la solicitud original. Un plazo ausente o contradictorio sigue sin informarse; no se sustituye por el plazo de acuñación ni la hora actual. Su vencimiento no acredita rechazo, registro efectivo ni recuperación completada."),
+    "ja": ("報告された確約期限", "未報告",
+           "元の申請の確約期間に関する観測のみです。期限が欠落または矛盾している場合は未報告のままとし、発行時の登記期限や現在時刻で置き換えません。期間経過は拒否、登記の生効、復旧完了を証明しません。"),
+}
+
+
+def _commitment_deadline(reports, leg_index, observed_at):
+    values = [entry.get("commitmentDeadlineAt") for entry in reports
+              if entry["legIndex"] == leg_index]
+    if (not values or any(type(value) is not int or not 0 <= value <= observed_at
+                          for value in values) or len(set(values)) != 1):
+        return None
+    return values[0]
+
+
 def render_queue_status(exchange, receipt_id, *, locale='en', now=None):
     """Render only original leg indices and known status meanings, never parties."""
     if locale not in WORDS:
         raise ValueError('supported queue locale required')
     w = WORDS[locale]
+    deadline_heading, deadline_missing, deadline_boundary = WINDOW_TEXT[locale]
     view = exchange.receipt_view(receipt_id, now)
     if (type(view) is not dict or view.get('receiptId') != receipt_id
             or type(view.get('observedAt')) is not int or view['observedAt'] < 0):
@@ -156,11 +182,13 @@ def render_queue_status(exchange, receipt_id, *, locale='en', now=None):
             key = 'unfiled'
         else:
             key = 'unknown'
+        deadline = _commitment_deadline(reports, index, view['observedAt'])
         rows.append('<tr><td>' + str(index) + '</td><td>' + escape(w[key])
-                    + '</td><td>' + escape(w[key + 'Detail']) + '</td></tr>')
+                    + '</td><td>' + escape(w[key + 'Detail']) + '</td><td>'
+                    + (str(deadline) if deadline is not None else escape(deadline_missing)) + '</td></tr>')
     if not rows:
-        rows.append('<tr><td colspan="3">' + escape(w['none']) + '</td></tr>')
+        rows.append('<tr><td colspan="4">' + escape(w['none']) + '</td></tr>')
     header = '<tr>' + ''.join('<th>' + escape(w[key]) + '</th>'
-                              for key in ('leg', 'state', 'detail')) + '</tr>'
+                              for key in ('leg', 'state', 'detail')) + '<th>' + escape(deadline_heading) + '</th></tr>'
     return ('<section lang="' + locale + '"><h2>' + escape(w['heading']) + '</h2><p>'
-            + escape(w['boundary']) + '</p><table>' + header + ''.join(rows) + '</table></section>')
+            + escape(w['boundary']) + '</p><p>' + escape(deadline_boundary) + '</p><table>' + header + ''.join(rows) + '</table></section>')
