@@ -1,5 +1,7 @@
 """Host-owned CLI for the original empty catalogue with an EIA reference feed."""
 import argparse
+import hashlib
+import re
 from copy import deepcopy
 import json
 import math
@@ -66,20 +68,28 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--empty-catalogue", action="store_true", required=True)
     parser.add_argument("--reference-config", required=True)
+    parser.add_argument("--reference-config-sha256", required=True)
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--tree", required=True)
     parser.add_argument("--collateral-selection", action="store_true")
     parser.add_argument("--scenario-selection", action="store_true")
     args = parser.parse_args(argv)
+    if re.fullmatch(r"[0-9a-f]{64}", args.reference_config_sha256) is None:
+        parser.error("exact host reference configuration digest required")
     try:
         with open(args.reference_config, "rb") as stream:
-            config = load_eia_reference_config(stream.read(CONFIG_LIMIT + 1))
+            raw = stream.read(CONFIG_LIMIT + 1)
+        if hashlib.sha256(raw).hexdigest() != args.reference_config_sha256:
+            raise ValueError("host reference configuration identity differs")
+        config = load_eia_reference_config(raw)
     except (OSError, ValueError, UnicodeError, RecursionError):
         parser.error("reference configuration could not be loaded")
     policy = config["policy"]
     server = compose_eia_reference_catalogue(
         policy=policy,
+        # The host-supplied external digest binds this complete configuration;
+        # the file does not choose or certify its own expected identity.
         # The operator-owned file defines this host configuration snapshot.
         # Equality is consistency only, not independent provider approval,
         # calendar/SLA attestation or a claim of third-party display rights.

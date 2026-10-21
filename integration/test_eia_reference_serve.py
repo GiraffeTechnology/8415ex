@@ -1,4 +1,5 @@
 """Synthetic CLI/config definitions; execution belongs to CI/review."""
+import hashlib
 import json
 from unittest.mock import mock_open, patch
 import unittest
@@ -22,8 +23,10 @@ class EIAReferenceServeTests(unittest.TestCase):
     def raw(self, config):
         return json.dumps(config).encode()
 
-    def args(self):
+    def args(self, raw=None):
+        raw = self.raw(self.config()) if raw is None else raw
         return ["--empty-catalogue", "--reference-config", "synthetic.json",
+                "--reference-config-sha256", hashlib.sha256(raw).hexdigest(),
                 "--port", "0", "--commit", "a" * 40, "--tree", "b" * 40,
                 "--collateral-selection", "--scenario-selection"]
 
@@ -94,8 +97,24 @@ class EIAReferenceServeTests(unittest.TestCase):
             with patch("builtins.open", mock_open(read_data=malformed)), \
                  patch("exchange.eia_reference_serve.compose_eia_reference_catalogue") as compose:
                 with self.assertRaises(SystemExit):
-                    main(self.args())
+                    main(self.args(malformed))
                 compose.assert_not_called()
+
+    def test_host_config_digest_is_external_exact_and_checked_before_binding(self):
+        raw = self.raw(self.config())
+        changed = raw.replace(b"Synthetic host config", b"Changed host config")
+        with patch("builtins.open", mock_open(read_data=changed)), \
+             patch("exchange.eia_reference_serve.compose_eia_reference_catalogue") as compose:
+            with self.assertRaises(SystemExit):
+                main(self.args(raw))
+            compose.assert_not_called()
+        for digest in ("not-a-digest", "A" * 64, "0" * 63):
+            args = self.args(raw)
+            args[args.index("--reference-config-sha256") + 1] = digest
+            with patch("builtins.open") as opened:
+                with self.assertRaises(SystemExit):
+                    main(args)
+                opened.assert_not_called()
 
     def test_main_uses_original_factory_and_lifecycle_with_explicit_flags(self):
         config = self.config()
@@ -128,7 +147,7 @@ class EIAReferenceServeTests(unittest.TestCase):
             serve.assert_not_called()
 
     def test_explicit_empty_mode_and_all_server_identities_required(self):
-        for flag in ("--empty-catalogue", "--port", "--commit", "--tree"):
+        for flag in ("--empty-catalogue", "--reference-config-sha256", "--port", "--commit", "--tree"):
             args = self.args()
             index = args.index(flag)
             del args[index:index + (1 if flag == "--empty-catalogue" else 2)]
