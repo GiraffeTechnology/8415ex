@@ -42,7 +42,7 @@ def executes(state):
 class ReservedWalletGatewayContracts(unittest.TestCase):
     def test_existing_budget_revision_and_ids_reach_original_execute(self):
         with gateway_fixture() as (gateway, client, state, value, _):
-            result = gateway.execute()
+            result = gateway.execute("4")
             self.assertEqual(executes(state), [dict(EXECUTE, expectedBudgetRevision="4")])
             self.assertEqual(result["status"], "unknown")
             self.assertFalse(result["nativeOutcomeVerified"])
@@ -51,44 +51,50 @@ class ReservedWalletGatewayContracts(unittest.TestCase):
             self.assertFalse(any(path.endswith(("/prepare", "/authorize", "/reserve", "/recover"))
                                  for _, path, _ in state["calls"]))
 
-    def test_unknown_submitted_cancelled_or_missing_never_dispatch(self):
-        for status in ("outcome-unknown", "submitted", "cancelled", "missing"):
-            with self.subTest(status=status), gateway_fixture(status) as (
-                    gateway, client, state, value, _):
-                with self.assertRaisesRegex(ReservedWalletTaskRefused, "RECONCILE_ONLY"):
-                    gateway.execute()
-                self.assertEqual(executes(state), [])
+    def test_execute_has_no_mandatory_status_or_new_readiness_query(self):
+        with gateway_fixture() as (gateway, client, state, value, _):
+            original = client.task
+            def no_status(action, payload):
+                if action == "status":
+                    self.fail("extra status query blocked original execution")
+                return original(action, payload)
+            client.task = no_status
+            result = gateway.execute("4")
+            self.assertEqual(result["status"], "unknown")
+            self.assertEqual(len(executes(state)), 1)
+            self.assertFalse(any(path == "/auth/tasks/status"
+                                 for _, path, _ in state["calls"]))
 
     def test_unknown_execute_propagates_and_same_original_client_blocks_resend(self):
         with gateway_fixture() as (gateway, client, state, value, _):
             state["mode"] = "unknown-execute"
             with self.assertRaisesRegex(WalletAPIRefused, "OUTCOME_UNKNOWN"):
-                gateway.execute()
+                gateway.execute("4")
             with self.assertRaisesRegex(WalletAPIRefused, "RECONCILE_FIRST"):
-                gateway.execute()
+                gateway.execute("4")
             self.assertEqual(len(executes(state)), 1)
             self.assertEqual(gateway.read()["reservationStatus"], "reserved")
             self.assertEqual(len(executes(state)), 1)
 
     def test_reconstructed_gateway_cannot_clear_original_durable_attempt(self):
         with gateway_fixture() as (gateway, client, state, value, options):
-            gateway.execute()
+            gateway.execute("4")
             recreated = ReservedWalletTaskGateway(client, **options)
             with self.assertRaisesRegex(WalletAPIRefused, "RECONCILE_FIRST"):
-                recreated.execute()
+                recreated.execute("4")
             self.assertEqual(len(executes(state)), 1)
 
     def test_no_fallback_store_is_created_when_original_attempt_store_is_missing(self):
         with gateway_fixture(durable=False) as (gateway, client, state, value, _):
             with self.assertRaisesRegex(WalletAPIRefused, "DURABLE_ATTEMPT_STORE_REQUIRED"):
-                gateway.execute()
+                gateway.execute("4")
             self.assertEqual(executes(state), [])
 
     def test_captured_mapping_does_not_follow_caller_mutation(self):
         with gateway_fixture() as (gateway, client, state, value, options):
             options["scope"]["nativeOperationId"] = "other"
             options["original_operation"]["recipient"] = ACTOR
-            result = gateway.execute()
+            result = gateway.execute("4")
             self.assertEqual(result["scope"]["nativeOperationId"], SCOPE["nativeOperationId"])
             self.assertEqual(len(executes(state)), 1)
 
@@ -108,7 +114,7 @@ class ReservedWalletGatewayContracts(unittest.TestCase):
             def call():
                 ready.wait(timeout=5)
                 try:
-                    return gateway.execute()["status"]
+                    return gateway.execute("4")["status"]
                 except WalletAPIRefused as error:
                     return str(error)
             with ThreadPoolExecutor(max_workers=2) as workers:

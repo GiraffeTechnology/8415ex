@@ -40,21 +40,18 @@ class ReservedWalletTaskGateway:
         with self._lock:
             return self._read()
 
-    def execute(self):
-        """Execute a matching already-reserved operation once via existing guards.
+    def execute(self, expected_budget_revision):
+        """Pass the ORIGINAL request revision directly to the original server.
 
-        The observed budget revision is the server's existing compare-and-swap
-        input, not a locally minted permission. A concurrent change is left to
-        that original CAS; this gateway never refreshes and retries execution.
+        No mandatory status query or new client readiness/approval check is
+        inserted. The server's existing reservation/CAS and the client's
+        durable attempt guard remain authoritative. Read is an independent port.
         """
         with self._lock:
-            observed = self._read()
-            if observed["reservationStatus"] != "reserved":
-                raise ReservedWalletTaskRefused("EX_RESERVED_WALLET_RECONCILE_ONLY")
             request = {"taskDigest": self._task,
                        "operationId": self._wallet_operation,
                        "childDigest": self._child,
-                       "expectedBudgetRevision": observed["budgetRevision"]}
+                       "expectedBudgetRevision": deepcopy(expected_budget_revision)}
             # Do not duplicate or reset the client's persistent attempt store.
             # Exceptions propagate; its uncertain/claimed operation stays bound.
             self._client.task("execute", request)
@@ -62,6 +59,6 @@ class ReservedWalletTaskGateway:
             return {"scope": deepcopy(self._scope), "taskDigest": self._task,
                     "walletOperationId": self._wallet_operation,
                     "childDigest": self._child,
-                    "budgetRevisionAtRequest": observed["budgetRevision"],
+                    "budgetRevisionAtRequest": deepcopy(request["expectedBudgetRevision"]),
                     "status": "unknown", "originalExecuteReturned": True,
                     "nativeOutcomeVerified": False, "replayAllowed": False}
