@@ -13,7 +13,10 @@ share this owned lifecycle with a separate service that expects the same feed
 to keep running.
 
 Every exit path closes the original HTTP resource and requests feed shutdown,
-including source-start, HTTP-serving and server-close failures. Feed shutdown
+including missing-feed, source-start, HTTP-serving and server-close failures.
+Both cleanup operations are attempted. A primary start/serve failure is preserved;
+otherwise the first cleanup failure is preserved, with only fixed cleanup notes
+for additional failures. Feed shutdown
 retains the existing stop-event and bounded worker join. This prevents another
 poll but is not evidence that an already pending source request has drained;
 there is no process kill, retry or fabricated stopped result. External callers

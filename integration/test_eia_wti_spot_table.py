@@ -22,6 +22,7 @@ class EIAWTISpotTableTests(unittest.TestCase):
                          ("3.300", "2026-10-14", "date"))
         self.assertEqual((row["currency"], row["unit"], row["priceType"]),
                          ("USD", "barrel", "spot-reference"))
+        self.assertEqual(row["series"], "PET.RWTC.D")
         self.assertEqual(row["sourceURL"], SOURCE_URL)
         self.assertEqual(len(row["rawResponseSHA256"]), 64)
 

@@ -28,13 +28,33 @@ def serve_reference_catalogue(server):
     if not isinstance(server, EmptyCatalogueServer):
         raise ValueError("original catalogue server required")
     feed = server.reference_feed
-    if not isinstance(feed, CommodityReferenceFeed):
-        raise ValueError("original attached reference feed required")
+    primary = None
     try:
+        if not isinstance(feed, CommodityReferenceFeed):
+            raise ValueError("original attached reference feed required")
         feed.start()
         server.serve_forever()
+    except BaseException as error:
+        primary = error
+        raise
     finally:
-        try:
-            server.server_close()
-        finally:
-            feed.close()
+        cleanup_failure = None
+        cleanups = [("HTTP server", server.server_close)]
+        if isinstance(feed, CommodityReferenceFeed):
+            cleanups.append(("reference feed", feed.close))
+        for label, close in cleanups:
+            try:
+                close()
+            except BaseException as error:
+                if primary is not None:
+                    note = getattr(primary, "add_note", None)
+                    if callable(note):
+                        note(label + " cleanup also failed")
+                elif cleanup_failure is None:
+                    cleanup_failure = error
+                else:
+                    note = getattr(cleanup_failure, "add_note", None)
+                    if callable(note):
+                        note(label + " cleanup also failed")
+        if primary is None and cleanup_failure is not None:
+            raise cleanup_failure

@@ -2,6 +2,8 @@
 
 This decoder reads the single daily Cushing WTI FOB spot table from the
 [EIA original series page](https://www.eia.gov/dnav/pet/hist/RWTCD.htm).
+Its canonical EIA Open Data series identifier is `PET.RWTC.D`, as listed in the
+[EIA petroleum dashboard](https://www.eia.gov/opendata/petroleum_dashboard.php).
 It fixes USD per barrel, the original specification and market, and the weekday
 columns. It does not treat a nearby chart, futures value or last number on a
 page as this series. The source's day precision remains a date; the original
