@@ -126,6 +126,27 @@ class EIAReferenceCatalogueTests(unittest.TestCase):
             close.assert_called_once()
         self.assertEqual(self.calls, [])
 
+    def test_non_callable_feed_clocks_fail_before_server_binding(self):
+        for clock in ("configured-clock", "", 0, False, [], {}, object()):
+            with self.subTest(clock=repr(clock)), \
+                 patch("exchange.eia_reference_catalogue.compose_reference_catalogue") as bind:
+                with self.assertRaises(ValueError):
+                    self.compose(feed_clock=clock)
+                bind.assert_not_called()
+        self.assertEqual(self.calls, [])
+
+    def test_falsey_callable_feed_clock_keeps_its_explicit_time(self):
+        class Clock:
+            def __bool__(self):
+                return False
+
+            def __call__(self):
+                return datetime(2026, 10, 16, tzinfo=timezone.utc)
+
+        server = self.compose(feed_clock=Clock())
+        self.assertEqual(server.reference_feed.refresh()["fetchedAt"],
+                         "2026-10-16T00:00:00Z")
+
     def test_duplicate_feed_and_missing_reader_settings_do_not_fetch(self):
         with self.assertRaises(ValueError):
             self.compose(reference_feed=object())
