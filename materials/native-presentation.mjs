@@ -1,5 +1,6 @@
 /** Editable presentation from the original browser collector. No I/O or runtime launch. */
 import {createHash} from 'node:crypto';
+import {DEMO_NARRATIVE,NARRATIVE_BASIS} from './demo-narrative.mjs';
 const NATIVE=['receipt','authorization','timeline','rollback','queue','evidence'];
 const SCENARIOS=Array.from({length:6},(_,i)=>`DEMO-${String(i+1).padStart(2,'0')}`);
 const hash=b=>createHash('sha256').update(b).digest('hex');
@@ -71,8 +72,7 @@ export function validateCapture(captured){
 
 const TITLES={receipt:'Whole warehouse receipt',authorization:'Wallet authorization scope',
   timeline:'Trade and registration timeline',rollback:'Suffix recovery',queue:'Pending operations',evidence:'Run evidence'};
-const DEMO_TITLES=['Single transfer and collection','Independent prefix release','B refusal and full suffix recovery',
-  'C refusal with the completed prefix preserved','Recovery with an exhausted gas budget','Trading cutoff and collection'];
+const DEMO_TITLES=DEMO_NARRATIVE.map(value=>value.title);
 function text(slide,value,box,font,size=24,bold=false){
   const shape=slide.shapes.add({geometry:'textbox',position:box,fill:'none',line:{fill:'none',width:0}});
   shape.text=value;
@@ -119,12 +119,14 @@ export async function buildPresentation(captured,{fontFamily,artifactTool}={}){
     const item=v.screenshots.find(s=>s.entry===scenario.id);
     slide=baseSlide(p,scenario.id+': '+DEMO_TITLES[i],fontFamily); photo(slide,item);
     const counts=Object.entries(scenario.counts).map(([k,n])=>k+' '+n).join(', ');
-    text(slide,'LOCAL SIMULATION. '+scenario.route+'. Recorded counts: '+counts+'.'+
+    text(slide,'LOCAL SIMULATION. Requirement label only. Recorded '+scenario.route+'; required '+DEMO_NARRATIVE[i].mainSource+'. Counts: '+counts+'.'+
       (scenario.hasRecordedError?' The scenario recorded an error.':''),
       {left:64,top:610,width:1152,height:80},fontFamily,19);
     slide.speakerNotes.text=sourceNote+'\nScenario '+scenario.id+'\nRun '+scenario.runId+
       '\nEvidence '+scenario.path+'\nScreenshot '+item.path+'\nPNG SHA256 '+hash(item.data)+
-      '\nRecorded counts are retained observations, not independent QA acceptance.';
+      '\nRequired behavior: '+DEMO_NARRATIVE[i].requiredOutcome+
+      '\nPRD narrative SHA256 '+NARRATIVE_BASIS.sha256+
+      '\nRequirement labels do not verify recorded scenario semantics. Recorded counts are retained observations, not independent QA acceptance.';
   }
   slide=baseSlide(p,'Evidence and remaining acceptance',fontFamily);
   text(slide,'Actual browser screenshots document a local simulation.\nThe source and scenario run identities remain attached to each image.\nWallet signing, the specified Sepolia asset and deployed operation require separate evidence.\nRendering, PowerPoint opening and visual review remain independent QA work.',
@@ -144,7 +146,11 @@ export async function buildPresentation(captured,{fontFamily,artifactTool}={}){
     inputManifestSHA256:v.manifestSHA256,slides:15,contentKind:'LOCAL_BROWSER_SIMULATION',
     fontPolicy:{basis:'design',families:[fontFamily]},rendering:'NOT_RUN',visualQA:'NOT_RUN',
     powerPointOpen:'NOT_RUN',providerSigningChain:'NOT_RUN',deployment:'NOT_RUN',
-    finalAcceptance:'NOT_RUN',scenarioRuns:v.scenarios.map(s=>({id:s.id,runId:s.runId,route:s.route,counts:s.counts}))};
+    finalAcceptance:'NOT_RUN',requirementsNarrative:{...NARRATIVE_BASIS},
+    scenarioRuns:v.scenarios.map((s,i)=>({id:s.id,runId:s.runId,route:s.route,counts:s.counts,
+      requiredMainSource:DEMO_NARRATIVE[i].mainSource,
+      mainSourceMatchesRequirement:s.route===DEMO_NARRATIVE[i].mainSource,
+      scenarioSemanticsVerified:false}))};
   return {presentation:p,manifest,exportPptx:()=>api.PresentationFile.exportPptx(p)};
 }
 /** Render only when the independent Linux QA host calls this explicitly. */

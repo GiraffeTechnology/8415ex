@@ -1,12 +1,12 @@
 /** Film delivery preparation from the original finalized browser recording. */
 import {createHash} from 'node:crypto';
 import {validateCapture} from './native-presentation.mjs';
+import {DEMO_NARRATIVE,NARRATIVE_BASIS} from './demo-narrative.mjs';
 const hash=b=>createHash('sha256').update(b).digest('hex');
 const check=(v,message)=>{if(!v)throw new Error(message);};
 const text=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const encoder=new TextEncoder();
-const TITLES=['Single transfer and collection','Independent prefix release','B refusal and full suffix recovery',
-  'C refusal with the completed prefix preserved','Recovery with an exhausted gas budget','Trading cutoff and collection'];
+const TITLES=DEMO_NARRATIVE.map(value=>value.title);
 function utc(value){
   check(typeof value==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)$/.test(value),'explicit UTC recording time required');
   const time=Date.parse(value);check(Number.isFinite(time),'valid UTC recording time required');return time;
@@ -36,25 +36,31 @@ export function buildFilm(captured,timing){
     const shot=v.screenshots.find(x=>x.entry===s.id),offset=utc(shot.observedUTC)-start;
     check(offset>=0&&offset<timing.mediaDurationMs&&utc(shot.observedUTC)<=end,'scenario screenshot is outside original recording');
     return {id:s.id,title:TITLES[i],runId:s.runId,route:s.route,counts:s.counts,
+      requiredMainSource:DEMO_NARRATIVE[i].mainSource,
+      mainSourceMatchesRequirement:s.route===DEMO_NARRATIVE[i].mainSource,
+      requiredOutcome:DEMO_NARRATIVE[i].requiredOutcome,
+      scenarioSemanticsVerified:false,
       observedUTC:shot.observedUTC,offsetMs:offset,recordedError:s.hasRecordedError};
   });
   check(chapters.every((c,i)=>i===0||c.offsetMs>chapters[i-1].offsetMs),'chronological distinct scenario observations required');
   const cues=chapters.map((c,i)=>{
     const endMs=i+1<chapters.length?chapters[i+1].offsetMs:timing.mediaDurationMs;
-    return c.id+'\n'+stamp(c.offsetMs)+' --> '+stamp(endMs)+'\n'+c.id+' '+c.title+'\nLOCAL SIMULATION. '+c.route+'.\n';
+    return c.id+'\n'+stamp(c.offsetMs)+' --> '+stamp(endMs)+'\n'+c.id+' '+c.title+'\nLOCAL SIMULATION. Requirement label only. Recorded route: '+c.route+'. Required main source: '+c.requiredMainSource+'.\n';
   });
   const source={schema:'8415ex-native-film/1',source:v.source,inputManifestSHA256:v.manifestSHA256,
     video:{path:'browser-capture.webm',bytes:data.length,sha256:hash(data)},timing:{...timing},chapters,
+    requirementsNarrative:{...NARRATIVE_BASIS},
     timingVerification:'HOST_RECORD_REQUIRED_NOT_INDEPENDENTLY_VERIFIED',
     playbackQA:'NOT_RUN',contentQA:'NOT_RUN',providerSigningChain:'NOT_RUN',deployment:'NOT_RUN',finalAcceptance:'NOT_RUN'};
   const links=chapters.map(c=>'<li><button type="button" data-offset="'+String(c.offsetMs/1000)+'">'+
-    text(c.id+' '+c.title)+'</button><p>'+text(c.route+' / '+c.runId)+'<br>'+text(JSON.stringify(c.counts))+
+    text(c.id+' '+c.title)+'</button><p>'+text('Recorded route '+c.route+' / required main source '+c.requiredMainSource+' / '+c.runId)+'<br>'+text(JSON.stringify(c.counts))+
     (c.recordedError?' / Scenario recorded an error.':'')+'</p></li>').join('');
   const html='<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+
     '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; media-src \'self\'; style-src \'unsafe-inline\'; script-src \'unsafe-inline\'">'+
     '<title>8415EX browser demonstration</title><style>body{font:18px system-ui;max-width:1120px;margin:30px auto;padding:20px;color:#142738}video{width:100%}button{font:inherit;text-align:left;padding:8px}p{overflow-wrap:anywhere}li{margin:20px 0}</style>'+
     '<h1>8415EX browser demonstration</h1><p>LOCAL SIMULATION. Registrars, accounts and assets are synthetic. No real institutional cooperation is implied.</p>'+
     '<video id="film" controls preload="metadata"><source src="browser-capture.webm" type="video/webm"><track kind="captions" src="chapters.vtt" srclang="en" label="English" default></video>'+
+    '<p>Chapter titles describe the current PRD scope. Recorded routes, counts, errors and footage remain original evidence; these labels do not establish current scenario acceptance.</p>'+
     '<p>The video retains the original browser recording bytes. Chapters locate screenshot observation times. They do not assert when the underlying operation began.</p>'+
     '<p>Playback, content review, provider signing, Sepolia transactions and deployment acceptance: NOT_RUN.</p><ol>'+links+'</ol>'+
     '<h2>Source</h2><p>Commit '+text(v.source.commit)+'<br>Tree '+text(v.source.tree)+'</p>'+
