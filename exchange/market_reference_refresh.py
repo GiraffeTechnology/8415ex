@@ -19,6 +19,7 @@ REFERENCE_SCRIPT = r"""(() => {
     const timeout = setTimeout(() => controller.abort(), 10000);
     try {
       const url = new URL(window.location.href);
+      url.hash = "";
       url.searchParams.set("reference", "1");
       const response = await fetch(url.href, {
         method: "GET", cache: "no-store", credentials: "omit",
@@ -80,7 +81,7 @@ REFERENCE_SCRIPT = r"""(() => {
     stopped = true;
     clearTimeout(timer);
     if (active) active.abort();
-  }, {once: true});
+  });
   window.addEventListener("pageshow", event => {
     if (event.persisted) { stopped = false; refresh(); }
   });

@@ -33,3 +33,10 @@ failure/recovery and separation from NFT prices and financial execution.
 Ten original-server HTTP regression definitions are included and have not been
 run by the source author. Browser lifecycle execution, actual ongoing source
 changes and production serving remain separate acceptance evidence.
+
+The full Workbench handles reference fragments before any NFT directory read.
+Browser response identity excludes the URL fragment while retaining the original
+query. The exit handler remains installed across every back-forward cache cycle.
+Regression checks cover the actual Workbench HTTP branch and execute the exact
+refresh script in a Node VM with a test-only DOM/event adapter. These checks are
+not real-browser, provider, deployment or ongoing source acceptance.

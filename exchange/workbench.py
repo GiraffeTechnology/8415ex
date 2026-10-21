@@ -344,12 +344,13 @@ class WorkbenchHandler(DemoHandler):
                 search = query.get("q", [""])[0]
                 if len(search) > 64 or any(ord(char) < 32 for char in search):
                     raise ValueError("bounded market search required")
-                rows = self.server.nft_directory.catalogue()
                 feed = self.server.reference_feed
                 reference = feed.snapshot() if feed is not None else {"status": "not-connected", "price": None}
                 if req.path == "/market" and fragment is not None:
                     self.send_body(200, render_reference_panel(reference, locale))
-                elif req.path == "/market":
+                    return
+                rows = self.server.nft_directory.catalogue()
+                if req.path == "/market":
                     body = render_market(rows, reference, locale, search)
                     send_market_response(self, body.replace('<main>',
                         '<main>' + self.native_navigation(locale), 1))

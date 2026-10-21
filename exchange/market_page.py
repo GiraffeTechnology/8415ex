@@ -57,11 +57,11 @@ EMPTY_MODE = {"en": "Read-only catalogue", "zh-Hans": "只读目录", "zh-Hant":
 
 REFRESH_FAILURE = {
     "en": "Page refresh unavailable; the previous observation is retained.",
-    "zh-Hans": "页面刷新不可用；保留上次观察值。",
-    "zh-Hant": "頁面更新不可用；保留上次觀察值。",
-    "fr": "Actualisation de la page indisponible ; observation précédente conservée.",
-    "es": "Actualización de página no disponible; se conserva la observación anterior.",
-    "ja": "ページを更新できません。前回の観測値を保持しています。",
+    "zh-Hans": "\u9875\u9762\u5237\u65b0\u4e0d\u53ef\u7528\uff1b\u4fdd\u7559\u4e0a\u6b21\u89c2\u5bdf\u503c\u3002",
+    "zh-Hant": "\u9801\u9762\u66f4\u65b0\u4e0d\u53ef\u7528\uff1b\u4fdd\u7559\u4e0a\u6b21\u89c0\u5bdf\u503c\u3002",
+    "fr": "Actualisation de la page indisponible ; observation pr\u00e9c\u00e9dente conserv\u00e9e.",
+    "es": "Actualizaci\u00f3n de p\u00e1gina no disponible; se conserva la observaci\u00f3n anterior.",
+    "ja": "\u30da\u30fc\u30b8\u3092\u66f4\u65b0\u3067\u304d\u307e\u305b\u3093\u3002\u524d\u56de\u306e\u89b3\u6e2c\u5024\u3092\u4fdd\u6301\u3057\u3066\u3044\u307e\u3059\u3002",
 }
 
 

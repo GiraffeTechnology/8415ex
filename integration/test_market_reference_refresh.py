@@ -130,5 +130,51 @@ class MarketReferenceRefreshTests(unittest.TestCase):
         self.assertIn("&lt;/script&gt;", body)
 
 
+
+class WorkbenchReferenceIsolationTests(unittest.TestCase):
+    def test_fragment_never_reads_nft_catalogue_but_catalogue_still_does(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from exchange.workbench import WorkbenchServer
+        detail = Mock(side_effect=AssertionError("NFT source must not be read by a reference refresh"))
+        binding = SimpleNamespace(receipt_id="refresh-fixture", run={}, gateway=None,
+                                  public_detail=detail)
+        server = WorkbenchServer(binding, port=0, commit="a" * 40, tree="b" * 40)
+        worker = threading.Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        opener = build_opener(ProxyHandler({})).open
+        try:
+            with opener(server.origin + "/market?reference=1", timeout=5) as response:
+                self.assertEqual(response.code, 200)
+                self.assertIn(b'commodity-reference', response.read())
+            detail.assert_not_called()
+            with opener(server.origin + "/api/catalogue", timeout=5) as response:
+                self.assertEqual(response.code, 200)
+                self.assertEqual(len(json.loads(response.read())["nfts"]), 1)
+            self.assertEqual(detail.call_count, 1)
+        finally:
+            server.shutdown()
+            server.server_close()
+            worker.join(timeout=2)
+
+
+class MarketRefreshScriptLifecycleTests(unittest.TestCase):
+    def run_script_case(self, case):
+        from pathlib import Path
+        import subprocess
+        from exchange.market_reference_refresh import REFERENCE_SCRIPT
+        result = subprocess.run(
+            ["node", str(Path(__file__).parent / "fixtures" / "market_refresh_browser.cjs")],
+            input=json.dumps({"script": REFERENCE_SCRIPT, "case": case}),
+            text=True, capture_output=True, timeout=10, check=True)
+        self.assertEqual(json.loads(result.stdout), {"case": case, "passed": True})
+
+    def test_anchor_does_not_reject_same_page_response(self):
+        self.run_script_case("fragment")
+
+    def test_every_exit_after_bfcache_restoration_aborts_active_read(self):
+        self.run_script_case("repeated-exit")
+
+
 if __name__ == "__main__":
     unittest.main()
