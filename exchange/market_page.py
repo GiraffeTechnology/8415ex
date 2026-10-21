@@ -4,6 +4,7 @@ from urllib.parse import urlencode
 from .nft_detail_page import LOCALES, STYLE
 from .gap_projection import gap_label
 from .reference_provenance_page import render_reference_fields
+from .market_reference_refresh import REFERENCE_SCRIPT
 
 ASSETS = {name: ("image/png" if name.endswith(".png") else "image/svg+xml") for name in
           ("soy.png", "ore.png", "copper.png", "cube.svg", "search.svg", "sparkline.svg", "sparkline-stale.svg")}
@@ -54,6 +55,32 @@ EMPTY_MODE = {"en": "Read-only catalogue", "zh-Hans": "只读目录", "zh-Hant":
               "fr": "Catalogue en lecture seule", "es": "Catálogo de solo lectura", "ja": "読み取り専用一覧"}
 
 
+REFRESH_FAILURE = {
+    "en": "Page refresh unavailable; the previous observation is retained.",
+    "zh-Hans": "页面刷新不可用；保留上次观察值。",
+    "zh-Hant": "頁面更新不可用；保留上次觀察值。",
+    "fr": "Actualisation de la page indisponible ; observation précédente conservée.",
+    "es": "Actualización de página no disponible; se conserva la observación anterior.",
+    "ja": "ページを更新できません。前回の観測値を保持しています。",
+}
+
+
+def render_reference_panel(reference, locale="en"):
+    if locale not in LOCALES or type(reference) is not dict:
+        raise ValueError("original reference observation and locale required")
+    t, common, states = WORDS[locale], LOCALES[locale], STATES[locale]
+    e = lambda value: escape(str(value), quote=True)
+    status = reference.get("status", "not-connected")
+    label = {"fresh": states[0], "stale": states[1], "unavailable": states[2],
+             "unknown": states[3], "not-connected": t[15]}.get(status, states[3])
+    return ('<section id="commodity-reference" aria-live="polite"><h2>' + e(t[4])
+            + '</h2><p class="missing" data-reference-status>' + e(label)
+            + '</p><p class="quote">' + e(reference.get("price") if reference.get("price") is not None else common[3])
+            + '</p><dl class="source-fields">' + render_reference_fields(reference, locale)
+            + '</dl><p class="missing" data-browser-error hidden>'
+            + e(REFRESH_FAILURE[locale]) + '</p></section>')
+
+
 def render_market(entries, reference, locale="en", query="", *, empty_catalogue=False):
     if type(empty_catalogue) is not bool:
         raise ValueError("explicit catalogue mode required")
@@ -82,20 +109,16 @@ def render_market(entries, reference, locale="en", query="", *, empty_catalogue=
                      + '<h2>' + e(name) + '</h2><p class="muted">' + e(card.get("spec", t[8])) + '</p><div class="quote">'
                      + price + '</div><p>' + quantity + ' · 1 NFT</p><p><span class="badge ' + gap_class
                      + '">' + e(gap) + '</span></p><span>' + e(t[10]) + ' →</span></a>')
-    status = reference.get("status", "not-connected")
-    status_label = {"fresh": states[0], "stale": states[1], "unavailable": states[2], "unknown": states[3], "not-connected": t[15]}.get(status, states[3])
-    fields = render_reference_fields(reference, locale)
+    reference_panel = render_reference_panel(reference, locale)
     languages = ''.join('<a href="/market?' + e(urlencode({"lang": key, "q": query})) + '" lang="' + key + '">' + key + '</a>' for key in LOCALES)
     return ('<!doctype html><html lang="' + locale + '"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             '<title>8415EX · ' + e(t[0]) + '</title><style>' + STYLE + MARKET_STYLE + '</style><body><main><header class="market-top">'
             '<img src="/assets/cube.svg" width="20" height="20" alt=""><b>8415EX</b><span class="badge">' + e(EMPTY_MODE[locale] if empty_catalogue else "DEMO") + '</span><a href="#nfts">' + e(t[0])
             + '</a><span>' + e(t[1]) + '</span><span>' + e(t[2]) + '</span><span>' + e(t[3]) + '</span><nav>' + languages + '</nav></header>'
-            '<p class="notice">' + e(t[7]) + '</p><section><h2>' + e(t[4]) + '</h2><p class="missing">' + e(status_label)
-            + '</p><p class="quote">' + e(reference.get("price") if reference.get("price") is not None else common[3])
-            + '</p><dl class="source-fields">' + fields + '</dl></section><section class="hero"><div><h1>' + e(t[5])
+            '<p class="notice">' + e(t[7]) + '</p>' + reference_panel + '<section class="hero"><div><h1>' + e(t[5])
             + '</h1><p class="muted">' + e(t[6]) + '</p><button disabled>' + e(t[11]) + '</button></div><figure><img class="hero-photo" src="/assets/soy.png" alt="'
             + e(t[9]) + '"><figcaption class="muted">' + e(t[9]) + '</figcaption></figure></section><div class="market-tools"><h2 id="nfts">' + e(t[1])
             + '</h2><a href="/market?' + e(urlencode({"lang": locale})) + '">' + e(t[14]) + '</a><form class="search" method="get" action="/market">'
             '<input type="hidden" name="lang" value="' + locale + '"><img src="/assets/search.svg" width="18" height="18" alt=""><input name="q" maxlength="64" value="'
             + e(query) + '" aria-label="' + e(t[12]) + '"><button>' + e(t[12]) + '</button></form></div><div class="nft-grid">'
-            + (''.join(cards) or '<p>' + e(t[13]) + '</p>') + '</div><footer class="muted">' + e(t[7]) + '</footer></main></body></html>')
+            + (''.join(cards) or '<p>' + e(t[13]) + '</p>') + '</div><footer class="muted">' + e(t[7]) + '</footer></main><script>' + REFERENCE_SCRIPT + '</script></body></html>')
