@@ -12,6 +12,8 @@ from .delivery import git_tree
 MAX_ARCHIVE = 16 * 1024 * 1024
 MAX_CONTENT = 8 * 1024 * 1024
 MAX_MEMBERS = 512
+# Directory metadata has its own finite budget; it is not executable source.
+MAX_DIRECTORIES = 128
 MANIFEST = "DEMO-KIT-MANIFEST.json"
 BOOTSTRAP = b"""import hashlib, os, sys
 sys.dont_write_bytecode = True
@@ -35,9 +37,10 @@ def read_archive(data):
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             members = archive.infolist()
-            if len(members) > MAX_MEMBERS:
+            if len(members) > MAX_MEMBERS + MAX_DIRECTORIES:
                 raise ValueError("too many archive members")
             seen, result, total = set(), {}, 0
+            directory_count = file_count = 0
             for member in members:
                 path = member.filename.rstrip("/")
                 parts = path.split("/")
@@ -51,7 +54,13 @@ def read_archive(data):
                 if stat.S_ISLNK(mode) or member.flag_bits & 1:
                     raise ValueError("link or encrypted member refused")
                 if member.is_dir():
+                    directory_count += 1
+                    if directory_count > MAX_DIRECTORIES:
+                        raise ValueError("too many archive directories")
                     continue
+                file_count += 1
+                if file_count > MAX_MEMBERS:
+                    raise ValueError("too many archive members")
                 if stat.S_IFMT(mode) not in (0, stat.S_IFREG):
                     raise ValueError("non-regular member refused")
                 total += member.file_size
