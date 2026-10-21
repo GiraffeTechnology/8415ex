@@ -9,6 +9,9 @@ from .gap_projection import display_gap, settlement_record
 from .signature_projection import signature_status
 from .register_projection import register_projection
 
+TERM_SECTION_KEYS = ("commodity", "quantity", "storage-delivery", "currencies",
+                     "deadlines", "additional", "signed-business-terms", "revision-history")
+
 
 def _market_card(row, view):
     card = row.get("marketCard")
@@ -121,14 +124,20 @@ def receipt_detail(exchange, receipt_id, *, read_details=None, verify_details=No
                 raise ValueError("empty business projection")
             output = []
             for clause in clauses:
-                if not isinstance(clause, dict) or set(clause) != {"label", "text"}:
+                if (not isinstance(clause, dict)
+                        or set(clause) not in ({"label", "text"}, {"label", "text", "section"})):
                     raise ValueError("business clause schema mismatch")
                 if any(not isinstance(clause[key], str) or not clause[key].strip() for key in ("label", "text")):
                     raise ValueError("missing business clause")
                 # Refuse rather than silently modifying a signed obligation.
                 if re.search(r"0x[0-9a-fA-F]{40}", clause["label"] + clause["text"]):
                     raise ValueError("identity-bearing projection")
-                output.append({"label": clause["label"], "text": clause["text"]})
+                projected = {"label": clause["label"], "text": clause["text"]}
+                if "section" in clause:
+                    if type(clause["section"]) is not str or clause["section"] not in TERM_SECTION_KEYS:
+                        raise ValueError("unknown business section")
+                    projected["section"] = clause["section"]
+                output.append(projected)
             result["terms"].update(status="provided-verified-projection", clauses=output)
         result["sourceStatus"] = "verified-original-reader"
         result["marketCard"] = _market_card(row, view)
