@@ -41,7 +41,7 @@ class OracleHTTPTransport:
     """
     MAX_BYTES = 65536
     ROUTE = re.compile(r"\A/v1/oracle/projection/(0|[1-9][0-9]{0,77})"
-                       r"(?:/(entry/version|holder/as-of|finality/as-of)"
+                       r"(?:/(entry/version|entry/as-of|holder/as-of|finality/as-of)"
                        r"/(0|[1-9][0-9]{0,19}))?\Z")
 
     def __init__(self, origin, timeout_ms=5000):

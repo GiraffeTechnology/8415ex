@@ -102,6 +102,32 @@ class OracleProjectionJoin:
 
     def inspect(self, binding, version, record_commitment, as_of, cutoff):
         """Return detached joined read facts; never manufacture release authority."""
+        return self._inspect(binding, version, record_commitment, as_of, cutoff)
+
+    def inspect_as_of(self, binding, as_of, cutoff):
+        """Select the original covering record without guessing its version.
+
+        This still requires the original canonical mapping verifier. A public
+        projection entry or registry locator alone is not release authority.
+        """
+        require(type(binding) is PrincipalBinding, CODE, "original EX segment binding required")
+        require(str(binding.asset.chain_id) == self._source["chainId"],
+                CODE, "asset/source chain mismatch")
+        token_id = _decimal(str(binding.asset.token_id), 256)
+        as_of, cutoff = _decimal(as_of, 64), _decimal(cutoff, 64)
+        body = self._get(token_id, "entry/as-of/" + as_of, ("instant", "entry"))
+        require(body["instant"] == as_of, CODE, "Oracle instant differs")
+        entry = _entry(body["entry"])
+        require(int(entry["effectiveAt"]) <= int(as_of)
+                and (entry["supersededAt"] == "0" or int(as_of) < int(entry["supersededAt"])),
+                CODE, "entry does not cover requested instant")
+        return self._inspect(binding, entry["version"], entry["recordCommitment"],
+                             as_of, cutoff, selected_entry=entry)
+
+    def _inspect(self, binding, version, record_commitment, as_of, cutoff,
+                 selected_entry=None):
+        """Bounded original version/holder/finality read, with optional selection."""
+
         require(type(binding) is PrincipalBinding, CODE, "original EX segment binding required")
         require(str(binding.asset.chain_id) == self._source["chainId"],
                 CODE, "asset/source chain mismatch")
@@ -116,6 +142,8 @@ class OracleProjectionJoin:
             entry = _entry(self._get(token_id, "entry/version/" + version, ("entry",))["entry"])
             require(entry["version"] == version and entry["recordCommitment"] == commitment,
                     CODE, "registration version or commitment differs")
+            require(selected_entry is None or entry == selected_entry,
+                    CODE, "Oracle selected entry changed during joined reads")
             require(int(entry["effectiveAt"]) <= int(as_of)
                     and (entry["supersededAt"] == "0" or int(as_of) < int(entry["supersededAt"])),
                     CODE, "entry does not cover requested instant")
