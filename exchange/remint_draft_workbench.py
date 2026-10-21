@@ -105,6 +105,50 @@ def _business_updates(fields):
     }
 
 
+ATTRIBUTE_WORDS = {
+    "en": ("Proposed commodity attributes", "Original commodity attributes",
+        "An empty optional value removes that attribute from the new draft."),
+    "zh-Hans": ("拟新商品属性", "原商品属性", "可选值留空会从新草稿中删除该属性。"),
+    "zh-Hant": ("擬新商品屬性", "原商品屬性", "可選值留空會從新草稿中刪除該屬性。"),
+    "fr": ("Attributs proposés de la marchandise", "Attributs originaux",
+        "Une valeur facultative vide supprime cet attribut du nouveau brouillon."),
+    "es": ("Atributos propuestos de la mercancía", "Atributos originales",
+        "Un valor opcional vacío elimina ese atributo del nuevo borrador."),
+    "ja": ("提案する商品属性", "元の商品属性", "任意項目を空にすると新しい下書きから削除されます。"),
+}
+
+
+def _attribute_schema(specification):
+    names = specification.template.applicable_fields
+    if (type(names) is not tuple or len(names) > 64
+            or any(_business_text(name) != name for name in names)):
+        raise ValueError("bounded original public attribute schema required")
+    return names
+
+
+def _attribute_values(specification):
+    return { _business_text(name): _business_text(value)
+             for name, value in specification.public_attributes }
+
+
+def _attribute_updates(seed, fields):
+    names = _attribute_schema(seed)
+    if (type(fields) is not dict
+            or set(fields) != {"attribute." + str(i) for i in range(len(names))}
+            or any(type(value) is not str for value in fields.values())):
+        raise ValueError("complete original attribute fields required")
+    values = {}
+    for i, name in enumerate(names):
+        value = fields["attribute." + str(i)]
+        if value != "":
+            values[name] = _business_text(value)
+    # Keep the original seed's surviving order; append newly populated fields
+    # in the original template order. No schema is selected by the request.
+    ordered = [name for name, _ in seed.public_attributes if name in values]
+    ordered += [name for name in names if name in values and name not in ordered]
+    return tuple((name, values[name]) for name in ordered)
+
+
 class RemintDraftUnavailable(ValueError):
     pass
 
@@ -134,7 +178,7 @@ class RemintDraftEditorBinding:
         self.receipt_id = receipt_id
         self.read_original_specifications = read_original_specifications
 
-    def draft(self, bill_terms=None, allowed_currencies=None, business_fields=None):
+    def draft(self, bill_terms=None, allowed_currencies=None, business_fields=None, attribute_fields=None):
         with self.access._lock:
             try:
                 pair = deepcopy(self.read_original_specifications(self.receipt_id))
@@ -147,6 +191,9 @@ class RemintDraftEditorBinding:
                 seed_text = _business_text(seed.bill_terms)
                 old_fields = _business_values(old)
                 _business_values(seed)
+                attribute_names = _attribute_schema(seed)
+                old_attributes = _attribute_values(old)
+                _attribute_values(seed)
                 choices = (None if self.read_currency_choices is None else
                            _currency_choices(deepcopy(self.read_currency_choices(self.receipt_id))))
                 if choices is not None:
@@ -160,6 +207,8 @@ class RemintDraftEditorBinding:
             updates = ({"specification": {}, "receipt": {}} if business_fields is None
                        else _business_updates(business_fields))
             updates["specification"]["bill_terms"] = text
+            if attribute_fields is not None:
+                updates["specification"]["public_attributes"] = _attribute_updates(seed, attribute_fields)
             if allowed_currencies is not None:
                 selected = _currency_choices(allowed_currencies)
                 if choices is None or not set(selected) <= set(choices):
@@ -169,15 +218,20 @@ class RemintDraftEditorBinding:
                 result = edit_remint_draft(old, seed, updates)
             except (DomainError, ValueError):
                 raise ValueError("unsigned business terms refused") from None
+            result["attributeNames"] = attribute_names
+            result["originalAttributes"] = old_attributes
+            result["proposedAttributes"] = _attribute_values(result["specification"])
+            result["requiredAttributeNames"] = seed.template.required_fields
             result["originalBusinessFields"] = old_fields
             result["proposedBusinessFields"] = _business_values(result["specification"])
             result["currencyChoices"] = choices
             result["originalCurrencies"] = old.receipt.allowed_price_currencies if choices is not None else None
         return old_text, result
 
-    def render(self, csrf, locale="en", bill_terms=None, allowed_currencies=None, business_fields=None):
+    def render(self, csrf, locale="en", bill_terms=None, allowed_currencies=None, business_fields=None,
+               attribute_fields=None):
         words = WORDS[locale]
-        original, result = self.draft(bill_terms, allowed_currencies, business_fields)
+        original, result = self.draft(bill_terms, allowed_currencies, business_fields, attribute_fields)
         proposed = result["specification"].bill_terms
         preview = ("" if bill_terms is None else '<section><h2>' + escape(words[4])
             + '</h2><pre>' + escape(proposed) + '</pre></section>')
@@ -207,6 +261,18 @@ class RemintDraftEditorBinding:
             business_form += ('<label>' + escape(label) + control + '</label><p>'
                 + escape(words[1]) + ': ' + escape(original_value) + '</p>')
         business_form += '</fieldset>'
+        attribute_labels = ATTRIBUTE_WORDS[locale]
+        attribute_form = ('<section><h2>' + escape(attribute_labels[1]) + '</h2><dl>'
+            + ''.join('<dt>' + escape(name) + '</dt><dd>' + escape(value) + '</dd>'
+                      for name, value in result["originalAttributes"].items()) + '</dl></section>'
+            + '<fieldset><legend>' + escape(attribute_labels[0]) + '</legend><p>'
+            + escape(attribute_labels[2]) + '</p>')
+        for i, name in enumerate(result["attributeNames"]):
+            attribute_form += ('<label>' + escape(name) + '<input name="attribute.'
+                + str(i) + '" value="' + escape(result["proposedAttributes"].get(name, ""), quote=True)
+                + '" maxlength="16384"'
+                + (' required' if name in result["requiredAttributeNames"] else '') + '></label>')
+        attribute_form += '</fieldset>'
         # Only complete public business fields and currency codes are rendered. No raw model,
         # account, asset address, mapping, fact hash or local diagnostic is served.
         return ('<p>' + escape(words[5]) + '</p><section><h2>' + escape(words[1])
@@ -216,7 +282,7 @@ class RemintDraftEditorBinding:
             + '<input type="hidden" name="lang" value="' + locale + '">'
             + '<label>' + escape(words[2]) + '<textarea name="billTerms" rows="16" '
             + 'maxlength="16384" required>' + escape(proposed) + '</textarea></label>'
-            + business_form + currency_form + '<button type="submit">' + escape(words[3]) + '</button></form>' + preview)
+            + business_form + attribute_form + currency_form + '<button type="submit">' + escape(words[3]) + '</button></form>' + preview)
 
 
 def mount_remint_draft(server, editor):
@@ -238,9 +304,9 @@ class RemintDraftWorkbenchHandler(RemintReviewWorkbenchHandler):
             + '<nav><a href="/remint-draft?lang=' + locale + '">'
             + escape(WORDS[locale][0]) + '</a></nav>')
 
-    def _draft_page(self, locale, text=None, currencies=None, business_fields=None):
+    def _draft_page(self, locale, text=None, currencies=None, business_fields=None, attribute_fields=None):
         return self._page(WORDS[locale][0],
-            self.server.draft_editor.render(self.server.csrf, locale, text, currencies, business_fields), locale,
+            self.server.draft_editor.render(self.server.csrf, locale, text, currencies, business_fields, attribute_fields), locale,
             language_path="/remint-draft")
 
     def _refuse(self, status, locale="en"):
@@ -291,12 +357,20 @@ class RemintDraftWorkbenchHandler(RemintReviewWorkbenchHandler):
             if len(raw) != length:
                 raise ValueError("incomplete body")
             fields = parse_qs(raw.decode("utf-8"), strict_parsing=True,
-                keep_blank_values=True, max_num_fields=46, errors="strict")
+                keep_blank_values=True, max_num_fields=110, errors="strict")
             enabled = self.server.draft_editor.read_currency_choices is not None
             required = {"csrf", "lang", "billTerms"}
             base_fields = required | ({"priceCurrency"} if enabled else set())
             has_business_fields = bool(set(fields) & set(BUSINESS_FIELDS))
-            exact_fields = base_fields | (set(BUSINESS_FIELDS) if has_business_fields else set())
+            attribute_keys = {key for key in fields if key.startswith("attribute.")}
+            if (len(attribute_keys) > 64
+                    or any(re.fullmatch(r"attribute\.(0|[1-9][0-9]?)", key) is None
+                           or len(fields[key]) != 1 for key in attribute_keys)):
+                raise ValueError("bounded original attribute input fields required")
+            exact_fields = (base_fields | attribute_keys
+                            | (set(BUSINESS_FIELDS) if has_business_fields else set()))
+            attribute_fields = ({key: fields[key][0] for key in attribute_keys}
+                                if attribute_keys else None)
             if (set(fields) != exact_fields
                     or any(len(fields.get(key, ())) != 1
                            for key in required | (set(BUSINESS_FIELDS) if has_business_fields else set()))):
@@ -314,7 +388,7 @@ class RemintDraftWorkbenchHandler(RemintReviewWorkbenchHandler):
             if not token.isascii() or not secrets.compare_digest(token, self.server.csrf):
                 return self._refuse(403, locale)
             text = _business_text(fields["billTerms"][0])
-            self.send_body(200, self._draft_page(locale, text, currencies, business_fields))
+            self.send_body(200, self._draft_page(locale, text, currencies, business_fields, attribute_fields))
         except RemintDraftUnavailable:
             self.close_connection = True
             self.send_body(503, WORDS[locale][6], Connection="close")
