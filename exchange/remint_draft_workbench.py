@@ -6,6 +6,7 @@ import secrets
 from urllib.parse import parse_qs, urlsplit
 
 from .demo_ui import MAX_BODY
+from .errors import DomainError
 from .mint_specification import MintSpecification
 from .remint_draft_edit import edit_remint_draft
 from .remint_review_workbench import RemintReviewWorkbenchServer, RemintReviewWorkbenchHandler
@@ -51,6 +52,59 @@ def _currency_choices(value):
     return value
 
 
+BUSINESS_FIELDS = ("commodityName", "commodityQuantity", "commodityUnit", "receiptNumber",
+    "billNumber", "issuer", "registrar", "storageLocation", "tradeStopAt",
+    "registrationDeadline", "registrationComparison")
+BUSINESS_LABELS = {
+    "en": ("Commodity", "Goods quantity", "Goods unit", "Receipt number", "Bill of lading number",
+        "Issuer", "Registrar", "Storage location", "Trading cutoff (UTC Unix seconds)",
+        "Registration deadline (UTC Unix seconds)", "Registration comparison"),
+    "zh-Hans": ("商品", "商品数量", "商品单位", "收据编号", "提单编号", "签发人", "登记方", "存储地点",
+        "交易截止（UTC Unix秒）", "登记截止（UTC Unix秒）", "登记比较语义"),
+    "zh-Hant": ("商品", "商品數量", "商品單位", "收據編號", "提單編號", "簽發人", "登記方", "儲存地點",
+        "交易截止（UTC Unix秒）", "登記截止（UTC Unix秒）", "登記比較語義"),
+    "fr": ("Marchandise", "Quantité de marchandises", "Unité", "Numéro du reçu", "Numéro du connaissement",
+        "Émetteur", "Registraire", "Lieu de stockage", "Fin de négociation (secondes Unix UTC)",
+        "Échéance d'enregistrement (secondes Unix UTC)", "Comparaison d'enregistrement"),
+    "es": ("Mercancía", "Cantidad de mercancía", "Unidad", "Número de recibo", "Número del conocimiento",
+        "Emisor", "Registrador", "Lugar de almacenamiento", "Límite de negociación (segundos Unix UTC)",
+        "Plazo de registro (segundos Unix UTC)", "Comparación de registro"),
+    "ja": ("商品", "商品数量", "商品単位", "受領書番号", "船荷証券番号", "発行者", "登録者", "保管場所",
+        "取引期限（UTC Unix秒）", "登録期限（UTC Unix秒）", "登録の比較条件"),
+}
+
+
+def _business_values(specification):
+    receipt = specification.receipt
+    values = (receipt.commodity_name, str(receipt.commodity_quantity), receipt.commodity_unit,
+        receipt.receipt_number, specification.bill_of_lading_number, specification.issuer,
+        specification.registrar, specification.storage_location, str(receipt.trade_stop_at),
+        str(specification.registration_deadline), specification.registration_comparison)
+    return dict(zip(BUSINESS_FIELDS, (_business_text(value) for value in values)))
+
+
+def _business_updates(fields):
+    if (type(fields) is not dict or set(fields) != set(BUSINESS_FIELDS)
+            or any(type(value) is not str for value in fields.values())):
+        raise ValueError("complete original public business fields required")
+    values = {key: _business_text(value) for key, value in fields.items()}
+    for key in ("commodityQuantity", "tradeStopAt", "registrationDeadline"):
+        if re.fullmatch(r"0|[1-9][0-9]{0,77}", values[key]) is None:
+            raise ValueError("canonical bounded integer business value required")
+        values[key] = int(values[key])
+        if values[key] >= 2 ** 256:
+            raise ValueError("bounded integer business value required")
+    return {
+        "receipt": {"commodity_name": values["commodityName"],
+            "commodity_quantity": values["commodityQuantity"], "commodity_unit": values["commodityUnit"],
+            "receipt_number": values["receiptNumber"], "trade_stop_at": values["tradeStopAt"]},
+        "specification": {"bill_of_lading_number": values["billNumber"], "issuer": values["issuer"],
+            "registrar": values["registrar"], "storage_location": values["storageLocation"],
+            "registration_deadline": values["registrationDeadline"],
+            "registration_comparison": values["registrationComparison"]},
+    }
+
+
 class RemintDraftUnavailable(ValueError):
     pass
 
@@ -80,7 +134,7 @@ class RemintDraftEditorBinding:
         self.receipt_id = receipt_id
         self.read_original_specifications = read_original_specifications
 
-    def draft(self, bill_terms=None, allowed_currencies=None):
+    def draft(self, bill_terms=None, allowed_currencies=None, business_fields=None):
         with self.access._lock:
             try:
                 pair = deepcopy(self.read_original_specifications(self.receipt_id))
@@ -91,6 +145,8 @@ class RemintDraftEditorBinding:
                 old, seed = pair
                 old_text = _business_text(old.bill_terms)
                 seed_text = _business_text(seed.bill_terms)
+                old_fields = _business_values(old)
+                _business_values(seed)
                 choices = (None if self.read_currency_choices is None else
                            _currency_choices(deepcopy(self.read_currency_choices(self.receipt_id))))
                 if choices is not None:
@@ -101,20 +157,27 @@ class RemintDraftEditorBinding:
             except Exception:
                 raise RemintDraftUnavailable("original business terms unavailable") from None
             text = seed_text if bill_terms is None else _business_text(bill_terms)
-            updates = {"specification": {"bill_terms": text}}
+            updates = ({"specification": {}, "receipt": {}} if business_fields is None
+                       else _business_updates(business_fields))
+            updates["specification"]["bill_terms"] = text
             if allowed_currencies is not None:
                 selected = _currency_choices(allowed_currencies)
                 if choices is None or not set(selected) <= set(choices):
                     raise ValueError("selected currencies outside original choices")
-                updates["receipt"] = {"allowed_price_currencies": selected}
-            result = edit_remint_draft(old, seed, updates)
+                updates["receipt"]["allowed_price_currencies"] = selected
+            try:
+                result = edit_remint_draft(old, seed, updates)
+            except (DomainError, ValueError):
+                raise ValueError("unsigned business terms refused") from None
+            result["originalBusinessFields"] = old_fields
+            result["proposedBusinessFields"] = _business_values(result["specification"])
             result["currencyChoices"] = choices
             result["originalCurrencies"] = old.receipt.allowed_price_currencies if choices is not None else None
         return old_text, result
 
-    def render(self, csrf, locale="en", bill_terms=None, allowed_currencies=None):
+    def render(self, csrf, locale="en", bill_terms=None, allowed_currencies=None, business_fields=None):
         words = WORDS[locale]
-        original, result = self.draft(bill_terms, allowed_currencies)
+        original, result = self.draft(bill_terms, allowed_currencies, business_fields)
         proposed = result["specification"].bill_terms
         preview = ("" if bill_terms is None else '<section><h2>' + escape(words[4])
             + '</h2><pre>' + escape(proposed) + '</pre></section>')
@@ -129,7 +192,22 @@ class RemintDraftEditorBinding:
                     + escape(code, quote=True) + '"' + (' checked' if code in selected else '')
                     + '>' + escape(code) + '</label>' for code in result["currencyChoices"])
                 + '</fieldset>')
-        # Only complete business text and explicit public currency codes are rendered. No raw model,
+        business_form = '<fieldset><legend>' + escape(words[2]) + '</legend>'
+        for key, label in zip(BUSINESS_FIELDS, BUSINESS_LABELS[locale]):
+            value = result["proposedBusinessFields"][key]
+            original_value = result["originalBusinessFields"][key]
+            if key == "registrationComparison":
+                control = ('<select name="' + key + '">'
+                    + ''.join('<option value="' + option + '"'
+                        + (' selected' if option == value else '') + '>' + option + '</option>'
+                        for option in ("LT", "LTE")) + '</select>')
+            else:
+                control = ('<input name="' + key + '" value="' + escape(value, quote=True)
+                    + '" maxlength="16384" required>')
+            business_form += ('<label>' + escape(label) + control + '</label><p>'
+                + escape(words[1]) + ': ' + escape(original_value) + '</p>')
+        business_form += '</fieldset>'
+        # Only complete public business fields and currency codes are rendered. No raw model,
         # account, asset address, mapping, fact hash or local diagnostic is served.
         return ('<p>' + escape(words[5]) + '</p><section><h2>' + escape(words[1])
             + '</h2><pre>' + escape(original) + '</pre></section>'
@@ -138,7 +216,7 @@ class RemintDraftEditorBinding:
             + '<input type="hidden" name="lang" value="' + locale + '">'
             + '<label>' + escape(words[2]) + '<textarea name="billTerms" rows="16" '
             + 'maxlength="16384" required>' + escape(proposed) + '</textarea></label>'
-            + currency_form + '<button type="submit">' + escape(words[3]) + '</button></form>' + preview)
+            + business_form + currency_form + '<button type="submit">' + escape(words[3]) + '</button></form>' + preview)
 
 
 def mount_remint_draft(server, editor):
@@ -160,9 +238,9 @@ class RemintDraftWorkbenchHandler(RemintReviewWorkbenchHandler):
             + '<nav><a href="/remint-draft?lang=' + locale + '">'
             + escape(WORDS[locale][0]) + '</a></nav>')
 
-    def _draft_page(self, locale, text=None, currencies=None):
+    def _draft_page(self, locale, text=None, currencies=None, business_fields=None):
         return self._page(WORDS[locale][0],
-            self.server.draft_editor.render(self.server.csrf, locale, text, currencies), locale,
+            self.server.draft_editor.render(self.server.csrf, locale, text, currencies, business_fields), locale,
             language_path="/remint-draft")
 
     def _refuse(self, status, locale="en"):
@@ -213,12 +291,18 @@ class RemintDraftWorkbenchHandler(RemintReviewWorkbenchHandler):
             if len(raw) != length:
                 raise ValueError("incomplete body")
             fields = parse_qs(raw.decode("utf-8"), strict_parsing=True,
-                keep_blank_values=True, max_num_fields=35, errors="strict")
+                keep_blank_values=True, max_num_fields=46, errors="strict")
             enabled = self.server.draft_editor.read_currency_choices is not None
             required = {"csrf", "lang", "billTerms"}
-            if (set(fields) != required | ({"priceCurrency"} if enabled else set())
-                    or any(len(fields.get(key, ())) != 1 for key in required)):
+            base_fields = required | ({"priceCurrency"} if enabled else set())
+            has_business_fields = bool(set(fields) & set(BUSINESS_FIELDS))
+            exact_fields = base_fields | (set(BUSINESS_FIELDS) if has_business_fields else set())
+            if (set(fields) != exact_fields
+                    or any(len(fields.get(key, ())) != 1
+                           for key in required | (set(BUSINESS_FIELDS) if has_business_fields else set()))):
                 raise ValueError("exact draft fields required")
+            business_fields = ({key: fields[key][0] for key in BUSINESS_FIELDS}
+                               if has_business_fields else None)
             currencies = tuple(fields["priceCurrency"]) if enabled else None
             if currencies is not None:
                 _currency_choices(currencies)
@@ -230,7 +314,7 @@ class RemintDraftWorkbenchHandler(RemintReviewWorkbenchHandler):
             if not token.isascii() or not secrets.compare_digest(token, self.server.csrf):
                 return self._refuse(403, locale)
             text = _business_text(fields["billTerms"][0])
-            self.send_body(200, self._draft_page(locale, text, currencies))
+            self.send_body(200, self._draft_page(locale, text, currencies, business_fields))
         except RemintDraftUnavailable:
             self.close_connection = True
             self.send_body(503, WORDS[locale][6], Connection="close")
