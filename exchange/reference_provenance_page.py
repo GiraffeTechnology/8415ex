@@ -1,5 +1,7 @@
 """Localized reference provenance over an existing observation, without reads."""
+from datetime import date
 from html import escape
+import re
 
 
 FIELDS = ("provider", "sourceURL", "series", "commodity", "spec", "market",
@@ -35,13 +37,45 @@ VALUES = {
 }
 
 
+
+EVIDENCE_LABELS = {
+    "en": ("Source publication date", "Source response SHA-256"),
+    "zh-Hans": ("来源发布日期", "来源响应 SHA-256"),
+    "zh-Hant": ("來源發布日期", "來源回應 SHA-256"),
+    "fr": ("Date de publication de la source", "SHA-256 de la réponse source"),
+    "es": ("Fecha de publicación de origen", "SHA-256 de la respuesta de origen"),
+    "ja": ("出典の公開日", "出典レスポンスの SHA-256"),
+}
+FIELDS += ("publicationDate", "rawResponseSHA256")
+LABELS = {locale: labels + EVIDENCE_LABELS[locale] for locale, labels in LABELS.items()}
+
+
+def _source_evidence(observation, key):
+    evidence = observation.get("sourceEvidence")
+    if type(evidence) is not dict:
+        return None
+    value = evidence.get(key)
+    if type(value) is not str:
+        return None
+    if key == "rawResponseSHA256":
+        return value if re.fullmatch(r"[0-9a-f]{64}", value) else None
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value) is None:
+        return None
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return None
+    return value
+
+
 def render_reference_fields(observation, locale="en"):
     if type(observation) is not dict or locale not in LABELS:
         raise ValueError("existing reference observation and supported locale required")
     missing, date_only, instant, spot, seconds = VALUES[locale]
 
     def display(key):
-        value = observation.get(key)
+        value = (_source_evidence(observation, key) if key in ("publicationDate", "rawResponseSHA256")
+                 else observation.get(key))
         if key == "sourceDelay":
             if type(value) is not dict:
                 return missing

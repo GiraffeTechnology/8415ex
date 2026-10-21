@@ -75,6 +75,28 @@ class CommodityReferenceFeed:
                 result = {key: row[key] for key in SCOPE}
                 result.update(price=price, sourceAsOf=source, sourcePrecision=precision,
                               fetchedAt=completed.isoformat().replace("+00:00", "Z"))
+                evidence = {}
+                if "sourceURL" in row and row["sourceURL"] != self._policy["sourceURL"]:
+                    raise ValueError("source response URL differs")
+                if "rawResponseSHA256" in row:
+                    digest = row["rawResponseSHA256"]
+                    if type(digest) is not str or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+                        raise ValueError("source response digest differs")
+                    evidence["rawResponseSHA256"] = digest
+                if "publicationDate" in row:
+                    publication = row["publicationDate"]
+                    if type(publication) is not str or re.fullmatch(r"\d{4}-\d{2}-\d{2}", publication) is None:
+                        raise ValueError("source publication date differs")
+                    published = datetime.fromisoformat(publication).date()
+                    if published < start.astimezone(self._source_zone).date():
+                        raise ValueError("source publication precedes observation")
+                    publication_limit = (completed + timedelta(
+                        seconds=self._policy["maxClockSkewSeconds"])).astimezone(self._source_zone).date()
+                    if published > publication_limit:
+                        raise ValueError("source publication exceeds fetch date")
+                    evidence["publicationDate"] = publication
+                if evidence:
+                    result["sourceEvidence"] = evidence
             except (Exception, InvalidOperation):
                 result = None
             with self._lock:
