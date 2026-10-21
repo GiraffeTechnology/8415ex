@@ -98,6 +98,30 @@ class UnknownCalendarTests(unittest.TestCase):
         self.assertEqual(value["sourceTimezone"], "UTC")
         self.assertEqual(value["sourceDelay"]["minimumSeconds"], 60)
 
+    def test_exact_instant_rejects_next_day_publication_without_civil_grace(self):
+        self.row.update(sourceAsOf="2026-10-16T11:59:00Z",
+                        sourcePrecision="instant", publicationDate="2026-10-17")
+        refused = self.feed.refresh()
+        self.assertEqual(refused["status"], "unavailable")
+        self.assertIsNone(refused["price"])
+        self.row["publicationDate"] = "2026-10-16"
+        accepted = self.feed.refresh()
+        self.assertEqual(accepted["status"], "fresh")
+        self.assertEqual(accepted["sourceTimezone"], "UTC")
+
+    def test_exact_instant_retains_only_explicit_clock_skew_allowance(self):
+        self.now = datetime(2026, 10, 16, 23, 59, 50, tzinfo=timezone.utc)
+        self.row.update(sourceAsOf="2026-10-16T23:59:40Z",
+                        sourcePrecision="instant", publicationDate="2026-10-17")
+        for seconds, expected in ((9, "unavailable"), (10, "fresh")):
+            policy = dict(self.policy, maxClockSkewSeconds=seconds)
+            feed = CommodityReferenceFeed(policy, self.read,
+                lambda p: p == policy, clock=lambda: self.now)
+            try:
+                self.assertEqual(feed.refresh()["status"], expected)
+            finally:
+                feed.close()
+
     def test_six_language_fields_render_missing_metadata_without_fake_zero(self):
         value = self.feed.refresh()
         for locale, values in VALUES.items():

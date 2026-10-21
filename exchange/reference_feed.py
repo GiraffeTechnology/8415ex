@@ -106,7 +106,7 @@ class CommodityReferenceFeed:
                         raise ValueError("source publication precedes observation")
                     publication_limit = (completed + timedelta(
                         seconds=self._policy["maxClockSkewSeconds"],
-                        days=1 if self._source_zone is None else 0)).astimezone(
+                        days=1 if precision == "date" and self._source_zone is None else 0)).astimezone(
                             self._source_zone or timezone.utc).date()
                     if published > publication_limit:
                         raise ValueError("source publication exceeds fetch date")
