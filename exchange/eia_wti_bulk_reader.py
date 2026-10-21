@@ -24,8 +24,13 @@ def _unique(pairs):
     return result
 
 
+def _reject_constant(value):
+    raise ValueError("nonfinite manifest constant")
+
+
 def _petroleum(raw):
-    value = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique)
+    value = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique,
+                       parse_constant=_reject_constant)
     item = value["dataset"]["PET"]
     if (type(item) is not dict or item.get("identifier") != "PET"
             or item.get("data_set") != "PET" or item.get("accessURL") != BULK_URL

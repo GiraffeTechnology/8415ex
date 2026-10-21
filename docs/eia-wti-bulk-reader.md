@@ -40,6 +40,13 @@ Source attribution and copyright are not replaced by dataset public access.
 This reader makes no licensing decision and does not configure production,
 start a scheduler or change NFT prices, orders, wallets or financial state.
 
-Nine synthetic transport regression definitions are included and have not
+Ten synthetic transport regression definitions are included and have not
 been executed by the source author. Actual continuous feed configuration and
 host acceptance remain separate from these source definitions.
+
+## Requirement and evidence mapping
+
+| Requirement | Exact source/configuration | Exact tests and run evidence | Verdict |
+| --- | --- | --- | --- |
+| T-71; EX-SCOPE-15, EX-PRICE-01, EX-PRICE-02 | `exchange/eia_wti_bulk_reader.py:EIAWTIBulkReader` with host-supplied bounded transport, cadence/backoff and fixed PET.RWTC.D policy. It uses the repaired `exchange/eia_wti_bulk_archive.py` and current original reader/feed contracts; construction never starts polling. | `integration/test_eia_wti_bulk_reader.py:BulkReaderTests`, ten definitions in Bootstrap checks' joined Stage 5 integration run. Retain candidate head and tested merge/base identity, runner metadata, complete test log and exact source/archive artifacts. | Current integrated candidate synthetic CI NOT_RUN pending actual checks; continuous host/source acceptance NOT_VERIFIED. |
+| T-72; EX-PRICE-02, EX-PRICE-03, EX-PRICE-04 | Source dates/update timestamps, archive/member/line/manifest hashes and cache reuse stay distinct. Every manifest JSON constant is finite; invalid input fails without accepting a new archive, source marker or quote. Failed reads preserve old cache only internally and report unavailable. | Exact tests cover unchanged/changed PET metadata, failed archive cache retention, origin/MIME/size refusal, provider Retry-After, sanitized diagnostics and nonfinite manifest constants rejected before archive acquisition. | Synthetic transport only; source timezone/freshness policy, live endpoint/browser unavailable/recovery states, deployment identity and actual acquisition intervals remain NOT_RUN/NOT_VERIFIED. |

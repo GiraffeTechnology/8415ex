@@ -156,6 +156,19 @@ class BulkReaderTests(unittest.TestCase):
                 self.reader(policy)
         self.assertEqual(self.calls, [])
 
+    def test_nonfinite_manifest_refuses_request_before_archive_or_cache(self):
+        for token in (b"NaN", b"Infinity", b"-Infinity"):
+            with self.subTest(token=token):
+                self.setUp()
+                response = self.manifest()
+                response.raw = response.raw[:-1] + b',"unselected":' + token + b"}"
+                self.queue.append(response)
+                with self.assertRaises(SpotSourceUnavailable):
+                    self.reader(self.policy)
+                self.assertEqual(len(self.calls), 1)
+                self.assertIsNone(self.reader._cached)
+                self.assertIsNone(self.reader._petroleum_marker)
+
     def test_error_details_are_sanitized(self):
         def failing(request, timeout):
             raise RuntimeError("synthetic-private-detail")

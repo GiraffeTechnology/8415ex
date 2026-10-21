@@ -100,6 +100,71 @@ class WTIBulkArchiveTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             select_eia_wti_bulk_archive(bytes(raw))
 
+
+    def test_nonfinite_constants_in_unselected_lines_are_refused(self):
+        for token in (b"NaN", b"Infinity", b"-Infinity"):
+            malformed = b'{"series_id":"OTHER","value":' + token + b"}\n"
+            for member in (malformed + self.line(), self.line() + malformed):
+                with self.subTest(token=token, member=member[:20]):
+                    with self.assertRaises(ValueError):
+                        select_eia_wti_bulk_archive(self.archive([("PET.txt", member)]))
+
+    def test_declared_valid_prefix_cannot_hide_member_suffix(self):
+        prefix = self.line()
+        for compression in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED):
+            for suffix in (self.line(), b"malformed trailing content\n"):
+                raw = bytearray(self.archive([("PET.txt", prefix + suffix)], compression))
+                central = raw.index(b"PK\x01\x02")
+                checksum = zipfile.crc32(prefix)
+                # Both headers describe the same valid prefix; the complete
+                # compressed payload still contains the hidden suffix.
+                struct.pack_into("<I", raw, 14, checksum)
+                struct.pack_into("<I", raw, 22, len(prefix))
+                struct.pack_into("<I", raw, central + 16, checksum)
+                struct.pack_into("<I", raw, central + 24, len(prefix))
+                with self.subTest(compression=compression, suffix=suffix[:12]):
+                    with self.assertRaises(ValueError):
+                        select_eia_wti_bulk_archive(bytes(raw))
+
+    def test_bytes_after_deflate_endpoint_are_not_member_evidence(self):
+        raw = bytearray(self.archive([("PET.txt", self.line())]))
+        central = raw.index(b"PK\x01\x02")
+        original_size = struct.unpack_from("<I", raw, central + 20)[0]
+        suffix = b"hidden after compression endpoint"
+        raw[central:central] = suffix
+        new_central = central + len(suffix)
+        struct.pack_into("<I", raw, 18, original_size + len(suffix))
+        struct.pack_into("<I", raw, new_central + 20, original_size + len(suffix))
+        end = raw.rindex(b"PK\x05\x06")
+        struct.pack_into("<I", raw, end + 16, new_central)
+        with self.assertRaises(ValueError):
+            select_eia_wti_bulk_archive(bytes(raw))
+
+    def test_local_header_flags_method_and_sizes_must_match(self):
+        original = self.archive([("PET.txt", self.line())], zipfile.ZIP_STORED)
+        for offset, fmt, value in ((6, "<H", 1), (8, "<H", zipfile.ZIP_BZIP2),
+                                   (18, "<I", 1), (22, "<I", 1)):
+            raw = bytearray(original)
+            struct.pack_into(fmt, raw, offset, value)
+            with self.subTest(offset=offset):
+                with self.assertRaises(ValueError):
+                    select_eia_wti_bulk_archive(bytes(raw))
+
+    def test_valid_data_descriptor_and_multiple_inflate_chunks(self):
+        class Unseekable(io.BytesIO):
+            def seek(self, *args):
+                raise OSError("synthetic unseekable archive writer")
+        for compression in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED):
+            out = Unseekable()
+            member = b'{"category_id":"filler"}\n' * 7000 + self.line()
+            with zipfile.ZipFile(out, "w", compression=compression) as archive:
+                archive.writestr("PET.txt", member)
+            result = select_eia_wti_bulk_archive(out.getvalue())
+            self.assertEqual(result["observation"]["price"], "81.25")
+            self.assertEqual(result["archiveEvidence"]["memberSHA256"],
+                             hashlib.sha256(member).hexdigest())
+            self.assertEqual(result["archiveEvidence"]["memberBytes"], len(member))
+
     def test_invalid_or_unbounded_transport_input(self):
         for raw in (b"", b"not a zip", "not bytes",
                     b"x" * (64 * 1024 * 1024 + 1)):
