@@ -37,7 +37,8 @@ class CommodityReferenceFeed:
         for key in ("pollSeconds", "maxSourceAgeSeconds", "maxClockSkewSeconds"):
             if type(policy.get(key)) is not int or policy[key] < (1 if key == "pollSeconds" else 0):
                 raise ValueError("explicit source cadence and freshness policy required")
-        self._source_zone = ZoneInfo(policy["sourceTimezone"])
+        self._source_zone = (None if policy["sourceTimezone"] == "unknown"
+                             else ZoneInfo(policy["sourceTimezone"]))
         self._policy, self._read = policy, read
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._lock, self._fetch_lock = threading.RLock(), threading.Lock()
@@ -64,13 +65,24 @@ class CommodityReferenceFeed:
                 if precision == "date":
                     if not isinstance(source, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", source):
                         raise ValueError("source date precision mismatch")
-                    start = datetime.fromisoformat(source).replace(tzinfo=self._source_zone)
-                    end = start + timedelta(days=1)
+                    observed_date = datetime.fromisoformat(source).date()
+                    if self._source_zone is None:
+                        start = end = None
+                        # A civil source date can be tomorrow at the fetch site.
+                        # This excludes impossible future dates without assigning
+                        # an observation instant or an unsupported source zone.
+                        latest_date = (completed + timedelta(
+                            seconds=self._policy["maxClockSkewSeconds"], days=1)).date()
+                        if observed_date > latest_date:
+                            raise ValueError("future source date")
+                    else:
+                        start = datetime.fromisoformat(source).replace(tzinfo=self._source_zone)
+                        end = start + timedelta(days=1)
                 elif precision == "instant":
                     start = end = _instant(source)
                 else:
                     raise ValueError("source precision not provided")
-                if start > completed + timedelta(seconds=self._policy["maxClockSkewSeconds"]):
+                if start is not None and start > completed + timedelta(seconds=self._policy["maxClockSkewSeconds"]):
                     raise ValueError("future source observation")
                 result = {key: row[key] for key in SCOPE}
                 result.update(price=price, sourceAsOf=source, sourcePrecision=precision,
@@ -88,10 +100,14 @@ class CommodityReferenceFeed:
                     if type(publication) is not str or re.fullmatch(r"\d{4}-\d{2}-\d{2}", publication) is None:
                         raise ValueError("source publication date differs")
                     published = datetime.fromisoformat(publication).date()
-                    if published < start.astimezone(self._source_zone).date():
+                    observation_date = (observed_date if precision == "date" else
+                                        start.astimezone(self._source_zone or timezone.utc).date())
+                    if published < observation_date:
                         raise ValueError("source publication precedes observation")
                     publication_limit = (completed + timedelta(
-                        seconds=self._policy["maxClockSkewSeconds"])).astimezone(self._source_zone).date()
+                        seconds=self._policy["maxClockSkewSeconds"],
+                        days=1 if precision == "date" and self._source_zone is None else 0)).astimezone(
+                            self._source_zone or timezone.utc).date()
                     if published > publication_limit:
                         raise ValueError("source publication exceeds fetch date")
                     evidence["publicationDate"] = publication
@@ -117,20 +133,27 @@ class CommodityReferenceFeed:
             if value is None:
                 return dict(base, status="unavailable", lastSuccessful=None, price=None)
             now = self._clock().astimezone(timezone.utc)
-            if value["sourcePrecision"] == "date":
-                start = datetime.fromisoformat(value["sourceAsOf"]).replace(tzinfo=self._source_zone)
-                end = start + timedelta(days=1)
+            unknown_calendar = value["sourcePrecision"] == "date" and self._source_zone is None
+            if unknown_calendar:
+                minimum = maximum = None
+                status = "unknown"
             else:
-                start = end = _instant(value["sourceAsOf"])
-            minimum = max(0, int((now - end).total_seconds()))
-            maximum = max(0, int((now - start).total_seconds()))
-            age = self._policy["maxSourceAgeSeconds"]
-            status = "stale" if minimum > age else ("fresh" if maximum <= age else "unknown")
+                if value["sourcePrecision"] == "date":
+                    start = datetime.fromisoformat(value["sourceAsOf"]).replace(tzinfo=self._source_zone)
+                    end = start + timedelta(days=1)
+                else:
+                    start = end = _instant(value["sourceAsOf"])
+                minimum = max(0, int((now - end).total_seconds()))
+                maximum = max(0, int((now - start).total_seconds()))
+                age = self._policy["maxSourceAgeSeconds"]
+                status = "stale" if minimum > age else ("fresh" if maximum <= age else "unknown")
             if self._failed:
                 status = "unavailable"
             return dict(base, **value, status=status, lastSuccessful=value["fetchedAt"],
                         sourceDelay={"minimumSeconds": minimum, "maximumSeconds": maximum},
-                        sourceTimezone=self._policy["sourceTimezone"], retainedValue=self._failed)
+                        sourceTimezone=(None if unknown_calendar else
+                                        self._policy["sourceTimezone"] if self._source_zone is not None else "UTC"),
+                        retainedValue=self._failed)
 
     def start(self):
         with self._lock:
