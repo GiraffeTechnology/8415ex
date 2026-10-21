@@ -69,6 +69,34 @@ class EIAReferenceServeTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 load_eia_reference_config(bad)
 
+    def test_polling_never_runs_inside_reader_spacing(self):
+        for poll, spacing in ((30, 60), (60, 60.5), (60, True), (60, "60"),
+                              (60, 0), (60, -1)):
+            config = self.config()
+            config["policy"]["pollSeconds"] = poll
+            config["reader"]["minimum_fetch_seconds"] = spacing
+            with self.subTest(poll=poll, spacing=spacing):
+                with self.assertRaises(ValueError):
+                    load_eia_reference_config(self.raw(config))
+        for poll, spacing in ((60, 60), (120, 60), (60, 59.5)):
+            config = self.config()
+            config["policy"]["pollSeconds"] = poll
+            config["reader"]["minimum_fetch_seconds"] = spacing
+            self.assertEqual(load_eia_reference_config(self.raw(config)), config)
+
+    def test_nonfinite_configuration_is_refused_before_composition(self):
+        raw = self.raw(self.config())
+        for token in (b"NaN", b"Infinity", b"-Infinity"):
+            malformed = raw.replace(b'"timeout_seconds": 20',
+                                    b'"timeout_seconds": ' + token)
+            with self.assertRaises(ValueError):
+                load_eia_reference_config(malformed)
+            with patch("builtins.open", mock_open(read_data=malformed)), \
+                 patch("exchange.eia_reference_serve.compose_eia_reference_catalogue") as compose:
+                with self.assertRaises(SystemExit):
+                    main(self.args())
+                compose.assert_not_called()
+
     def test_main_uses_original_factory_and_lifecycle_with_explicit_flags(self):
         config = self.config()
         server = object()

@@ -22,9 +22,13 @@ def compose_eia_reference_catalogue(*, policy, verify_policy, reader_options,
         raise ValueError("explicit original reader options required")
     if "reference_feed" in server_options:
         raise ValueError("one original EIA reference feed required")
+    if feed_clock is not None and not callable(feed_clock):
+        raise ValueError("callable feed clock required")
     reader = EIAWTISpotReader(**dict(reader_options))
+    # Preserve explicitly supplied callable clocks even when they are falsey.
+    clock = (lambda: feed_clock()) if feed_clock is not None else None
     feed = CommodityReferenceFeed(deepcopy(policy), reader, verify_policy,
-                                  clock=feed_clock)
+                                  clock=clock)
     try:
         return compose_reference_catalogue(feed, **server_options)
     except BaseException as primary:

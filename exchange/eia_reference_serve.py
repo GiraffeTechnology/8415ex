@@ -2,6 +2,7 @@
 import argparse
 from copy import deepcopy
 import json
+import math
 
 from .eia_reference_catalogue import compose_eia_reference_catalogue
 from .eia_wti_spot_table import SCOPE, SOURCE_URL
@@ -27,11 +28,16 @@ def _unique(pairs):
     return result
 
 
+def _reject_constant(value):
+    raise ValueError("nonfinite reference configuration constant")
+
+
 def load_eia_reference_config(raw):
     """Decode only non-secret source/transport configuration, without startup."""
     if type(raw) is not bytes or not 0 < len(raw) <= CONFIG_LIMIT:
         raise ValueError("bounded reference configuration bytes required")
-    config = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique)
+    config = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique,
+                        parse_constant=_reject_constant)
     if (type(config) is not dict or set(config) != {"version", "policy", "reader"}
             or type(config["version"]) is not int or config["version"] != 1):
         raise ValueError("reference configuration version differs")
@@ -47,6 +53,10 @@ def load_eia_reference_config(raw):
     for key in ("pollSeconds", "maxSourceAgeSeconds", "maxClockSkewSeconds"):
         if type(policy[key]) is not int or policy[key] < (1 if key == "pollSeconds" else 0):
             raise ValueError("explicit reference cadence and freshness required")
+    minimum = reader["minimum_fetch_seconds"]
+    if (type(minimum) not in (int, float) or not math.isfinite(minimum)
+            or minimum <= 0 or policy["pollSeconds"] < minimum):
+        raise ValueError("reference polling must cover reader fetch spacing")
     # Transport values and the actual IANA calendar are validated by the
     # existing reader/feed during composition, before the HTTP socket binds.
     return deepcopy(config)
@@ -70,8 +80,9 @@ def main(argv=None):
     policy = config["policy"]
     server = compose_eia_reference_catalogue(
         policy=policy,
-        # Host file identity and fixed-series consistency, not a new permission
-        # or a claim that third-party display rights were independently proved.
+        # The operator-owned file defines this host configuration snapshot.
+        # Equality is consistency only, not independent provider approval,
+        # calendar/SLA attestation or a claim of third-party display rights.
         verify_policy=lambda candidate: candidate == policy,
         reader_options=config["reader"],
         port=args.port, commit=args.commit, tree=args.tree,

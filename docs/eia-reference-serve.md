@@ -1,6 +1,6 @@
 # Host entry for the original EIA reference catalogue
 
-`python -m exchange.eia_reference_serve` uses the existing EIA catalogue
+`python3 -B -m exchange.eia_reference_serve` uses the existing EIA catalogue
 composition and serving lifecycle. Its required arguments are
 `--empty-catalogue`, `--reference-config`, `--port`, `--commit` and `--tree`.
 The existing scenario/collateral selection flags are forwarded unchanged.
@@ -29,6 +29,26 @@ entry does not install a service, change a proxy, create credentials or perform
 financial actions. Host activation and actual served/source identity readback
 remain separate deployment work.
 
-Eight synthetic configuration/CLI definitions accompany this stage and have
+Ten synthetic configuration/CLI definitions accompany this stage and have
 not been run by the source author. The synthetic test calendar is not a
 production source-calendar assertion.
+
+## Host policy contract and requirement mapping
+
+The explicit private host file is the operator's source configuration, not an
+independent provider approval, licensing certificate or proof of a source's
+calendar/SLA. Its equality callback binds the composition to that exact
+configuration snapshot; it must not be reported as independent provenance
+verification. The original programmatic composition API remains available for
+hosts that already supply their own verifier. No additional user approval is
+created by this entry. Actual source/display-policy and runtime acceptance
+remain NOT_VERIFIED until their own evidence exists.
+
+Polling must be no faster than the configured minimum reader fetch spacing.
+Invalid numeric spacing and nonfinite JSON constants fail before binding,
+without advancing a cache or starting a worker.
+
+| Requirement | Exact source/configuration | Exact cases/run/artifacts | Verdict |
+| --- | --- | --- | --- |
+| T-71; EX-SCOPE-15, EX-PRICE-01, EX-PRICE-02 | `exchange/eia_reference_serve.py:load_eia_reference_config/main` loads the bounded private host file and calls the original composition/lifecycle. Explicit policy/reader/port/source commit/tree and scenario/collateral flags are retained; pollSeconds must cover minimum_fetch_seconds. | `integration/test_eia_reference_serve.py:EIAReferenceServeTests`, ten definitions via Bootstrap checks' joined Stage 5 integration step, plus the unmodified usage/documentation suite. Keep exact head/base/tested-merge and runner identity, full test logs and source archive. | Current repair candidate synthetic CI NOT_RUN. Host activation/continuous source and policy provenance NOT_VERIFIED. |
+| T-72; EX-PRICE-02, EX-PRICE-03, EX-PRICE-04 | No default zone, invented price, freshness or transport input; actual original reader/feed retain evidence and unavailable states. The host may choose the feed's explicit unknown-calendar mode without claiming a measured zone or delay. | Existing fixed-scope/config/CLI refusal tests plus cadence consistency and nonfinite-config refusals. Keep actual served source/config identity and successful/error acquisition/endpoint/browser artifacts separately. | No deployment, live-source, browser or complete product acceptance follows from configuration validation or synthetic CI. |
