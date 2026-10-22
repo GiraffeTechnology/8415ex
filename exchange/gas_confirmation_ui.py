@@ -90,6 +90,12 @@ class GasConfirmationPage:
             ('maximum', cap), ('median', median),
             ('quote', _escape(quote.quote_id) + ' / ' + _escape(quote.version)),
             ('actions', _escape(', '.join(quote.actions))), ('chain', _escape(quote.chain_id)),
+            ('scope', _escape(quote.scope)),
+            ('quotedAt', _escape(quote.quoted_at)),
+            ('sampleCount', _escape(len(quote.samples))),
+            ('window', _escape(quote.window_start) + ' ' + _escape(words['to'])
+             + ' ' + _escape(quote.window_end)),
+            ('algorithm', _escape(data['algorithm'])),
             ('fxTime', _escape(quote.rate_observed_at)),
             ('fxSource', _escape(quote.rate_source) + ' / ' + _escape(quote.usd_micro_per_eth)),
             ('expires', _escape(quote.valid_until)),
