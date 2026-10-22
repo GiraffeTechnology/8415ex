@@ -1,5 +1,6 @@
 """Read-only comparison of original identity-excluding business projections."""
 from copy import deepcopy
+from difflib import SequenceMatcher
 from html import escape
 import re
 
@@ -63,6 +64,35 @@ def _clauses(detail, receipt_id):
     return result
 
 
+def _render_changes(before, after, words):
+    """Compare ordered public clauses exactly; no semantic or identity inference."""
+    old = [(item["label"], item["text"]) for item in before]
+    new = [(item["label"], item["text"]) for item in after]
+    changes = []
+    for kind, start, end, new_start, new_end in SequenceMatcher(
+            a=old, b=new, autojunk=False).get_opcodes():
+        if kind == "equal":
+            continue
+        def side(clauses, first, last, title, tag):
+            if first == last:
+                return ""
+            articles = "".join(
+                '<article data-clause-position="' + str(index + 1) + '"><h4>'
+                + escape(clauses[index]["label"]) + '</h4><pre>'
+                + escape(clauses[index]["text"]) + '</pre></article>'
+                for index in range(first, last))
+            return ('<section><h3>' + escape(title) + ' '
+                    + str(first + 1) + '–' + str(last) + '</h3><' + tag + '>'
+                    + articles + '</' + tag + '></section>')
+        changes.append('<div data-clause-change="' + kind + '">'
+                       + side(before, start, end, words[1], "del")
+                       + side(after, new_start, new_end, words[2], "ins") + '</div>')
+    if not changes:
+        return ""
+    return ('<section data-remint-clause-changes="1"><h2>' + escape(words[3])
+            + '</h2>' + "".join(changes) + '</section>')
+
+
 class RemintReviewBinding:
     """The host injects its original trusted projection reader, never request data.
 
@@ -98,5 +128,6 @@ class RemintReviewBinding:
                 '<article><h3>' + escape(item["label"]) + '</h3><pre>' + escape(item["text"])
                 + '</pre></article>' for item in clauses) + '</section>')
         return ('<p role="status">' + escape(words[3] if before != after else words[4]) + '</p>'
+                + _render_changes(before, after, words)
                 + section(words[1], before) + section(words[2], after)
                 + '<p>' + escape(words[6]) + '</p><p>' + escape(words[7]) + '</p>')
