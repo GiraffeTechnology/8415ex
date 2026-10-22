@@ -184,3 +184,24 @@ class DemoPackage(unittest.TestCase):
                 archive.writestr(f"directory-{n}/", b"")
         with self.assertRaisesRegex(ValueError, "too many archive directories"):
             kit.read_archive(output.getvalue(), generated_kit=True)
+
+    def test_current_525_file_source_roundtrips_without_omitting_tests_or_docs(self):
+        source = dict(SOURCE)
+        source.update({f"docs/retained-{n}.txt": b"committed source\n"
+                       for n in range(525 - len(source))})
+        tree = kit.git_tree(source)
+        data = kit.build(kit.pack(source), "a" * 40, tree)
+        manifest = kit.verify(data, hashlib.sha256(data).hexdigest())
+        self.assertEqual(len(manifest["files"]), 525)
+        self.assertEqual(manifest["tree"], tree)
+        self.assertEqual(set(manifest["files"]), set(source))
+        source["docs/retained-0.txt"] += b"changed"
+        with self.assertRaisesRegex(ValueError, "source tree mismatch"):
+            kit.build(kit.pack(source), "a" * 40, tree)
+
+    def test_larger_file_capacity_does_not_expand_compressed_content_budget(self):
+        source = {f"docs/source-{n}.txt": b"" for n in range(525)}
+        source["docs/large.txt"] = b"x" * kit.MAX_CONTENT
+        source["docs/extra.txt"] = b"x"
+        with self.assertRaisesRegex(ValueError, "archive content limit"):
+            kit.read_archive(kit.pack(source))

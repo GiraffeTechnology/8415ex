@@ -11,7 +11,9 @@ from .delivery import git_tree
 
 MAX_ARCHIVE = 16 * 1024 * 1024
 MAX_CONTENT = 8 * 1024 * 1024
-MAX_MEMBERS = 512
+# Bounded full-source capacity, independent of the two generated kit members.
+# The current committed source exceeds 512 files; byte budgets stay unchanged.
+MAX_MEMBERS = 1024
 # Directory metadata has its own finite budget; it is not executable source.
 MAX_DIRECTORIES = 128
 MANIFEST = "DEMO-KIT-MANIFEST.json"
