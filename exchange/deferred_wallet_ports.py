@@ -8,7 +8,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 import re
 
-from .deferred_settlement import DeferredRefused, Operation, Profile
+from .deferred_settlement import DeferredRefused, Operation, Profile, identifier
 from .wallet_api_client import WalletAPIClient
 
 
@@ -29,6 +29,10 @@ class NativeTaskBinding:
     operation_id: str
     child_digest: str
     expected_budget_revision: str
+    funding_payer: str | None = None
+    funding_budget: str | None = None
+    funding_asset: str | None = None
+    funding_cap_units: int | None = None
 
     def __post_init__(self):
         hex32 = r"0x[0-9a-f]{64}"
@@ -42,6 +46,13 @@ class NativeTaskBinding:
                 or type(self.expected_budget_revision) is not str
                 or re.fullmatch(r"0|[1-9][0-9]{0,77}", self.expected_budget_revision) is None):
             raise DeferredRefused("invalid original native task binding")
+        funding = (self.funding_payer, self.funding_budget, self.funding_asset, self.funding_cap_units)
+        if any(value is not None for value in funding):
+            if (any(type(value) is not str or
+                    re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", value) is None
+                    for value in funding[:3]) or type(self.funding_cap_units) is not int
+                    or not 0 < self.funding_cap_units < 2 ** 256):
+                raise DeferredRefused("invalid original native funding binding")
 
     def payload(self):
         return {"taskDigest": self.task_digest, "operationId": self.operation_id,
@@ -75,7 +86,7 @@ class DeferredWalletPorts:
     def _bound(self, operation):
         if not isinstance(operation, Operation):
             raise DeferredRefused("exact deferred operation required")
-        if operation.kind in ("debt-liquidation", "gas-liquidation", "collateral-unlock"):
+        if operation.kind in ("debt-liquidation", "collateral-unlock"):
             chain, client = 560048, self.collateral_client
         elif operation.kind in ("seller-payment", "excess-refund", "rollback"):
             chain, client = 11155111, self.settlement_client
@@ -85,6 +96,25 @@ class DeferredWalletPorts:
         if (not isinstance(binding, NativeTaskBinding) or binding.commitment != operation.commitment
                 or binding.source_chain != chain):
             raise DeferredRefused("original task does not match deferred operation")
+        if operation.kind == "debt-liquidation":
+            terms = operation.liquidation_terms
+            if (terms is None or operation.funding_record is None or
+                    (binding.funding_payer, binding.funding_budget,
+                     binding.funding_asset, binding.funding_cap_units) !=
+                    (terms["gasPayer"], terms["gasBudget"], terms["gasAsset"], terms["gasCapUnits"])):
+                raise DeferredRefused("original task lacks matching EX-funded execution budget")
+        else:
+            funding = operation.normal_funding
+            if (type(funding) is not dict or set(funding) != {"chain", "asset", "allocation", "terms"}
+                    or funding.get("chain") != chain or
+                    funding.get("asset") != "ETH" or type(funding.get("terms")) is not dict):
+                raise DeferredRefused("original chain-specific prepaid normal funding required")
+            identifier(funding["allocation"])
+            terms = funding["terms"]
+            if ((binding.funding_payer, binding.funding_budget,
+                 binding.funding_asset, binding.funding_cap_units) !=
+                    (terms.get("payer"), terms.get("budget"), "ETH", terms.get("capWei"))):
+                raise DeferredRefused("original task normal funding does not match the prepaid allocation")
         return client, binding
 
     def execute_original(self, operation):
@@ -106,7 +136,12 @@ class DeferredWalletPorts:
             if (not isinstance(claimed, Operation) or claimed.status != "UNKNOWN"
                     or claimed.identity != identity or claimed.commitment != commitment):
                 raise DeferredRefused("original dispatch claim changed")
-            return client.task("execute", binding.payload())
+            # Re-read the original task/budget immediately before execute. The
+            # Wallet then applies its own atomic authority and funding checks.
+            current_client, current_binding = self._bound(claimed)
+            if current_client is not client or current_binding != binding:
+                raise DeferredRefused("original task or funding changed after preflight")
+            return current_client.task("execute", current_binding.payload())
         return execute_bound
 
     def observe_original(self, operation):

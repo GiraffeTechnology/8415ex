@@ -14,7 +14,7 @@ from .ids import canonical_json
 class DeferredCheckpoint:
     COMPONENT = "deferred-settlement"
     COMMANDS = frozenset({"admit_lock", "reserve", "observe_registration", "observe_rollback_authority", "credit_escrow",
-                          "deadline", "observe_liquidation_source", "observe_collateral_remainder", "prepare", "observe_gas_requirement", "mark_dispatched", "confirm_nonexecution", "confirm"})
+                          "deadline", "observe_liquidation_source", "observe_collateral_remainder", "prepare", "observe_gas_requirement", "observe_liquidation_funding", "observe_liquidation_cost", "observe_liquidation_penalty", "mark_dispatched", "confirm_nonexecution", "confirm"})
 
     def __init__(self, store, scope, profile, verifier):
         if not isinstance(store, AggregateCheckpointStore) or self.COMPONENT not in store.components:
@@ -40,6 +40,8 @@ class DeferredCheckpoint:
         try:
             state = json.loads(row["components"][self.COMPONENT].decode("utf-8"))
             model = DeferredSettlement.restore(self.profile, self.verifier, state)
+        except DeferredRefused:
+            raise
         except (ValueError, TypeError, KeyError, UnicodeError) as error:
             raise DeferredRefused("invalid deferred checkpoint") from error
         return row, model
@@ -64,7 +66,7 @@ class DeferredCheckpoint:
                                 immutable_components=tuple(k for k in components if k != self.COMPONENT))
         return {"generation": saved["generation"], "result": deepcopy(value), "dispatched": False}
 
-    def dispatch_once(self, operation_id, execution_port, *, expected_generation):
+    def dispatch_once(self, operation_id, execution_port, *, expected_generation, now):
         prepare_original = getattr(execution_port, "prepare_original", None)
         if not callable(prepare_original):
             raise DeferredRefused("original read-only execution preflight required")
@@ -85,7 +87,7 @@ class DeferredCheckpoint:
                     "dispatched": False}
         # Persist UNKNOWN before execution. CAS also catches changes during the
         # read-only preflight; no prepared callback runs after a failed save.
-        prepared = self.apply("mark_dispatched", operation_id, expected_generation=expected_generation)
+        prepared = self.apply("mark_dispatched", operation_id, expected_generation=expected_generation, now=now)
         operation = prepared["result"]
         try:
             observation = execute_original(deepcopy(operation))
