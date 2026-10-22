@@ -1,0 +1,11 @@
+# Original pinned remint history snapshot
+
+`RemintHistorySnapshotReader` connects the history workbench to two explicitly installed original read ports: authenticated block observation and authenticated ABI calls at that exact block. It selects no RPC endpoint, provider, account, signer or transport and performs no work during construction.
+
+The host binds the original Sepolia remint contract and stable bill key. The history page supplies only the selected token within that scope. The adapter obtains one original block number/hash/timestamp, then passes the complete block to each original `declarationOf`, `predecessorOf`, `successorOf`, `activeTokenForBill` and applicable reciprocal-link call. Every response must retain the exact chain/contract/block/function/argument binding. Integer/string differences, block changes and wrong arguments are conflicts. The installed ports must actually authenticate and pin the reads; a response echo is not independent proof of that behavior.
+
+The retained declaration is decoded before link queries and must belong to the bound bill. ABI results use the decoder in PR212; reciprocal and active-map consistency is evaluated by the workbench binding in PR213. Real zero links remain zero observations and do not cause invented token-zero queries. A failed or malformed read produces no partial snapshot, retry, latest-block fallback, source replacement or state mutation. No operationResult, task absence or transaction-finality conclusion is inferred.
+
+Compose this reader into the original `RemintChainHistoryBinding` and then the original `RemintHistoryWorkbenchServer`; retain the existing original application controllers. This is a read-only dependency and is never a new prerequisite for a previously authorized remint, trade or financial action. It cannot mint, burn, sign, broadcast, release funds or alter original journals.
+
+This stage depends on PR213 and supplies the original-port read composition for EX-REMINT-04/T-67. Eight synthetic approved-Linux definitions exercise the complete composition, all read bindings, malformed headers/declarations, real zeros, failures and detached data. Author execution is NOT_RUN. No live source has been selected, configured or queried; actual original port binding, provider evidence, browser and chain acceptance remain outstanding.
