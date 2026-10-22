@@ -3,6 +3,7 @@ from copy import deepcopy
 from datetime import datetime
 import hashlib
 import json
+import threading
 from urllib.error import HTTPError
 from urllib.request import Request
 
@@ -57,6 +58,9 @@ class EIAWTIBulkReader(EIAWTISpotReader):
     def __init__(self, **options):
         super().__init__(**options)
         self._petroleum_marker = None
+        # Snapshots must not wait for the fetch lock's network or decode work.
+        # Fetches may take this short-lived lock; readers never take the fetch lock.
+        self._evidence_lock = threading.Lock()
         self._bulk_evidence = None
 
     def cached_source_evidence(self):
@@ -65,7 +69,7 @@ class EIAWTIBulkReader(EIAWTISpotReader):
         This is byte/source attribution evidence, not display permission,
         source freshness or an independently authenticated feed result.
         """
-        with self._lock:
+        with self._evidence_lock:
             return deepcopy(self._bulk_evidence)
 
     def _get(self, url, limit, content_types):
@@ -111,7 +115,7 @@ class EIAWTIBulkReader(EIAWTISpotReader):
                                   "manifestSHA256": manifest_hash,
                                   "datasetUpdatedAt": stamp,
                                   "archiveDownloaded": False,
-                                  "bulkEvidence": deepcopy(self._bulk_evidence)}
+                                  "bulkEvidence": self.cached_source_evidence()}
                     return deepcopy(self._cached)
                 archive = self._get(BULK_URL, MAX_ARCHIVE_BYTES,
                                     ("application/x-zip-compressed", "application/zip"))
@@ -128,7 +132,8 @@ class EIAWTIBulkReader(EIAWTISpotReader):
                 # Publish the new cache only after the complete archive verifies.
                 self._cached = deepcopy(observation)
                 self._petroleum_marker = marker
-                self._bulk_evidence = deepcopy(evidence)
+                with self._evidence_lock:
+                    self._bulk_evidence = deepcopy(evidence)
                 self._last = {"status": "read", "archiveDownloaded": True,
                               "bulkEvidence": evidence}
                 return deepcopy(observation)

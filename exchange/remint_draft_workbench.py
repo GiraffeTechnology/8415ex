@@ -58,6 +58,18 @@ def _currency_choices(value):
 BUSINESS_FIELDS = ("commodityName", "commodityQuantity", "commodityUnit", "receiptNumber",
     "billNumber", "issuer", "registrar", "storageLocation", "tradeStopAt",
     "registrationDeadline", "registrationComparison")
+# Only the draft endpoint accepts this schema-sized form. Each supported text
+# character needs at most four UTF-8 bytes and twelve percent-encoded bytes.
+# The remaining allowance covers bounded currency codes, field names and the
+# existing short control fields. Other endpoints retain their original limit.
+MAX_DRAFT_BODY = ((1 + 6 + 64) * 16384 * 12 + 128 * 3 + 3 * 78 + 3
+    + 32 * (len("priceCurrency=") + 128 * 3 + 1) + 111 * 64 + MAX_BODY)
+
+MAX_DRAFT_FIELD_BYTES = 16384 * 12 + 64
+MULTILINE_BUSINESS_FIELDS = frozenset((
+    "commodityName", "commodityUnit", "billNumber", "issuer", "registrar", "storageLocation",
+))
+
 BUSINESS_LABELS = {
     "en": ("Commodity", "Goods quantity", "Goods unit", "Receipt number", "Bill of lading number",
         "Issuer", "Registrar", "Storage location", "Trading cutoff (UTC Unix seconds)",
@@ -86,11 +98,24 @@ def _business_values(specification):
     return dict(zip(BUSINESS_FIELDS, (_business_text(value) for value in values)))
 
 
-def _business_updates(fields):
+def _form_text(value, original):
+    """Restore unchanged source text; normalize edited browser form newlines."""
+    if type(value) is not str:
+        return value
+    normalized = value.replace("\r\n", "\n").replace("\r", "\n")
+    if (type(original) is str
+            and normalized == original.replace("\r\n", "\n").replace("\r", "\n")):
+        return original
+    return normalized
+
+
+def _business_updates(fields, seed):
     if (type(fields) is not dict or set(fields) != set(BUSINESS_FIELDS)
             or any(type(value) is not str for value in fields.values())):
         raise ValueError("complete original public business fields required")
-    values = {key: _business_text(value) for key, value in fields.items()}
+    originals = _business_values(seed)
+    values = {key: _business_text(_form_text(value, originals[key]))
+              for key, value in fields.items()}
     for key in ("commodityQuantity", "tradeStopAt", "registrationDeadline"):
         if re.fullmatch(r"0|[1-9][0-9]{0,77}", values[key]) is None:
             raise ValueError("canonical bounded integer business value required")
@@ -141,8 +166,11 @@ def _attribute_updates(seed, fields):
             or any(type(value) is not str for value in fields.values())):
         raise ValueError("complete original attribute fields required")
     values = {}
+    original_values = dict(seed.public_attributes)
     for i, name in enumerate(names):
         value = fields["attribute." + str(i)]
+        original = original_values.get(name)
+        value = _form_text(value, original)
         if value != "":
             values[name] = _business_text(value)
     # Keep the original seed's surviving order; append newly populated fields
@@ -275,9 +303,9 @@ class RemintDraftEditorBinding:
                 raise
             except Exception:
                 raise RemintDraftUnavailable("original business terms unavailable") from None
-            text = seed_text if bill_terms is None else _business_text(bill_terms)
+            text = seed_text if bill_terms is None else _business_text(_form_text(bill_terms, seed_text))
             updates = ({"specification": {}, "receipt": {}} if business_fields is None
-                       else _business_updates(business_fields))
+                       else _business_updates(business_fields, seed))
             updates["specification"]["bill_terms"] = text
             if attribute_fields is not None:
                 updates["specification"]["public_attributes"] = _attribute_updates(seed, attribute_fields)
@@ -330,9 +358,13 @@ class RemintDraftEditorBinding:
                     + ''.join('<option value="' + option + '"'
                         + (' selected' if option == value else '') + '>' + option + '</option>'
                         for option in ("LT", "LTE")) + '</select>')
+            elif key in MULTILINE_BUSINESS_FIELDS:
+                control = ('<textarea name="' + key + '" rows="4" maxlength="32768"'
+                    + ' data-max-codepoints="16384" required>\n' + escape(value) + '</textarea>')
             else:
+                limit = 128 if key == "receiptNumber" else 78
                 control = ('<input name="' + key + '" value="' + escape(value, quote=True)
-                    + '" maxlength="16384" required>')
+                    + '" maxlength="' + str(limit) + '" required>')
             business_form += ('<label>' + escape(label) + control + '</label><p>'
                 + escape(words[1]) + ': ' + escape(original_value) + '</p>')
         business_form += '</fieldset>'
@@ -343,10 +375,10 @@ class RemintDraftEditorBinding:
             + '<fieldset><legend>' + escape(attribute_labels[0]) + '</legend><p>'
             + escape(attribute_labels[2]) + '</p>')
         for i, name in enumerate(result["attributeNames"]):
-            attribute_form += ('<label>' + escape(name) + '<input name="attribute.'
-                + str(i) + '" value="' + escape(result["proposedAttributes"].get(name, ""), quote=True)
-                + '" maxlength="16384"'
-                + (' required' if name in result["requiredAttributeNames"] else '') + '></label>')
+            attribute_form += ('<label>' + escape(name) + '<textarea name="attribute.'
+                + str(i) + '" rows="4" maxlength="32768" data-max-codepoints="16384"'
+                + (' required' if name in result["requiredAttributeNames"] else '') + '>\n'
+                + escape(result["proposedAttributes"].get(name, "")) + '</textarea></label>')
         attribute_form += '</fieldset>'
         choice_form = ""
         choice_hidden = ""
@@ -371,7 +403,7 @@ class RemintDraftEditorBinding:
             + '<input type="hidden" name="csrf" value="' + escape(csrf, quote=True) + '">'
             + '<input type="hidden" name="lang" value="' + locale + '">' + choice_hidden
             + '<label>' + escape(words[2]) + '<textarea name="billTerms" rows="16" '
-            + 'maxlength="16384" required>' + escape(proposed) + '</textarea></label>'
+            + 'maxlength="32768" data-max-codepoints="16384" required>\n' + escape(proposed) + '</textarea></label>'
             + business_form + attribute_form + currency_form + '<button type="submit">' + escape(words[3]) + '</button></form>' + preview)
 
 
@@ -442,11 +474,18 @@ class RemintDraftWorkbenchHandler(RemintReviewWorkbenchHandler):
                     or self.headers.get("Content-Type") != "application/x-www-form-urlencoded"):
                 raise ValueError("plain bounded form required")
             length = int(self.headers.get("Content-Length", "0"))
-            if not 0 < length <= MAX_BODY:
+            body_limit = MAX_DRAFT_BODY if request.path == "/remint-draft" else MAX_BODY
+            if not 0 < length <= body_limit:
                 raise ValueError("bounded body required")
             raw = self.rfile.read(length)
             if len(raw) != length:
                 raise ValueError("incomplete body")
+            # Bound each value before percent decoding. max_num_fields alone
+            # does not prevent one large encoded field from amplifying memory.
+            encoded_fields = raw.split(b"&", 111)
+            if (len(encoded_fields) > 111
+                    or any(len(field) > MAX_DRAFT_FIELD_BYTES for field in encoded_fields)):
+                raise ValueError("bounded encoded form fields required")
             fields = parse_qs(raw.decode("utf-8"), strict_parsing=True,
                 keep_blank_values=True, max_num_fields=111, errors="strict")
             if request.path == "/remint-draft-choice":
@@ -497,7 +536,8 @@ class RemintDraftWorkbenchHandler(RemintReviewWorkbenchHandler):
             token = fields["csrf"][0]
             if not token.isascii() or not secrets.compare_digest(token, self.server.csrf):
                 return self._refuse(403, locale)
-            text = _business_text(fields["billTerms"][0])
+            text = fields["billTerms"][0]
+            _business_text(_form_text(text, None))
             self.send_body(200, self._draft_page(locale, text, currencies, business_fields, attribute_fields, replacement_choice))
         except RemintDraftUnavailable:
             self.close_connection = True
