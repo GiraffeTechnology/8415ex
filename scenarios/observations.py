@@ -212,7 +212,7 @@ PYTHON_DISPLAY_TABLES = {
     "exchange/command_observation_page.py": ("TEXT", "STATUS_TEXT"),
     "exchange/funds_page.py": ("TEXT",),
     "exchange/queue_status_page.py": ("TEXT", "CONTROL_TEXT", "WINDOW_TEXT"),
-    "exchange/reference_provenance_page.py": ("LABELS", "VALUES", "EVIDENCE_LABELS"),
+    "exchange/reference_provenance_page.py": ("LABELS", "VALUES", "EVIDENCE_LABELS", "BULK_WORDS"),
     "exchange/register_projection_page.py": ("BLOCK_TIME", "LABELS"),
     "exchange/registration_source_locales.py": ("WORDS",),
     "exchange/remint_draft_workbench.py": ("WORDS", "CURRENCY_WORDS", "BUSINESS_LABELS", "ATTRIBUTE_WORDS", "REPLACEMENT_WORDS"),
