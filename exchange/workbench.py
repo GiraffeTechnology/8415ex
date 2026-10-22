@@ -18,7 +18,8 @@ from .nft_detail import receipt_detail
 from .nft_detail_page import render_detail, LOCALES
 from .nft_directory import NftDirectory
 from .reference_feed import CommodityReferenceFeed
-from .market_page import render_market, ASSETS
+from .market_page import render_market, render_reference_panel, ASSETS
+from .market_reference_refresh import send_market_response
 from .demo_ui import DemoHandler, DemoServer, MAX_BODY
 from .errors import DomainError
 from .public_workbench import snapshot as public_snapshot, command_result
@@ -333,19 +334,25 @@ class WorkbenchHandler(DemoHandler):
                 self.wfile.write(raw)
                 return
             if req.path in ("/market", "/api/catalogue"):
-                query = parse_qs(req.query, strict_parsing=True, keep_blank_values=True)
-                if set(query) - {"lang", "q"} or any(len(value) != 1 for value in query.values()):
+                query = parse_qs(req.query, strict_parsing=True, keep_blank_values=True, max_num_fields=3)
+                if set(query) - {"lang", "q", "reference"} or any(len(value) != 1 for value in query.values()):
                     raise ValueError("one market locale and search only")
+                fragment = query.get("reference", [None])[0]
+                if fragment is not None and (req.path != "/market" or fragment != "1"):
+                    raise ValueError("one read-only reference fragment required")
                 locale = query.get("lang", ["en"])[0]
                 search = query.get("q", [""])[0]
                 if len(search) > 64 or any(ord(char) < 32 for char in search):
                     raise ValueError("bounded market search required")
-                rows = self.server.nft_directory.catalogue()
                 feed = self.server.reference_feed
                 reference = feed.snapshot() if feed is not None else {"status": "not-connected", "price": None}
+                if req.path == "/market" and fragment is not None:
+                    self.send_body(200, render_reference_panel(reference, locale))
+                    return
+                rows = self.server.nft_directory.catalogue()
                 if req.path == "/market":
                     body = render_market(rows, reference, locale, search)
-                    self.send_body(200, body.replace('<main>',
+                    send_market_response(self, body.replace('<main>',
                         '<main>' + self.native_navigation(locale), 1))
                 else:
                     self.send_body(200, json.dumps({"nfts": rows, "reference": reference}, sort_keys=True),

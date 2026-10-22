@@ -123,6 +123,28 @@ class DemoPackage(unittest.TestCase):
             self.assertEqual(kit.main(["verify", "--sha256", "0" * 64], io.BytesIO(data), rejected), 1)
             self.assertEqual(rejected.getvalue(), b"")
 
+    def test_directory_metadata_does_not_spend_regular_source_capacity(self):
+        files = {f"source/{n}.py": b"" for n in range(kit.MAX_MEMBERS)}
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w") as archive:
+            archive.writestr("source/", b"")
+            for path, payload in files.items():
+                archive.writestr(path, payload)
+        self.assertEqual(kit.read_archive(output.getvalue()), files)
+
+    def test_regular_member_budget_still_refuses_one_extra_file(self):
+        files = {f"source-{n}.py": b"" for n in range(kit.MAX_MEMBERS + 1)}
+        with self.assertRaisesRegex(ValueError, "too many archive members"):
+            kit.read_archive(kit.pack(files))
+
+    def test_directory_metadata_has_a_separate_finite_budget(self):
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w") as archive:
+            for n in range(kit.MAX_DIRECTORIES + 1):
+                archive.writestr(f"directory-{n}/", b"")
+        with self.assertRaisesRegex(ValueError, "too many archive directories"):
+            kit.read_archive(output.getvalue())
+
     def test_source_growth_beyond_512_files_roundtrips_complete_kit(self):
         source = dict(SOURCE)
         source.update({"fixtures/member-%04d.txt" % n: b"" for n in range(508)})

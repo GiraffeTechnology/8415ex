@@ -6,7 +6,8 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 
 from .demo_ui import identity
 from .health_observation import health_observation
-from .market_page import render_market
+from .market_page import render_market, render_reference_panel
+from .market_reference_refresh import send_market_response
 from .nft_detail_page import LOCALES
 from .nft_directory import NftDirectory
 from .reference_feed import CommodityReferenceFeed
@@ -104,19 +105,24 @@ class EmptyCatalogueHandler(WorkbenchHandler):
         if request.path in ("/market", "/api/catalogue"):
             try:
                 query = parse_qs(request.query, strict_parsing=True,
-                                 keep_blank_values=True, max_num_fields=2)
-                if set(query) - {"lang", "q"} or any(len(values) != 1 for values in query.values()):
+                                 keep_blank_values=True, max_num_fields=3)
+                if set(query) - {"lang", "q", "reference"} or any(len(values) != 1 for values in query.values()):
                     raise ValueError("one locale and search only")
+                fragment = query.get("reference", [None])[0]
+                if fragment is not None and (request.path != "/market" or fragment != "1"):
+                    raise ValueError("one read-only reference fragment required")
                 locale = query.get("lang", ["en"])[0]
                 search = query.get("q", [""])[0]
                 if locale not in LOCALES or len(search) > 64 or any(ord(c) < 32 for c in search):
                     raise ValueError("bounded supported search required")
                 feed = self.server.reference_feed
                 reference = feed.snapshot() if feed is not None else {"status": "not-connected", "price": None}
-                if request.path == "/market":
+                if request.path == "/market" and fragment is not None:
+                    self.send_body(200, render_reference_panel(reference, locale))
+                elif request.path == "/market":
                     body = render_market([], reference, locale, search, empty_catalogue=True)
                     body = body.replace("<main>", "<main>" + self.native_navigation(locale), 1)
-                    self.send_body(200, body)
+                    send_market_response(self, body)
                 else:
                     self.send_body(200, json.dumps({"nfts": [], "reference": reference}, sort_keys=True),
                                    "application/json; charset=utf-8")
