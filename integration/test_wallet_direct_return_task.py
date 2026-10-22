@@ -67,8 +67,21 @@ class DirectReturnTaskContracts(unittest.TestCase):
                 return original(action, payload)
             client.task = only_execute
             recreated.execute('4')
-            paths = [path for _, path, _ in state['calls'][before:]]
-            self.assertEqual(paths, ['/auth/tasks/execute'])
+            # Original session validation is authentication, not a new task
+            # status, readiness, preparation, reservation or approval preflight.
+            self.assertEqual(state['calls'][before:], [
+                ('GET', '/auth/session', {}),
+                ('POST', '/auth/tasks/execute', dict(EXECUTE, expectedBudgetRevision='4')),
+            ])
+
+    def test_changed_original_session_refuses_before_direct_return_execute(self):
+        with direct_task() as (task, client, state, value, options):
+            before = len(state['calls'])
+            state['mode'] = 'changed-session'
+            with self.assertRaises(WalletAPIRefused):
+                task.execute('4')
+            self.assertEqual(state['calls'][before:], [('GET', '/auth/session', {})])
+            self.assertEqual(executes(state), [])
 
     def test_different_recipient_or_return_hop_refuses_before_wallet_calls(self):
         with direct_task() as (task, client, state, value, options):
