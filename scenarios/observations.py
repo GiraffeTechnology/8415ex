@@ -206,7 +206,7 @@ PYTHON_DISPLAY_TABLES = {
     "exchange/authorization_page.py": ("TEXT",),
     "exchange/evidence_page.py": ("_TEXT", "LANGUAGES", "UNVERIFIED"),
     "exchange/gap_projection.py": ("GAP_LABELS",),
-    "exchange/gas_disclosure_locales.py": ("WORDS", "TRANSPORT", "AVAILABILITY"),
+    "exchange/gas_disclosure_locales.py": ("WORDS", "TRANSPORT", "AVAILABILITY", "BUDGET_OBSERVATION"),
     "exchange/market_page.py": ("BASE_UNITS", "WORDS", "STATES", "EMPTY_MODE"),
     "exchange/nft_detail_page.py": ("LOCALES", "QUOTE_LABELS"),
     "exchange/queue_status_page.py": ("TEXT", "CONTROL_TEXT", "WINDOW_TEXT"),
