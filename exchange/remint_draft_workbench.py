@@ -264,7 +264,7 @@ class RemintDraftEditorBinding:
         self.receipt_id = receipt_id
         self.read_original_specifications = read_original_specifications
 
-    def draft(self, bill_terms=None, allowed_currencies=None, business_fields=None, attribute_fields=None,
+    def _draft_pair(self, bill_terms=None, allowed_currencies=None, business_fields=None, attribute_fields=None,
               replacement_choice=None):
         if replacement_choice is not None and (type(replacement_choice) is not str
                 or re.fullmatch(r"[0-9a-f]{64}", replacement_choice) is None):
@@ -329,7 +329,20 @@ class RemintDraftEditorBinding:
             result["proposedBusinessFields"] = _business_values(result["specification"])
             result["currencyChoices"] = choices
             result["originalCurrencies"] = old.receipt.allowed_price_currencies if choices is not None else None
+        return old, old_text, result
+
+    def draft(self, bill_terms=None, allowed_currencies=None, business_fields=None, attribute_fields=None,
+              replacement_choice=None):
+        _, old_text, result = self._draft_pair(bill_terms, allowed_currencies,
+            business_fields, attribute_fields, replacement_choice)
         return old_text, result
+
+    def draft_specifications(self, bill_terms=None, allowed_currencies=None, business_fields=None,
+                             attribute_fields=None, replacement_choice=None):
+        """Trusted host port: one detached original/proposed pair, not HTML."""
+        old, _, result = self._draft_pair(bill_terms, allowed_currencies,
+            business_fields, attribute_fields, replacement_choice)
+        return old, result["specification"]
 
     def render(self, csrf, locale="en", bill_terms=None, allowed_currencies=None, business_fields=None,
                attribute_fields=None, replacement_choice=None):
