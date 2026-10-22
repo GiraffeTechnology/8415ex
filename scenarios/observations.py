@@ -215,6 +215,7 @@ PYTHON_DISPLAY_TABLES = {
     "exchange/registration_source_locales.py": ("WORDS",),
     "exchange/remint_draft_workbench.py": ("WORDS",),
     "exchange/remint_review.py": ("WORDS",),
+    "exchange/remint_history_workbench.py": ("WORDS",),
     "exchange/rollback_page.py": ("TEXT", "HISTORY"),
     "exchange/settlement_record_page.py": ("TEXT",),
     "exchange/timeline_page.py": ("TEXT", "SIMULATION"),
