@@ -144,3 +144,43 @@ class DemoPackage(unittest.TestCase):
                 archive.writestr(f"directory-{n}/", b"")
         with self.assertRaisesRegex(ValueError, "too many archive directories"):
             kit.read_archive(output.getvalue())
+
+    def test_full_source_budget_builds_and_verifies_two_fixed_generated_members(self):
+        source = dict(SOURCE)
+        source.update({f"capacity/source-{n}.txt": b""
+                       for n in range(kit.MAX_MEMBERS - len(source))})
+        data = kit.build(kit.pack(source), "a" * 40, kit.git_tree(source))
+        manifest = kit.verify(data, hashlib.sha256(data).hexdigest())
+        self.assertEqual(len(manifest["files"]), kit.MAX_MEMBERS)
+        self.assertEqual(set(manifest["files"]), set(source))
+        self.assertEqual(len(kit.read_archive(data, generated_kit=True)), kit.MAX_MEMBERS + 2)
+        with self.assertRaisesRegex(ValueError, "too many archive members"):
+            kit.read_archive(data)
+        source["one-source-too-many.txt"] = b""
+        with self.assertRaisesRegex(ValueError, "too many archive members"):
+            kit.build(kit.pack(source), "a" * 40, kit.git_tree(source))
+
+    def test_generated_slots_cannot_increase_source_budget_or_omit_fixed_paths(self):
+        for fixed in ({}, {kit.MANIFEST: b"{}"}, {"__main__.py": kit.BOOTSTRAP}):
+            arbitrary = {f"source-{n}.txt": b""
+                         for n in range(kit.MAX_MEMBERS + 2 - len(fixed))}
+            with self.assertRaisesRegex(ValueError, "fixed generated kit members required"):
+                kit.read_archive(kit.pack(dict(arbitrary, **fixed)), generated_kit=True)
+        excess = {f"source-{n}.txt": b"" for n in range(kit.MAX_MEMBERS + 1)}
+        excess.update({kit.MANIFEST: b"{}", "__main__.py": kit.BOOTSTRAP})
+        with self.assertRaisesRegex(ValueError, "too many archive members"):
+            kit.read_archive(kit.pack(excess), generated_kit=True)
+        for kind in (None, 1, "kit"):
+            with self.assertRaisesRegex(ValueError, "explicit archive kind required"):
+                kit.read_archive(self.build(), generated_kit=kind)
+
+    def test_kit_reader_retains_directory_and_content_limits(self):
+        data = self.build()
+        with patch.object(kit, "MAX_CONTENT", 2), self.assertRaisesRegex(ValueError, "archive content limit"):
+            kit.read_archive(data, generated_kit=True)
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w") as archive:
+            for n in range(kit.MAX_DIRECTORIES + 1):
+                archive.writestr(f"directory-{n}/", b"")
+        with self.assertRaisesRegex(ValueError, "too many archive directories"):
+            kit.read_archive(output.getvalue(), generated_kit=True)

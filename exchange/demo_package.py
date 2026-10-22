@@ -31,13 +31,17 @@ raise SystemExit(run_archive(archive, expected, sys.argv[1:]))
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
 
-def read_archive(data):
+def read_archive(data, *, generated_kit=False):
+    if type(generated_kit) is not bool:
+        raise ValueError("explicit archive kind required")
+    # Only the verifier can spend the two fixed generated launcher/manifest slots.
+    maximum_files = MAX_MEMBERS + (2 if generated_kit else 0)
     if not isinstance(data, bytes) or not data or len(data) > MAX_ARCHIVE:
         raise ValueError("bounded archive bytes required")
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             members = archive.infolist()
-            if len(members) > MAX_MEMBERS + MAX_DIRECTORIES:
+            if len(members) > maximum_files + MAX_DIRECTORIES:
                 raise ValueError("too many archive members")
             seen, result, total = set(), {}, 0
             directory_count = file_count = 0
@@ -59,7 +63,7 @@ def read_archive(data):
                         raise ValueError("too many archive directories")
                     continue
                 file_count += 1
-                if file_count > MAX_MEMBERS:
+                if file_count > maximum_files:
                     raise ValueError("too many archive members")
                 if stat.S_IFMT(mode) not in (0, stat.S_IFREG):
                     raise ValueError("non-regular member refused")
@@ -67,6 +71,8 @@ def read_archive(data):
                 if total > MAX_CONTENT or member.file_size > MAX_CONTENT:
                     raise ValueError("archive content limit")
                 result[path] = archive.read(member)
+            if generated_kit and (MANIFEST not in result or "__main__.py" not in result):
+                raise ValueError("fixed generated kit members required")
             return result
     except (zipfile.BadZipFile, RuntimeError, NotImplementedError) as error:
         raise ValueError("invalid archive") from error
@@ -107,7 +113,7 @@ def verify(data, expected_sha256):
             or not isinstance(data, bytes)
             or hashlib.sha256(data).hexdigest() != expected_sha256):
         raise ValueError("demo archive digest mismatch")
-    members = read_archive(data)
+    members = read_archive(data, generated_kit=True)
     if members.pop("__main__.py", None) != BOOTSTRAP:
         raise ValueError("kit bootstrap mismatch")
     try:
