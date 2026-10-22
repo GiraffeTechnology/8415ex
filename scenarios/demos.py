@@ -524,15 +524,15 @@ def demo_06(recorder):
 
 DEMOS = (
     Scenario("DEMO-01", "single trade, registration, independent release and bill history",
-             ("T-02", "T-11", "T-25", "T-32", "T-33"), MAIN_PATHS["DEMO-01"], demo_01, prd_version="1.4"),
+             ("T-02", "T-11", "T-25", "T-32", "T-33"), MAIN_PATHS["DEMO-01"], demo_01, prd_version="1.5"),
     Scenario("DEMO-02", "serial registration with independent prefix release",
-             ("T-03", "T-04", "T-12", "T-13"), MAIN_PATHS["DEMO-02"], demo_02, prd_version="1.4"),
+             ("T-03", "T-04", "T-12", "T-13"), MAIN_PATHS["DEMO-02"], demo_02, prd_version="1.5"),
     Scenario("DEMO-03", "first-hop refusal returns the whole suffix to the origin",
-             ("T-17", "T-19", "T-21"), MAIN_PATHS["DEMO-03"], demo_03, prd_version="1.4"),
+             ("T-17", "T-19", "T-21"), MAIN_PATHS["DEMO-03"], demo_03, prd_version="1.5"),
     Scenario("DEMO-04", "finalized prefix survives a later refusal",
-             ("T-18", "T-19", "T-29"), MAIN_PATHS["DEMO-04"], demo_04, prd_version="1.4"),
+             ("T-18", "T-19", "T-29"), MAIN_PATHS["DEMO-04"], demo_04, prd_version="1.5"),
     Scenario("DEMO-05", "intermediate wallets hold no gas budget",
-             ("T-20", "T-21", "T-22", "T-23"), MAIN_PATHS["DEMO-05"], demo_05, prd_version="1.4"),
+             ("T-20", "T-21", "T-22", "T-23"), MAIN_PATHS["DEMO-05"], demo_05, prd_version="1.5"),
     Scenario("DEMO-06", "cutoff refuses a new trade while in-flight work continues",
-             ("T-24", "T-25", "T-32", "T-33"), MAIN_PATHS["DEMO-06"], demo_06, prd_version="1.4"),
+             ("T-24", "T-25", "T-32", "T-33"), MAIN_PATHS["DEMO-06"], demo_06, prd_version="1.5"),
 )

@@ -19,8 +19,8 @@ class SectionLedger(unittest.TestCase):
 
     def test_exact_published_baseline_is_distinct_from_current_complete_contract(self):
         row = prd.build(ROOT)
-        self.assertEqual(row["publishedBaselineVersion"], "1.4")
-        self.assertEqual(row["currentCompletePRDVersion"], "1.4")
+        self.assertEqual(row["publishedBaselineVersion"], "1.5")
+        self.assertEqual(row["currentCompletePRDVersion"], "1.5")
         self.assertTrue(row["completeCurrentContractLoaded"])
         self.assertFalse(row["baselinePassIsCurrentPass"])
         self.assertFalse(row["historicalPassInherited"])
@@ -28,7 +28,7 @@ class SectionLedger(unittest.TestCase):
     def test_all_published_requirement_identifiers_remain_distinct(self):
         row = prd.build(ROOT)
         ids = [item["id"] for item in row["requirements"]]
-        self.assertEqual(len(ids), 111)
+        self.assertEqual(len(ids), 123)
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual(ids, [item["id"] for item in current_prd.load(ROOT)["requirements"]])
 

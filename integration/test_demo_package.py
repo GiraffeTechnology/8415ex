@@ -144,3 +144,30 @@ class DemoPackage(unittest.TestCase):
                 archive.writestr(f"directory-{n}/", b"")
         with self.assertRaisesRegex(ValueError, "too many archive directories"):
             kit.read_archive(output.getvalue())
+
+    def test_source_growth_beyond_512_files_roundtrips_complete_kit(self):
+        source = dict(SOURCE)
+        source.update({"fixtures/member-%04d.txt" % n: b"" for n in range(508)})
+        self.assertEqual(len(source), 513)
+        data = kit.build(kit.pack(source), "a" * 40, kit.git_tree(source))
+        manifest = kit.verify(data, hashlib.sha256(data).hexdigest())
+        self.assertEqual(set(manifest["files"]), set(source))
+        self.assertEqual(len(kit.read_archive(data)), 515)
+
+    def test_output_reserves_members_for_manifest_and_bootstrap(self):
+        source = dict(SOURCE, **{"extra.txt": b""})
+        with patch.object(kit, "MAX_MEMBERS", 8):
+            data = kit.build(kit.pack(source), "a" * 40, kit.git_tree(source))
+            self.assertEqual(len(kit.read_archive(data)), 8)
+            source["over.txt"] = b""
+            with self.assertRaisesRegex(ValueError, "too many archive members"):
+                kit.build(kit.pack(source), "a" * 40, kit.git_tree(source))
+
+    def test_member_and_generated_content_limits_remain_enforced(self):
+        with self.assertRaisesRegex(ValueError, "too many archive members"):
+            kit.read_archive(kit.pack({"member-%04d" % n: b""
+                                       for n in range(kit.MAX_MEMBERS + 1)}))
+        source_bytes = sum(map(len, SOURCE.values()))
+        with patch.object(kit, "MAX_CONTENT", source_bytes):
+            with self.assertRaisesRegex(ValueError, "archive content limit"):
+                self.build()

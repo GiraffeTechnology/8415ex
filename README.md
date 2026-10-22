@@ -7,7 +7,7 @@ supporting 8415wallet and compatible wallets.
 
 ## Current requirements
 
-[PRD.md](PRD.md) v1.4 is the current complete product and acceptance contract: 111 EX requirements, T-01..84, six stages and six demonstrations. Read [AGENTS.md](AGENTS.md) before implementation. Earlier v1.3 loaders/locks/plans and conflicting subdirectory guides are historical, not authority or v1.4 acceptance. This publication does not claim implementation, runtime, deployment or chain completion.
+[PRD.md](PRD.md) v1.5 is the current complete product and acceptance contract: 123 EX requirements, T-01..96, six stages and six demonstrations. Read [AGENTS.md](AGENTS.md) before implementation. Earlier v1.3 loaders/locks/plans and conflicting subdirectory guides are historical, not authority or v1.5 acceptance. This publication does not claim implementation, runtime, deployment or chain completion.
 
 The scope is a commodity spot-intermediary Web3 infrastructure DEMO: whole receipts, BTC/ETH and soybean/iron-ore scenes, both crypto and receipt-NFT collateral, ordinary market-maker quotes, continuous real public spot references isolated from simulated NFT orders, full terms, independent current/owner/holder markers, role-bound per-position signatures and six-language responsive UI. Undefined financing/valuation/liquidation/returns remain local open items, not invented defaults or a global stop.
 
@@ -119,4 +119,8 @@ and the suite fails on either.
 
 Reuse existing CI and check exact-source outcomes, without historical PASS inheritance. Missing implementation/evidence remains NOT_RUN/NOT_VERIFIED.
 
-Published product baseline file integrity: PRD.md SHA-256 `b3989a91f1d3f7a1de6812fa05777d0dfdf84a4eee4a7909bdda77d1196032ce`. This identifies document bytes, not a runtime acceptance result.
+Published product baseline file integrity: PRD.md SHA-256 `e5124bb30d408ae6ce8bcaba7c1ba6d14eda2a461c25e0c9c7202410278856c6`. This identifies document bytes, not a runtime acceptance result.
+
+## Optional deferred cross-chain mode
+
+Read PRD section 7.1 and docs/cross-chain-deferred-settlement.md. These explicitly scoped rules replace prepaid-only restrictions for seller-consented deferred trades, not ordinary spot behavior. Sepolia ETH gas and Sepolia PYUSD principal remain; Hoodi ETH is collateral only. At the settlement deadline an unregistered trade rolls back; registered NFT responsibility never revives due to unpaid B debt. The upfront ETH settlement fee covers normal-process gas, not contingent liquidation gas. EX first pays liquidation gas and charges B an additional penalty deducted from liquidated collateral; no fresh B ETH payment or mandatory asset bridge is a liquidation prerequisite. No EX cash loan or interest spread. Existing UI is reused. Keep V1.5 isolated from V1.4/main, even after CI passes; downstream authorized wiring/testing/deployment must bind the exact approved version. No document publication certifies runtime acceptance.

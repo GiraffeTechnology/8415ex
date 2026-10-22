@@ -1,7 +1,7 @@
 # Repository instructions
 
 ## Current authority
-Read [PRD.md](PRD.md) v1.4 in full before implementation: 111 EX requirements, T-01..84, six stages and six demonstrations. Earlier v1.3 loaders/locks/plans, source reports and subdirectory guides are historical wherever they conflict and cannot certify revised requirements. Read this file, README and applicable directory instructions before changes. Preserve concurrent valid changes and exact base/head identity; reuse existing infrastructure and configured storage.
+Read [PRD.md](PRD.md) v1.5 in full before implementation: 123 EX requirements, T-01..96, six stages and six demonstrations. Earlier v1.3 loaders/locks/plans, source reports and subdirectory guides are historical wherever they conflict and cannot certify revised requirements. Read this file, README and applicable directory instructions before changes. Preserve concurrent valid changes and exact base/head identity; reuse existing infrastructure and configured storage.
 
 ## Execution
 CI is allowed in GitHub Actions, including applicable automated tests, syntax/type checks and builds. Runtime and integration acceptance use the project-supported Linux configuration. Document editing and document-byte/hash review are not product tests.
@@ -19,7 +19,7 @@ GitHub CI results do not establish deployment or live-chain acceptance. EX remai
 - ETH-only gas: before a new trade show real cap/P50 ETH and informative USD with source/method/sample/time/scope, obtain buyer confirmation and freeze the maximum separately from principal. Refuse zero/insufficient ETH before signing/sending. Debit actual gas, unfreeze unused ETH, retain consumed failed-tx gas and query unknown results before retry. Existing sufficient freezes cover the same approved recovery without new prepayment. Shared-operation allocation is locally open.
 - Holder possession plus holder=owner is the confirmed remint business predicate with existing authority and atomic old burn/new mint. New terms cannot rewrite old history; add no cleanup/migration approval. Equality is not protocol proof of no gap/escrow/task.
 - Keep gap/admission/historical finality/Oracle refusal/funds/execution separate. cancelSettlement is not business rollback and retains recorded-initiator/strict-deadline rules. Do not invent protocol REJECTED or ordinary-transfer gates.
-- Implement the market, both crypto/receipt collateral choices, ordinary market makers, real public references separated from simulated orders, complete terms and responsive six-language UI. Do not invent financing/LTV/liquidation/returns.
+- Implement the market, both crypto/receipt collateral choices, ordinary market makers, real public references separated from simulated orders, complete terms and responsive six-language UI. Implement only the explicitly confirmed section 7.1 deferred mode; do not invent other financing/LTV/liquidation/return terms.
 - Individual NFT status uses exact openGapOF=YES red and openGapOF=NO green. Actual openGapOf returns bytes32; map only supported successful queries. Unknown/loading/error/unsupported is never NO/green.
 - current/owner/holder positions are independent real-record markers. Per-position signatures require original role/payload/scheme evidence, never alignment inference. No wallet names/full/truncated addresses in frontend, metadata, hover, accessibility, download or copy paths.
 - Show all business conditions as a complete identity-excluding projection without summaries/altered obligations. Keep unchanged originals private for hash/signature verification. Six candidate locales are en, zh-Hans, zh-Hant, fr, es, ja; preserve protocol identifiers and original terms. Exclude wallet-management pages while retaining EX authority/balance/fee checks.
@@ -29,4 +29,8 @@ Preserve dependencies and exact base/head. Use the existing CI workflow. Record 
 
 Map applicable requirements to exact source/config/run/artifacts and actual evidence. Separate design/models/simulations/implementation/browser/deployment/chain verdicts; missing evidence remains NOT_RUN/NOT_VERIFIED. Undefined feed/locale/interface/commercial matters block only dependent paths. Product documentation is in English.
 
-Published product baseline file integrity: PRD.md SHA-256 `b3989a91f1d3f7a1de6812fa05777d0dfdf84a4eee4a7909bdda77d1196032ce`. This identifies document bytes, not a runtime acceptance result.
+Published product baseline file integrity: PRD.md SHA-256 `e5124bb30d408ae6ce8bcaba7c1ba6d14eda2a461c25e0c9c7202410278856c6`. This identifies document bytes, not a runtime acceptance result.
+
+## Optional deferred cross-chain mode
+
+Read PRD section 7.1 and docs/cross-chain-deferred-settlement.md. These explicitly scoped rules replace prepaid-only restrictions for seller-consented deferred trades, not ordinary spot behavior. Sepolia ETH gas and Sepolia PYUSD principal remain; Hoodi ETH is collateral only. At the settlement deadline an unregistered trade rolls back; registered NFT responsibility never revives due to unpaid B debt. The upfront ETH settlement fee covers normal-process gas, not contingent liquidation gas. EX first pays liquidation gas and charges B an additional penalty deducted from liquidated collateral; no fresh B ETH payment or mandatory asset bridge is a liquidation prerequisite. No EX cash loan or interest spread. Existing UI is reused. Keep V1.5 isolated from V1.4/main, even after CI passes; downstream authorized wiring/testing/deployment must bind the exact approved version. No document publication certifies runtime acceptance.

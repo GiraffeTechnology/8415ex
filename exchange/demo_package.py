@@ -11,7 +11,7 @@ from .delivery import git_tree
 
 MAX_ARCHIVE = 16 * 1024 * 1024
 MAX_CONTENT = 8 * 1024 * 1024
-MAX_MEMBERS = 512
+MAX_MEMBERS = 1024
 # Directory metadata has its own finite budget; it is not executable source.
 MAX_DIRECTORIES = 128
 MANIFEST = "DEMO-KIT-MANIFEST.json"
@@ -99,7 +99,10 @@ def build(source_zip, commit, tree):
                 "commit": commit, "tree": tree, "realAcceptance": "NOT_RUN",
                 "files": {p: {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
                           for p, data in sorted(source.items())}}
-    return pack(dict(source, **{MANIFEST: canonical(manifest), "__main__.py": BOOTSTRAP}))
+    data = pack(dict(source, **{MANIFEST: canonical(manifest), "__main__.py": BOOTSTRAP}))
+    # Generated metadata also consumes the same member and byte budgets.
+    verify(data, hashlib.sha256(data).hexdigest())
+    return data
 
 def verify(data, expected_sha256):
     if (not isinstance(expected_sha256, str)
