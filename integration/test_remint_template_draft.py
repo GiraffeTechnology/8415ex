@@ -1,5 +1,6 @@
 """Original typed template/voucher choice definitions; author execution NOT_RUN."""
 from dataclasses import replace
+from html import escape
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -44,8 +45,8 @@ class RemintTemplateDraft(unittest.TestCase):
             with self.subTest(locale=locale):
                 status, _, body = self.original.request("GET", "/remint-draft?lang=" + locale)
                 self.assertEqual(status, 200)
-                self.assertIn(REPLACEMENT_WORDS[locale][0], body)
-                self.assertIn(REPLACEMENT_WORDS[locale][2], body)
+                self.assertIn(escape(REPLACEMENT_WORDS[locale][0]), body)
+                self.assertIn(escape(REPLACEMENT_WORDS[locale][2]), body)
                 self.assertIn('action="/remint-draft-choice"', body)
                 self.assertIn(self.key, body)
                 for value in (self.original.seed.receipt.asset.contract,

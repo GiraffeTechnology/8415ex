@@ -1,5 +1,6 @@
 """Public scalar remint draft UI definitions; author execution NOT_RUN."""
 import copy
+from html import escape
 import unittest
 from urllib.parse import urlencode
 
@@ -36,7 +37,7 @@ class RemintBusinessDraft(unittest.TestCase):
                 self.assertEqual(status, 200)
                 for key, label in zip(BUSINESS_FIELDS, BUSINESS_LABELS[locale]):
                     self.assertIn('name="' + key + '"', body)
-                    self.assertIn(label, body)
+                    self.assertIn(escape(label), body)
                 self.assertIn(self.original.old.bill_of_lading_number, body)
                 for value in (self.original.old.receipt.origin_account,
                               self.original.old.receipt.asset.contract,
