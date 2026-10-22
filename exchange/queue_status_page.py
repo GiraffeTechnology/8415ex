@@ -1,6 +1,8 @@
 """Read-only localized queue component; original domain remains authoritative."""
 from html import escape
 
+from .funds_page import render_segment_funds
+
 
 KEYS = ('heading', 'leg', 'state', 'detail', 'none', 'deferred', 'deferredDetail',
         'rejected', 'rejectedDetail', 'overdue', 'overdueDetail', 'pending',
@@ -191,4 +193,6 @@ def render_queue_status(exchange, receipt_id, *, locale='en', now=None):
     header = '<tr>' + ''.join('<th>' + escape(w[key]) + '</th>'
                               for key in ('leg', 'state', 'detail')) + '<th>' + escape(deadline_heading) + '</th></tr>'
     return ('<section lang="' + locale + '"><h2>' + escape(w['heading']) + '</h2><p>'
-            + escape(w['boundary']) + '</p><p>' + escape(deadline_boundary) + '</p><table>' + header + ''.join(rows) + '</table></section>')
+            + escape(w['boundary']) + '</p><p>' + escape(deadline_boundary) + '</p><table>' + header + ''.join(rows) + '</table></section>'
+            + render_segment_funds(exchange, receipt_id, view['observedAt'],
+                                   [leg['legIndex'] for leg in view['legs']], locale=locale))
