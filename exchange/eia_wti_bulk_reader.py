@@ -59,6 +59,15 @@ class EIAWTIBulkReader(EIAWTISpotReader):
         self._petroleum_marker = None
         self._bulk_evidence = None
 
+    def cached_source_evidence(self):
+        """Read the retained verified cache metadata without a source request.
+
+        This is byte/source attribution evidence, not display permission,
+        source freshness or an independently authenticated feed result.
+        """
+        with self._lock:
+            return deepcopy(self._bulk_evidence)
+
     def _get(self, url, limit, content_types):
         request = Request(url, headers={"Accept": ", ".join(content_types),
                           "Accept-Encoding": "identity", "User-Agent": self._agent},
@@ -112,7 +121,10 @@ class EIAWTIBulkReader(EIAWTISpotReader):
                 observation["rawResponseSHA256"] = selected["archiveEvidence"]["sha256"]
                 observation["responseDigestScope"] = "complete-petroleum-archive"
                 evidence = dict(selected["archiveEvidence"], selectedLineSHA256=line_hash,
-                                manifestSHA256=manifest_hash, datasetUpdatedAt=stamp)
+                                manifestSHA256=manifest_hash, datasetUpdatedAt=stamp,
+                                sourceUpdatedAt=observation["sourceUpdatedAt"],
+                                upstreamSource=observation["upstreamSource"],
+                                sourceCopyright=observation["sourceCopyright"])
                 # Publish the new cache only after the complete archive verifies.
                 self._cached = deepcopy(observation)
                 self._petroleum_marker = marker
