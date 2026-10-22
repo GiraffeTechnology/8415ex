@@ -4,11 +4,13 @@ from copy import deepcopy
 from .serialized_exchange_access import SerializedExchangeAccess
 from .remint_review import RemintReviewBinding
 from .remint_review_workbench import RemintReviewWorkbenchServer
+from .remint_workbench import RemintWorkbenchServer
 
 
 def compose_serialized_workbench(access, receipt_id, *, gas_page,
         registration_sources, current_time, commit, tree, runtime_options=None,
-        detail_receipts=(), remint_review=None, reference_feed=None, port=0):
+        detail_receipts=(), remint_review=None, remint_history=None,
+        remint_receipt=None, reference_feed=None, port=0):
     """Construct, but do not start, the existing native HTTP server.
 
     detail_receipts contains original (receipt_id, RuntimeBinding options) pairs.
@@ -34,10 +36,15 @@ def compose_serialized_workbench(access, receipt_id, *, gas_page,
 
         review = RemintReviewBinding(review.receipt_id,
                                      review.replacement_receipt_id, read_pair)
-    server = RemintReviewWorkbenchServer(binding, gas_page=gas_page,
+    read_views = {}
+    server_type = RemintReviewWorkbenchServer
+    if remint_history is not None or remint_receipt is not None:
+        server_type = RemintWorkbenchServer
+        read_views = {"remint_history": remint_history, "remint_receipt": remint_receipt}
+    server = server_type(binding, gas_page=gas_page,
         registration_sources=registration_sources, current_time=current_time,
         commit=commit, tree=tree, port=port, detail_bindings=details,
-        reference_feed=reference_feed, remint_review=review)
+        reference_feed=reference_feed, remint_review=review, **read_views)
     # The original constructor stamps its primary binding. Stamp the same
     # actual host-supplied source on each directory binding as well.
     for detail in details:

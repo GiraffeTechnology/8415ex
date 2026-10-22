@@ -18,7 +18,7 @@ class LoadedCheckpointWorkbench:
 def compose_checkpoint_workbench(checkpoint, scope, runtime, receipt_id, *,
         gas_page, registration_sources, current_time, commit, tree,
         runtime_options=None, detail_receipts=(), remint_review=None,
-        reference_feed=None, port=0):
+        remint_history=None, remint_receipt=None, reference_feed=None, port=0):
     """Construct the existing server, but never start it or dispatch a command.
 
     The application supplies its original controllers, gateway options, source
@@ -38,5 +38,6 @@ def compose_checkpoint_workbench(checkpoint, scope, runtime, receipt_id, *,
         gas_page=gas_page, registration_sources=registration_sources,
         current_time=current_time, commit=commit, tree=tree,
         runtime_options=runtime_options, detail_receipts=details,
-        remint_review=remint_review, reference_feed=reference_feed, port=port)
+        remint_review=remint_review, remint_history=remint_history,
+        remint_receipt=remint_receipt, reference_feed=reference_feed, port=port)
     return LoadedCheckpointWorkbench(server=server, checkpoint=loaded)
