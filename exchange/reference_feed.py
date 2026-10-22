@@ -15,6 +15,39 @@ from zoneinfo import ZoneInfo
 SCOPE = ("provider", "series", "commodity", "spec", "market", "priceType", "currency", "unit")
 
 
+_DIAGNOSTIC_UNAVAILABLE = {"status": "diagnostic-unavailable"}
+_TRANSPORT_CODES = {
+    "SPOT_SOURCE_VALIDATOR_REFUSED", "SPOT_SOURCE_ORIGIN_DIFFERS",
+    "SPOT_SOURCE_HTTP_DEFERRED", "SPOT_SOURCE_CACHE_ABSENT",
+    "SPOT_SOURCE_RESPONSE_REFUSED", "SPOT_SOURCE_RESPONSE_TOO_LARGE",
+    "SPOT_SOURCE_READ_UNAVAILABLE",
+}
+
+
+def _transport_observation(value):
+    """Project only the original reader's finite, non-secret diagnostic schema."""
+    if value is None:
+        return None
+    if type(value) is not dict:
+        return dict(_DIAGNOSTIC_UNAVAILABLE)
+    status = value.get("status")
+    digest = value.get("rawResponseSHA256")
+    valid_digest = type(digest) is str and re.fullmatch(r"[0-9a-f]{64}", digest) is not None
+    if (status == "read" and set(value) == {"status", "httpStatus", "bytes", "rawResponseSHA256"}
+            and type(value["httpStatus"]) is int and value["httpStatus"] == 200
+            and type(value["bytes"]) is int and 0 < value["bytes"] <= 2 * 1024 * 1024
+            and valid_digest):
+        return deepcopy(value)
+    if (status == "not-modified" and set(value) == {"status", "httpStatus", "rawResponseSHA256"}
+            and type(value["httpStatus"]) is int and value["httpStatus"] == 304 and valid_digest):
+        return deepcopy(value)
+    if (status == "unavailable" and set(value) == {"status", "code", "retainedSource"}
+            and type(value["code"]) is str and value["code"] in _TRANSPORT_CODES
+            and type(value["retainedSource"]) is bool):
+        return deepcopy(value)
+    return dict(_DIAGNOSTIC_UNAVAILABLE)
+
+
 def _instant(value):
     if not isinstance(value, str) or not value.endswith("Z"):
         raise ValueError("UTC timestamp required")
@@ -22,7 +55,11 @@ def _instant(value):
 
 
 class CommodityReferenceFeed:
-    def __init__(self, policy, read, verify_policy, *, clock=None):
+    def __init__(self, policy, read, verify_policy, *, clock=None, observe_transport=None):
+        if observe_transport is not None and not callable(observe_transport):
+            raise ValueError("original transport observation port required")
+        self._observe_transport = observe_transport
+        self._transport = None
         policy = deepcopy(policy)
         if not callable(read) or not callable(verify_policy) or verify_policy(deepcopy(policy)) is not True:
             raise ValueError("verified original source policy and reader required")
@@ -115,7 +152,17 @@ class CommodityReferenceFeed:
                     result["sourceEvidence"] = evidence
             except (Exception, InvalidOperation):
                 result = None
+            # Capture metadata only after the reader has returned or raised. Do
+            # not call it from snapshot(), under the UI state lock, or as another
+            # request. A diagnostic failure never invalidates a good price.
+            transport = None
+            if self._observe_transport is not None:
+                try:
+                    transport = _transport_observation(self._observe_transport())
+                except Exception:
+                    transport = dict(_DIAGNOSTIC_UNAVAILABLE)
             with self._lock:
+                self._transport = transport
                 self._attempt = at.isoformat().replace("+00:00", "Z")
                 self._failed = result is None
                 if result is not None:
@@ -130,6 +177,12 @@ class CommodityReferenceFeed:
             base = {"kind": "external-spot-reference", "sourceURL": self._policy["sourceURL"],
                     "lastAttemptAt": self._attempt, "events": deepcopy(self._events),
                     "executableOrder": False, "conversionPerformed": False}
+            if self._observe_transport is not None:
+                base["transportObservation"] = {
+                    "value": deepcopy(self._transport),
+                    "attemptCorrelation": "NOT_ESTABLISHED",
+                    "meaning": "last reader transport metadata, not price validity, freshness or execution",
+                }
             if value is None:
                 return dict(base, status="unavailable", lastSuccessful=None, price=None)
             now = self._clock().astimezone(timezone.utc)
