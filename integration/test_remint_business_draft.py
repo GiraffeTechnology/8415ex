@@ -1,5 +1,7 @@
 """Public scalar remint draft UI definitions; author execution NOT_RUN."""
 import copy
+from dataclasses import replace
+from html import escape
 import unittest
 from urllib.parse import urlencode
 
@@ -36,7 +38,7 @@ class RemintBusinessDraft(unittest.TestCase):
                 self.assertEqual(status, 200)
                 for key, label in zip(BUSINESS_FIELDS, BUSINESS_LABELS[locale]):
                     self.assertIn('name="' + key + '"', body)
-                    self.assertIn(label, body)
+                    self.assertIn(escape(label), body)
                 self.assertIn(self.original.old.bill_of_lading_number, body)
                 for value in (self.original.old.receipt.origin_account,
                               self.original.old.receipt.asset.contract,
@@ -71,7 +73,7 @@ class RemintBusinessDraft(unittest.TestCase):
             self.form(self.fields(commodityQuantity="123", issuer="Edited issuer")))
         self.assertEqual(status, 200)
         self.assertIn('name="commodityQuantity" value="123"', body)
-        self.assertIn('name="issuer" value="Edited issuer"', body)
+        self.assertIn('<textarea name="issuer" rows="4" maxlength="32768" data-max-codepoints="16384" required>\nEdited issuer</textarea>', body)
         self.assertIn('value="quote-c" checked', body)
         status, _, body = self.original.request("GET", "/remint-draft")
         self.assertEqual(status, 200)
@@ -116,4 +118,40 @@ class RemintBusinessDraft(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn("Legacy text edit", body)
         self.assertIn('name="commodityQuantity" value="100"', body)
+        self.assertEqual(self.original.host.calls, [])
+
+    def test_multiline_business_fields_and_leading_terms_are_preserved(self):
+        original = "\nOriginal issuer\r\nSecond line\rLast line <keep>"
+        terms = "\nOriginal full terms\nSecond clause"
+        self.original.seed = replace(self.original.seed, issuer=original, bill_terms=terms)
+        _, baseline = self.editor.draft()
+        self.baseline = baseline["proposedBusinessFields"]
+        status, _, body = self.original.request("GET", "/remint-draft")
+        self.assertEqual(status, 200)
+        self.assertIn('name="issuer" rows="4" maxlength="32768" data-max-codepoints="16384" required>\n'
+                      + escape(original) + '</textarea>', body)
+        self.assertIn('name="billTerms" rows="16" maxlength="32768" data-max-codepoints="16384" required>\n'
+                      + escape(terms) + '</textarea>', body)
+        values = self.fields(issuer=original.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n"))
+        submitted_terms = terms.replace("\n", "\r\n")
+        status, _, body = self.original.request("POST", "/remint-draft",
+            self.form(values, billTerms=submitted_terms))
+        self.assertEqual(status, 200)
+        self.assertIn(escape(original), body)
+        self.assertIn(escape(terms), body)
+        _, result = self.editor.draft(submitted_terms, ("quote-c",), values)
+        self.assertEqual(result["specification"].issuer, original)
+        self.assertEqual(result["specification"].bill_terms, terms)
+        self.assertEqual(self.original.seed.issuer, original)
+        self.assertEqual(self.original.host.calls, [])
+
+    def test_business_text_controls_support_astral_values_without_widening_server_limit(self):
+        value = "\U0001f33e" * 16384
+        status, _, body = self.original.request("POST", "/remint-draft",
+            self.form(self.fields(issuer=value)))
+        self.assertEqual(status, 200)
+        self.assertIn(value, body)
+        self.assertIn('maxlength="32768" data-max-codepoints="16384"', body)
+        self.assertEqual(self.original.request("POST", "/remint-draft",
+            self.form(self.fields(issuer=value + "x")))[0], 400)
         self.assertEqual(self.original.host.calls, [])

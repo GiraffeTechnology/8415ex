@@ -1,6 +1,7 @@
 """Original template public attribute draft definitions; author NOT_RUN."""
 from dataclasses import replace
 from html import escape
+from html.parser import HTMLParser
 import unittest
 from urllib.parse import urlencode
 
@@ -30,8 +31,8 @@ class RemintAttributeDraft(unittest.TestCase):
                 self.assertEqual(status, 200)
                 self.assertIn(ATTRIBUTE_WORDS[locale][0], body)
                 self.assertIn(ATTRIBUTE_WORDS[locale][1], body)
-                self.assertIn('name="attribute.0" value="Seed grade"', body)
-                self.assertIn('name="attribute.1" value="Seed packing"', body)
+                self.assertIn('<textarea name="attribute.0" rows="4" maxlength="32768" data-max-codepoints="16384" required>\nSeed grade</textarea>', body)
+                self.assertIn('<textarea name="attribute.1" rows="4" maxlength="32768" data-max-codepoints="16384">\nSeed packing</textarea>', body)
                 self.assertIn("fixture-grade", body)
                 self.assertNotIn(self.original.old.controlled_access_mapping, body)
 
@@ -81,7 +82,7 @@ class RemintAttributeDraft(unittest.TestCase):
     def test_preview_is_not_saved_and_legacy_posts_remain_compatible(self):
         status, _, body = self.original.request("POST", "/remint-draft", self.form(packing="Preview packing"))
         self.assertEqual(status, 200)
-        self.assertIn('name="attribute.1" value="Preview packing"', body)
+        self.assertIn('<textarea name="attribute.1" rows="4" maxlength="32768" data-max-codepoints="16384">\nPreview packing</textarea>', body)
         status, _, body = self.original.request("GET", "/remint-draft")
         self.assertEqual(status, 200)
         self.assertNotIn("Preview packing", body)
@@ -102,3 +103,66 @@ class RemintAttributeDraft(unittest.TestCase):
         self.assertEqual(status, 503)
         self.assertIn(WORDS["fr"][6], body)
         self.assertNotIn("private source diagnostic", body)
+
+    def test_multiline_textarea_form_round_trip_preserves_original_attribute(self):
+        class Textareas(HTMLParser):
+            def __init__(self):
+                super().__init__(convert_charrefs=True)
+                self.name = None
+                self.values = {}
+
+            def handle_starttag(self, tag, attrs):
+                if tag == "textarea":
+                    self.name = dict(attrs).get("name")
+                    self.values[self.name] = ""
+
+            def handle_data(self, data):
+                if self.name is not None:
+                    self.values[self.name] += data
+
+            def handle_endtag(self, tag):
+                if tag == "textarea":
+                    self.name = None
+
+        original = "\nFirst line\r\nSecond line\rThird line <keep> & preserve"
+        self.original.seed = replace(self.original.seed,
+            public_attributes=(("grade", original), ("packing", "Seed packing")))
+        status, _, body = self.original.request("GET", "/remint-draft")
+        self.assertEqual(status, 200)
+        self.assertNotIn('<input name="attribute.', body)
+        self.assertIn(escape(original), body)
+        controls = Textareas()
+        # Model the documented HTML newline and form-serialization rules.
+        # This is a synthetic HTTP regression, not live browser acceptance.
+        controls.feed(body.replace("\r\n", "\n").replace("\r", "\n"))
+        value = controls.values["attribute.0"]
+        self.assertTrue(value.startswith("\n"))
+        submitted = value[1:].replace("\n", "\r\n")
+        status, _, preview = self.original.request("POST", "/remint-draft",
+            self.form(grade=submitted, packing="Changed packing"))
+        self.assertEqual(status, 200)
+        self.assertIn(escape(original), preview)
+        self.assertEqual(self.original.seed.public_attributes[0], ("grade", original))
+        _, result = self.editor.draft(attribute_fields={
+            "attribute.0": submitted, "attribute.1": "Changed packing"})
+        self.assertEqual(result["specification"].public_attributes[0], ("grade", original))
+        self.assertEqual(self.original.host.calls, [])
+
+    def test_unchanged_newline_expansion_is_restored_before_character_limit(self):
+        original = "x" + "\n" * 16383
+        self.original.seed = replace(self.original.seed,
+            public_attributes=(("grade", original), ("packing", "Seed packing")))
+        _, result = self.editor.draft(attribute_fields={
+            "attribute.0": original.replace("\n", "\r\n"), "attribute.1": "Seed packing"})
+        self.assertEqual(result["specification"].public_attributes[0], ("grade", original))
+        self.assertEqual(self.original.host.calls, [])
+
+    def test_changed_multiline_value_uses_logical_character_limit(self):
+        changed = "y" + "\n" * 16383
+        _, result = self.editor.draft(attribute_fields={
+            "attribute.0": changed.replace("\n", "\r\n"), "attribute.1": "Seed packing"})
+        self.assertEqual(result["specification"].public_attributes[0], ("grade", changed))
+        with self.assertRaises(ValueError):
+            self.editor.draft(attribute_fields={
+                "attribute.0": changed + "z", "attribute.1": "Seed packing"})
+        self.assertEqual(self.original.host.calls, [])
