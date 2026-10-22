@@ -29,6 +29,7 @@ from .authorization_page import render_authorizations, WORDS as AUTH_WORDS
 from .timeline_page import render_timeline, WORDS as TIMELINE_WORDS
 from .rollback_page import render_rollback, WORDS as ROLLBACK_WORDS
 from .health_observation import health_observation
+from .command_observation_page import render_command_observations
 
 ACTIONS = {
     "submit-registration": "Submit registration",
@@ -248,7 +249,9 @@ class WorkbenchHandler(DemoHandler):
                     '<title>8415ex - ' + escape(words["heading"]) + '</title><style>'
                     + views.STYLE + '</style></head><body><main>' + links + languages
                     + render_queue_status(binding.exchange, binding.receipt_id, locale=locale)
-                    + self.queue_controls(locale) + detail + '</main></body></html>')
+                    + self.queue_controls(locale)
+                    + render_command_observations(list(self.server.command_observations.values()), locale=locale)
+                    + detail + '</main></body></html>')
         if name == "evidence":
             body = render_evidence(binding.exchange, binding.receipt_id, binding.run,
                                    locale=locale, gateway_configured=binding.gateway is not None)

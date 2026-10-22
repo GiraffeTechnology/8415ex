@@ -1,0 +1,13 @@
+# Existing gateway observations on the operations queue
+
+The original workbench already retains up to 64 gateway-returned observations in its process-local ordered cache and provides them through its existing operations API. This stage renders those same values on the native and integrated queue pages in all six locales. No new operation reader, journal, endpoint or state store is added. Queue rendering performs no gateway enquiry, reconciliation, dispatch, retry, signing or provider request.
+
+Rows show a local ordinal, a known action label, a known reported status, whether the original return came from gateway enquiry or dispatch, and an optional complete valid transaction hash. Private cache/journal keys, raw messages, payloads, accounts and unknown action/status text are not rendered. The existing public command-result projection validates status and transaction hash again before display. All existing public status values have fixed six-language resources; unfamiliar values remain unknown.
+
+An observation is a gateway report, not independent proof of the underlying native transaction or business completion. A reported complete/done result cannot establish complete registration, funds release or product acceptance. A transaction reference does not prove a receipt or finality. The two observation paths describe where a return value came from, not a new grant or permission.
+
+The empty state explicitly says the original journal has not been queried by this view. Restart, eviction, a failed HTTP exchange or a gateway call that never returned may leave no row. Missing observations must never be treated as authenticated native absence or permission to resend. Original persistent UNKNOWN records and original enquiry/recovery procedures remain authoritative; this bounded cache does not replace them. This stage does not change POST handling or create a new row for an exception.
+
+The existing queue controls, source/private journal checks, CSRF/origin rules and original gateway execution path stay in charge. Transaction hashes remain whole protocol identifiers without an invented explorer URL. No wallet identity is displayed.
+
+Eight regression definitions cover full locale/status resources, private data exclusion, enquiry/dispatch distinction, honest empty states, the 64-row bound, exact transaction hashes, malformed observations and both existing queue compositions with gateway calls forbidden. Author product tests and browser execution are **NOT_RUN**. Native recovery, persistence, chain and full acceptance remain **OPEN**. Source publication does not deploy this stage.
