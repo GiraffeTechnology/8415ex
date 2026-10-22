@@ -1,5 +1,6 @@
 """Original typed template/voucher choice definitions; author execution NOT_RUN."""
 from dataclasses import replace
+from html import escape
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -44,8 +45,8 @@ class RemintTemplateDraft(unittest.TestCase):
             with self.subTest(locale=locale):
                 status, _, body = self.original.request("GET", "/remint-draft?lang=" + locale)
                 self.assertEqual(status, 200)
-                self.assertIn(REPLACEMENT_WORDS[locale][0], body)
-                self.assertIn(REPLACEMENT_WORDS[locale][2], body)
+                self.assertIn(escape(REPLACEMENT_WORDS[locale][0]), body)
+                self.assertIn(escape(REPLACEMENT_WORDS[locale][2]), body)
                 self.assertIn('action="/remint-draft-choice"', body)
                 self.assertIn(self.key, body)
                 for value in (self.original.seed.receipt.asset.contract,
@@ -73,16 +74,16 @@ class RemintTemplateDraft(unittest.TestCase):
         status, _, body = self.original.request("POST", "/remint-draft-choice", self.choice_form())
         self.assertEqual(status, 200)
         self.assertIn("moisture", body)
-        self.assertIn('name="attribute.0" value="10 percent"', body)
+        self.assertIn('<textarea name="attribute.0" rows="4" maxlength="32768" data-max-codepoints="16384" required>\n10 percent</textarea>', body)
         self.assertIn('name="replacementChoice" value="' + self.key + '"', body)
         fields = {"csrf": self.original.server.csrf, "lang": "en", "billTerms": "New terms",
                   "replacementChoice": self.key, "attribute.0": "12 percent", "attribute.1": ""}
         status, _, body = self.original.request("POST", "/remint-draft", urlencode(fields))
         self.assertEqual(status, 200)
-        self.assertIn('name="attribute.0" value="12 percent"', body)
+        self.assertIn('<textarea name="attribute.0" rows="4" maxlength="32768" data-max-codepoints="16384" required>\n12 percent</textarea>', body)
         status, _, body = self.original.request("GET", "/remint-draft")
         self.assertEqual(status, 200)
-        self.assertIn('name="attribute.0" value="fixture-grade"', body)
+        self.assertIn('<textarea name="attribute.0" rows="4" maxlength="32768" data-max-codepoints="16384" required>\nfixture-grade</textarea>', body)
         self.assertNotIn("12 percent", body)
         self.assertEqual(self.original.seed.template.template_id, "fixture-template")
         self.assertEqual(self.original.host.calls, [])

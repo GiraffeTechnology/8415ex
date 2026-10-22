@@ -5,7 +5,10 @@ import unittest
 from unittest.mock import patch
 from urllib.parse import urlencode
 
-from exchange.remint_draft_workbench import CURRENCY_WORDS, WORDS, RemintDraftEditorBinding
+from exchange.demo_ui import MAX_BODY
+from exchange.remint_draft_workbench import (
+    CURRENCY_WORDS, WORDS, RemintDraftEditorBinding, MAX_DRAFT_BODY, MAX_DRAFT_FIELD_BYTES,
+)
 from exchange import recovered_workbench_ui as recovered
 from integration import test_remint_draft_workbench as original_ui
 
@@ -98,3 +101,42 @@ class RemintCurrencyDraft(unittest.TestCase):
         self.assertIs(result, loaded)
         editor.assert_called_once_with(loaded.checkpoint.access, "receipt", reader,
                                        read_currency_choices=callback)
+
+    def test_all_32_long_currency_choices_and_full_unicode_terms_fit_bounded_form(self):
+        choices = ("quote-a", "quote-b") + tuple(
+            "q" + str(i).zfill(2) + ":" * 125 for i in range(30))
+        self.original.server.draft_editor.read_currency_choices = lambda receipt_id: choices
+        terms = "\U0001f33e" * 16384
+        raw = self.form(selected=choices, billTerms=terms)
+        self.assertGreater(len(raw.encode()), MAX_BODY)
+        self.assertLessEqual(len(raw.encode()), MAX_DRAFT_BODY)
+        status, _, body = self.original.request("POST", "/remint-draft", raw)
+        self.assertEqual(status, 200)
+        self.assertIn(terms, body)
+        for code in choices:
+            self.assertIn('value="' + code + '" checked', body)
+        self.assertEqual(self.original.seed.receipt.allowed_price_currencies, ("quote-a", "quote-b"))
+        self.assertEqual(self.original.host.calls, [])
+
+    def test_schema_budget_does_not_expand_other_routes_or_allow_oversized_headers(self):
+        self.assertEqual(MAX_BODY, 2048)
+        before = len(self.original.read_calls)
+        for path, limit in (("/remint-draft", MAX_DRAFT_BODY),
+                            ("/remint-draft-choice", MAX_BODY)):
+            with self.subTest(path=path):
+                status, _, _ = self.original.request("POST", path, "",
+                    **{"Content-Length": str(limit + 1)})
+                self.assertEqual(status, 400)
+        self.assertEqual(len(self.original.read_calls), before)
+        self.assertEqual(self.original.host.calls, [])
+
+    def test_single_oversized_encoded_field_is_refused_before_percent_decoding(self):
+        before = len(self.original.read_calls)
+        raw = "billTerms=" + "%41" * (MAX_DRAFT_FIELD_BYTES // 3 + 1)
+        self.assertLess(len(raw), MAX_DRAFT_BODY)
+        with patch("exchange.remint_draft_workbench.parse_qs",
+                   side_effect=AssertionError("oversized field must not be decoded")):
+            status, _, _ = self.original.request("POST", "/remint-draft", raw)
+        self.assertEqual(status, 400)
+        self.assertEqual(len(self.original.read_calls), before)
+        self.assertEqual(self.original.host.calls, [])
