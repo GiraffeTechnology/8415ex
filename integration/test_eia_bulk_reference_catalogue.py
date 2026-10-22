@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from email.message import Message
 import io
 import json
+import threading
 import unittest
 from unittest.mock import patch
 import zipfile
@@ -59,13 +60,13 @@ class EIABulkCatalogueContracts(unittest.TestCase):
         return Response(MANIFEST_URL, json.dumps({"dataset": {"PET": item}}).encode(),
                         "text/plain")
 
-    def archive(self):
+    def archive(self, price=81.25):
         row = dict(series_id="PET.RWTC.D", f="D",
             name="Cushing, OK WTI Spot Price FOB, Daily", units="Dollars per Barrel",
             unitsshort="$/bbl", geography="USA-OK", iso3166="USA-OK",
             source="Synthetic upstream", copyright="Synthetic attribution",
             last_updated="2026-10-15T18:43:40-04:00",
-            start="20261014", end="20261014", data=[["20261014", 81.25]])
+            start="20261014", end="20261014", data=[["20261014", price]])
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
             archive.writestr("PET.txt", json.dumps(row) + "\n")
@@ -138,6 +139,101 @@ class EIABulkCatalogueContracts(unittest.TestCase):
         calls = list(self.calls)
         server.reference_feed.snapshot()
         self.assertEqual(self.calls, calls)
+
+    def test_cached_snapshot_completes_while_archive_response_is_blocked(self):
+        self.policy = dict(self.policy, sourceTimezone="UTC")
+        server = self.compose(
+            feed_clock=lambda: datetime(2026, 10, 30, tzinfo=timezone.utc))
+        first = self.initial()
+        self.assertEqual(first["status"], "stale")
+        reader = server.reference_feed._bulk_reader
+        self.now += 60
+        self.queue.extend([self.manifest(True), self.archive(82.5)])
+        entered, release = threading.Event(), threading.Event()
+        refreshed, snapped = threading.Event(), threading.Event()
+        results, errors = {}, []
+
+        def blocked_open(request, timeout):
+            response = self.open(request, timeout)
+            if request.full_url == BULK_URL:
+                entered.set()
+                if not release.wait(10):
+                    raise TimeoutError("synthetic archive response was not released")
+            return response
+
+        def refresh():
+            try:
+                results["refresh"] = server.reference_feed.refresh()
+            except BaseException as error:
+                errors.append(error)
+            finally:
+                refreshed.set()
+
+        def snapshot():
+            try:
+                results["snapshot"] = server.reference_feed.snapshot()
+            except BaseException as error:
+                errors.append(error)
+            finally:
+                snapped.set()
+
+        fetch_worker = threading.Thread(target=refresh, daemon=True)
+        view_worker = threading.Thread(target=snapshot, daemon=True)
+        with patch.object(reader, "_open", side_effect=blocked_open):
+            try:
+                fetch_worker.start()
+                self.assertTrue(entered.wait(3), "synthetic archive request did not start")
+                calls = list(self.calls)
+                view_worker.start()
+                self.assertTrue(snapped.wait(3), "snapshot waited for the source fetch lock")
+                self.assertFalse(release.is_set())
+                self.assertFalse(refreshed.is_set())
+                self.assertEqual(errors, [])
+                value = results["snapshot"]
+                self.assertEqual(value["price"], first["price"])
+                self.assertEqual(value["status"], "stale")
+                self.assertEqual(value["sourceEvidence"], first["sourceEvidence"])
+                self.assertEqual(self.calls, calls)
+            finally:
+                release.set()
+                for worker in (fetch_worker, view_worker):
+                    if worker.ident is not None:
+                        worker.join(3)
+        self.assertFalse(fetch_worker.is_alive())
+        self.assertFalse(view_worker.is_alive())
+        self.assertEqual(errors, [])
+        self.assertTrue(refreshed.is_set())
+        self.assertEqual(results["refresh"]["price"], "82.5")
+        self.assertEqual(results["refresh"]["sourceAttributionStatus"], "recorded")
+        self.assertNotEqual(results["refresh"]["sourceEvidence"]["rawResponseSHA256"],
+                            first["sourceEvidence"]["rawResponseSHA256"])
+
+    def test_cache_replacement_between_snapshot_parts_suppresses_old_attribution(self):
+        server = self.compose()
+        first = self.initial()
+        reader = server.reference_feed._bulk_reader
+        self.now += 60
+        self.queue.extend([self.manifest(True), self.archive(82.5)])
+        cached_evidence = reader.cached_source_evidence
+
+        def replace_before_metadata_read():
+            # Deterministic interleaving after the feed copied the old price.
+            reader(self.policy)
+            return cached_evidence()
+
+        with patch.object(reader, "cached_source_evidence",
+                          side_effect=replace_before_metadata_read):
+            value = server.reference_feed.snapshot()
+        self.assertEqual(value["price"], first["price"])
+        self.assertEqual(value["sourceEvidence"]["rawResponseSHA256"],
+                         first["sourceEvidence"]["rawResponseSHA256"])
+        self.assertEqual(value["status"], "unavailable")
+        self.assertTrue(value["retainedValue"])
+        self.assertEqual(value["sourceAttributionStatus"], "unavailable")
+        self.assertNotIn("bulkSource", value["sourceEvidence"])
+        self.assertNotEqual(cached_evidence()["sha256"],
+                            first["sourceEvidence"]["rawResponseSHA256"])
+        self.assertEqual(len(self.calls), 4)
 
     def test_mismatched_evidence_cannot_label_retained_price_as_fresh(self):
         server = self.compose()
