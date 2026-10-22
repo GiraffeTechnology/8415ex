@@ -8,6 +8,7 @@ import math
 
 from .eia_reference_catalogue import compose_eia_reference_catalogue
 from .eia_wti_spot_table import SCOPE, SOURCE_URL
+from .eia_wti_bulk_series import BULK_URL
 from .reference_catalogue_runtime import serve_reference_catalogue
 
 CONFIG_LIMIT = 64 * 1024
@@ -34,8 +35,10 @@ def _reject_constant(value):
     raise ValueError("nonfinite reference configuration constant")
 
 
-def load_eia_reference_config(raw):
-    """Decode only non-secret source/transport configuration, without startup."""
+def _load_fixed_eia_reference_config(raw, source_url):
+    """Shared strict decoding for the two explicit existing fixed sources."""
+    if source_url not in (SOURCE_URL, BULK_URL):
+        raise ValueError("existing fixed EIA source required")
     if type(raw) is not bytes or not 0 < len(raw) <= CONFIG_LIMIT:
         raise ValueError("bounded reference configuration bytes required")
     config = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique,
@@ -45,7 +48,7 @@ def load_eia_reference_config(raw):
         raise ValueError("reference configuration version differs")
     policy, reader = config["policy"], config["reader"]
     if (type(policy) is not dict or set(policy) != POLICY_FIELDS
-            or policy.get("sourceURL") != SOURCE_URL
+            or policy.get("sourceURL") != source_url
             or any(policy.get(key) != value for key, value in SCOPE.items())):
         raise ValueError("fixed daily EIA source configuration required")
     if type(reader) is not dict or set(reader) != READER_FIELDS:
@@ -62,6 +65,11 @@ def load_eia_reference_config(raw):
     # Transport values and the actual IANA calendar are validated by the
     # existing reader/feed during composition, before the HTTP socket binds.
     return deepcopy(config)
+
+
+def load_eia_reference_config(raw):
+    """Decode the original HTML host file only, without selecting a fallback."""
+    return _load_fixed_eia_reference_config(raw, SOURCE_URL)
 
 
 def main(argv=None):
