@@ -1,0 +1,11 @@
+# Read-only remint receipt workbench
+
+`RemintReceiptWorkbenchServer` adds `GET /remint-result` to the original remint-review workbench. The host explicitly supplies a same-receipt `RemintReceiptViewBinding`, the original `RemintReceiptObserver`, an original raw-receipt reader and its complete private original operation context. The route accepts only a supported language. No request can choose a transaction, actor, contract, receipt, operation, callback or proof reference.
+
+The page renders distinct localized statuses for not mined at read, failed transaction, no matching event and correlated original remint events. It shows the original NFT, actual event-derived replacement NFT when available, protocol transaction/operation identifiers, observed block and actual transaction gas. ETH gas uses exact integer wei arithmetic and eighteen decimal places, including consumed gas for a failed receipt; missing gas never becomes zero. There is no exchange, estimated charge, debit or principal deduction.
+
+All six supported locales use the existing responsive workbench shell and preserve the result route across language navigation. Actor/contract addresses, private proof references, raw logs, provider errors and operation context are excluded. Failure withholds partial receipt fields and shows a localized unavailable message. POST returns405 without reading or dispatching any operation. The original gas, registration and remint-review routes remain mounted.
+
+The view cannot reconcile UNKNOWN, release funds, authorize replay or infer business settlement/finality from receipt status. It is never an added remint or recovery execution prerequisite. Original terms, registration/trade/funds history and the separately mounted history viewer retain their own source bindings. There is no default live reader, fixture, endpoint or service configuration.
+
+This stage depends on PR215 and implements the read-result UI portion of EX-REMINT-04/05 and T-64/T-66/T-67. Eight synthetic approved-Linux HTTP test definitions cover six locales, exact ETH formatting, statuses, fixed original context, privacy, failures, POST and existing routes. Author execution is NOT_RUN. Actual installed reader/provider/ABI context, current-source validation, browser and native-chain acceptance remain outstanding.
