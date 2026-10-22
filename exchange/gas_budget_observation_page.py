@@ -3,11 +3,7 @@
 No financial, journal, reservation, confirmation or transaction writes.
 """
 from html import escape
-from .gas_disclosure_locales import WORDS as DISCLOSURE_WORDS
-
-KEYS = ("heading","cap","spent","pending","unused","proposal","closed","yes","no","unknown","unavailable","policy")
-WORDS = {locale: {key: values["budget_" + key] for key in KEYS}
-         for locale, values in DISCLOSURE_WORDS.items()}
+from .gas_disclosure_locales import BUDGET_OBSERVATION as WORDS
 
 
 
