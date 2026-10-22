@@ -46,6 +46,12 @@ Source success is not destination payment. Destination funds do not release unkn
 
 DeferredCheckpoint uses the original AggregateCheckpointStore, scope and synchronous journal. All other components remain byte-for-byte unchanged. No new store, database path, signer, account or route is created.
 
+The opt-in [existing-row snapshot composition](composite-exchange-checkpoint.md)
+allows the original EX snapshot loader to share a declared aggregate row with
+this module. Both writers retain the same generation CAS and untouched companion
+bytes. This does not initialize/migrate an aggregate or complete the separate
+native-command pre-effect, runtime, business-transition or UI integration paths.
+
 dispatch_once first resolves the original task read-only, then persists UNKNOWN under the exact generation before execute. Stale writers, failed saves and lost save acknowledgement never dispatch. Transport errors after possible execution remain UNKNOWN. Terminal nonexecution requires authenticated proof the exact operation cannot execute later, not a timeout or missing RPC record.
 
 DeferredWalletPorts keeps original Sepolia and Hoodi clients separate. Every normal operation carries its original chain-specific prepaid funding, including Hoodi collateral unlock. Debt liquidation uses its separate EX-funded binding. The callback rereads the original task and funding before execute and rejects changes. The original Wallet performs its own atomic checks. The resolver is trusted application composition, never HTTP-supplied binding data.
@@ -62,4 +68,4 @@ The identity-free public view distinguishes principal, ETH fee, each chain's gas
 
 Tests use explicitly synthetic facts, original-port fixtures and the existing file-backed aggregate. Until exact-candidate GitHub CI runs, these are test sources, not PASS results. Historical green does not certify the candidate. No local product execution is claimed.
 
-Production proof verifiers, original native resolver composition, actual vault/disposal/destination-liquidity routes, same-store runtime bindings, existing UI wiring and real Hoodi/Sepolia evidence remain unfinished integration work. This candidate is not complete V1.5 delivery or production readiness.
+Production proof verifiers, original native resolver composition, actual vault/disposal/destination-liquidity routes, full same-store runtime/business-transition bindings beyond the explicit existing-row adapter, existing UI wiring and real Hoodi/Sepolia evidence remain unfinished integration work. This candidate is not complete V1.5 delivery or production readiness.

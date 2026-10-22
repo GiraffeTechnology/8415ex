@@ -51,3 +51,11 @@ UNKNOWN as the existing localized HTTP 503 response. New cases exercise actual
 command POSTs from a separate serving thread, native uncertainty without replay,
 and early refusal of a thread-bound original connection. Current exact-source
 CI establishes execution results separately.
+
+The opt-in [composite snapshot adapter](composite-exchange-checkpoint.md) permits
+loading an existing shared owned-facts/deferred aggregate, but deliberately
+refuses this bridge's different per-operation pre-effect scope. New native
+dispatch through that adapter is therefore unsupported; no empty companion or
+replacement row is synthesized. If attempted, the executor is not called and
+the original journal's already-persisted UNKNOWN remains for reconciliation.
+This read/load compatibility must not be reported as complete command wiring.
