@@ -76,10 +76,85 @@ SIMULATION = {'en': 'Registration in this domain report is simulated.',
               'ja': 'このドメイン報告の登記結果はシミュレーションです。'}
 
 
+DEADLINE_KEYS = ("heading", "trade", "registration", "tradeRule", "registrationRule",
+                 "unit", "timezone", "precision", "upperBound", "unknown", "boundary")
+DEADLINE_TEXT = {
+    "en": ("Recorded cutoffs", "Trade cutoff", "Registration cutoff", "Trade comparison",
+           "Registration comparison", "Time unit", "Timezone", "Precision",
+           "Registration must also not exceed the trade cutoff", "Unknown",
+           "Original domain declaration only. A cutoff is not execution permission, an Oracle effective-time result or completed recovery."),
+    "zh-Hans": ("已记录的截止时间", "交易截止", "登记截止", "交易比较语义", "登记比较语义", "时间单位",
+                "时区", "精度", "登记生效时间还不得晚于交易截止", "未知",
+                "仅展示原始领域声明。截止时间不等于执行许可、Oracle 生效时间结果或恢复完成。"),
+    "zh-Hant": ("已記錄的截止時間", "交易截止", "登記截止", "交易比較語義", "登記比較語義", "時間單位",
+                "時區", "精度", "登記生效時間還不得晚於交易截止", "未知",
+                "僅展示原始領域聲明。截止時間不等於執行許可、Oracle 生效時間結果或復原完成。"),
+    "fr": ("Échéances consignées", "Échéance de négociation", "Échéance d’enregistrement",
+           "Comparaison de négociation", "Comparaison d’enregistrement", "Unité de temps",
+           "Fuseau horaire", "Précision", "L’enregistrement ne doit pas non plus dépasser l’échéance de négociation",
+           "Inconnu", "Déclaration du domaine d’origine uniquement. Une échéance ne prouve ni autorisation d’exécution, ni résultat temporel Oracle, ni reprise achevée."),
+    "es": ("Plazos registrados", "Límite de negociación", "Límite de registro",
+           "Comparación de negociación", "Comparación de registro", "Unidad de tiempo",
+           "Zona horaria", "Precisión", "El registro tampoco debe superar el límite de negociación",
+           "Desconocido", "Solo declaración del dominio original. Un plazo no acredita permiso de ejecución, resultado temporal de Oracle ni recuperación completada."),
+    "ja": ("記録済みの期限", "取引期限", "登記期限", "取引の比較規則", "登記の比較規則", "時間単位",
+           "タイムゾーン", "精度", "登記の生効時刻は取引期限も超えてはなりません", "不明",
+           "元のドメイン宣言のみです。期限は実行許可、Oracle の生効時刻の結果、復旧完了を証明しません。"),
+}
+DEADLINE_WORDS = {locale: dict(zip(DEADLINE_KEYS, values)) for locale, values in DEADLINE_TEXT.items()}
+DEADLINE_RULES = {
+    "en": ("observed time < trade cutoff", "effective time < registration cutoff",
+           "effective time ≤ registration cutoff"),
+    "zh-Hans": ("观察时间 < 交易截止", "生效时间 < 登记截止", "生效时间 ≤ 登记截止"),
+    "zh-Hant": ("觀察時間 < 交易截止", "生效時間 < 登記截止", "生效時間 ≤ 登記截止"),
+    "fr": ("instant observé < échéance de négociation", "instant effectif < échéance d’enregistrement",
+           "instant effectif ≤ échéance d’enregistrement"),
+    "es": ("instante observado < límite de negociación", "instante efectivo < límite de registro",
+           "instante efectivo ≤ límite de registro"),
+    "ja": ("観測時刻 < 取引期限", "生効時刻 < 登記期限", "生効時刻 ≤ 登記期限"),
+}
+
+
+def _render_deadlines(value, locale):
+    words, rules = DEADLINE_WORDS[locale], DEADLINE_RULES[locale]
+    deadlines = value["deadlines"]
+    known = deadlines["declarationStatus"] == "original-domain-declaration"
+    def shown(key):
+        item = deadlines[key]
+        return str(item) if item is not None else words["unknown"]
+    fields = [("trade", shown("tradeStopAt")), ("registration", shown("registrationDeadline")),
+              ("tradeRule", rules[0] if known else words["unknown"]),
+              ("registrationRule", (rules[1] if deadlines["registrationComparison"] == "LT" else rules[2])
+               if known else words["unknown"]),
+              ("unit", shown("unit")), ("timezone", shown("timezone")), ("precision", shown("precision"))]
+    rows = ''.join('<dt>' + escape(words[key]) + '</dt><dd>' + escape(text) + '</dd>'
+                   for key, text in fields)
+    upper = '<p>' + escape(words["upperBound"]) + '</p>' if known else ''
+    return '<section class="timeline-deadlines"><h3>' + escape(words["heading"]) + '</h3><dl>' + rows + '</dl>' + upper + '<p>' + escape(words["boundary"]) + '</p></section>'
+
+
+
+EXECUTION_WORDS = {
+    "en": ("Trade observation", "Recorded execution time", "Trade execution recorded in domain",
+           "A recorded trade is separate from registration, funding and native transaction completion. The recorded time is not a block timestamp or protocol finality."),
+    "zh-Hans": ("交易执行观察", "已记录的执行时间", "领域中已记录交易执行",
+                "交易记录与登记、资金和原生交易完成分别展示。记录时间不是区块时间或协议 finality。"),
+    "zh-Hant": ("交易執行觀察", "已記錄的執行時間", "領域中已記錄交易執行",
+                "交易記錄與登記、資金和原生交易完成分別展示。記錄時間不是區塊時間或協定 finality。"),
+    "fr": ("Observation de l’échange", "Instant d’exécution consigné", "Exécution de l’échange consignée dans le domaine",
+           "L’échange consigné est distinct de l’enregistrement, des fonds et de la transaction native achevée. L’instant consigné n’est ni un horodatage de bloc ni la finalité du protocole."),
+    "es": ("Observación de la operación", "Instante de ejecución registrado", "Ejecución registrada en el dominio",
+           "La operación registrada es independiente del registro, los fondos y la transacción nativa completada. El instante registrado no es una marca temporal de bloque ni la finalidad del protocolo."),
+    "ja": ("取引実行の観測", "記録済みの実行時刻", "ドメインに取引実行を記録済み",
+           "取引記録は登記、資金、ネイティブ取引の完了と別に表示します。記録時刻はブロック時刻やプロトコルの finality ではありません。"),
+}
+
+
 def render_timeline(exchange, receipt_id, *, locale='en', now=None):
     if locale not in WORDS:
         raise ValueError('supported timeline locale required')
     w, q = WORDS[locale], QUEUE_WORDS[locale]
+    execution_words = EXECUTION_WORDS[locale]
     value = timeline_projection(exchange, receipt_id, now=now)
     registration_evidence = SIMULATION[locale] if value['simulatedRegistration'] else w['unknown']
 
@@ -94,16 +169,21 @@ def render_timeline(exchange, receipt_id, *, locale='en', now=None):
         price = (leg['price'] + ' ' + leg['currency'] + ' (' + w['units'] + ')'
                  if leg['price'] is not None and leg['currency'] is not None else w['unknown'])
         cells = (str(leg['legIndex']), number(leg['fromPosition']), number(leg['toPosition']),
-                 price, registration, funding, recovery, w['active'] if leg['active'] else w['withdrawn'])
+                 price, execution_words[2] if leg['executionStatus'] == 'executed' else w['unknown'],
+                 number(leg['executedAt']), registration, funding, recovery,
+                 w['active'] if leg['active'] else w['withdrawn'])
         rows.append('<tr>' + ''.join('<td>' + escape(cell) + '</td>' for cell in cells) + '</tr>')
     if not rows:
-        rows.append('<tr><td colspan="8">' + escape(w['empty']) + '</td></tr>')
-    header = '<tr>' + ''.join('<th>' + escape(w[key]) + '</th>' for key in
-                              ('leg', 'source', 'destination', 'price', 'registration', 'funding', 'recovery', 'path')) + '</tr>'
+        rows.append('<tr><td colspan="10">' + escape(w['empty']) + '</td></tr>')
+    headings = (w['leg'], w['source'], w['destination'], w['price'],
+                execution_words[0], execution_words[1], w['registration'],
+                w['funding'], w['recovery'], w['path'])
+    header = '<tr>' + ''.join('<th scope="col">' + escape(label) + '</th>' for label in headings) + '</tr>'
     summary = '<dl>' + ''.join('<dt>' + escape(w[key]) + '</dt><dd>' + escape(number(value[field])) + '</dd>'
                                for key, field in (('owner', 'ownerPosition'), ('holder', 'holderPosition'),
                                                   ('observed', 'observedAt'))) + '</dl>'
     return ('<section lang="' + locale + '"><h2>' + escape(w['heading']) + '</h2><p>'
             + escape(w['boundary']) + '</p><p>' + escape(w['basis']) + '</p><p>'
             + escape(w['registration']) + ': ' + escape(registration_evidence) + '</p>' + summary
+            + _render_deadlines(value, locale) + '<p>' + escape(execution_words[3]) + '</p>'
             + '<table>' + header + ''.join(rows) + '</table></section>')
