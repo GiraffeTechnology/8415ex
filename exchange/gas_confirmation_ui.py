@@ -3,6 +3,7 @@ from html import escape
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 from .gas_budget import GasQuote, BuyerConfirmation, GasBudgetRefused
 from .gas_disclosure_locales import WORDS, AVAILABILITY
+from .gas_budget_observation_page import render_budget_observation
 
 
 def _escape(value):
@@ -30,7 +31,7 @@ class GasConfirmationPage:
     from the form. It does not implement authentication, wallet I/O or sending.
     """
     def __init__(self, current_quote, confirm_with_wallet, buyer, action_digest,
-                 wallet_grant, post_path, validate_csrf):
+                 wallet_grant, post_path, validate_csrf, *, read_original_budget=None):
         if not callable(current_quote) or not callable(confirm_with_wallet):
             raise GasBudgetRefused('live quote resolver and existing wallet adapter required')
         for value in (buyer, action_digest, wallet_grant):
@@ -49,6 +50,9 @@ class GasConfirmationPage:
         self.action_digest = action_digest
         self.wallet_grant = wallet_grant
         self.post_path = post_path
+        if read_original_budget is not None and not callable(read_original_budget):
+            raise GasBudgetRefused('installed original budget observation port required')
+        self.read_original_budget = read_original_budget
 
     def _quote(self, now):
         if type(now) is not int or now < 0:
@@ -90,6 +94,12 @@ class GasConfirmationPage:
             ('maximum', cap), ('median', median),
             ('quote', _escape(quote.quote_id) + ' / ' + _escape(quote.version)),
             ('actions', _escape(', '.join(quote.actions))), ('chain', _escape(quote.chain_id)),
+            ('scope', _escape(quote.scope)),
+            ('quotedAt', _escape(quote.quoted_at)),
+            ('sampleCount', _escape(len(quote.samples))),
+            ('window', _escape(quote.window_start) + ' ' + _escape(words['to'])
+             + ' ' + _escape(quote.window_end)),
+            ('algorithm', _escape(data['algorithm'])),
             ('fxTime', _escape(quote.rate_observed_at)),
             ('fxSource', _escape(quote.rate_source) + ' / ' + _escape(quote.usd_micro_per_eth)),
             ('expires', _escape(quote.valid_until)),
@@ -100,6 +110,8 @@ class GasConfirmationPage:
                           for key in ('sample', 'wei', 'time', 'block', 'source', 'raw'))
         def hidden(name, value):
             return '<input type="hidden" name="' + name + '" value="' + _escape(value) + '">'
+        budget_view = ('' if self.read_original_budget is None else
+                       render_budget_observation(self.read_original_budget, quote, locale))
         return ('<section lang="' + locale + '" aria-labelledby="gas-quote-heading">'
             '<h2 id="gas-quote-heading">' + _escape(words['heading']) + '</h2><dl>'
             + definitions + '</dl><p>' + _escape(words['explanation']) + '</p>'
@@ -116,7 +128,7 @@ class GasConfirmationPage:
             + hidden('version', quote.version) + hidden('quoteDigest', quote.digest)
             + '<label><input type="checkbox" name="accepted" value="yes" required>'
             + _escape(words['consent']) + '</label><button type="submit">'
-            + _escape(words['continue']) + '</button></form></section>')
+            + _escape(words['continue']) + '</button></form>' + budget_view + '</section>')
 
     def submit(self, fields, now):
         expected = {'csrf', 'quoteId', 'version', 'quoteDigest', 'accepted'}
