@@ -1,7 +1,8 @@
 """Bounded read-only receipt lookup through an injected existing RPC transport."""
 import json
 from .gas_budget import GasBudgetRefused
-from .receipt_gas_observer import ReceiptGasObserver, _pairs, _quantity, _hash
+from .receipt_gas_observer import (ReceiptGasObserver, HoodiReceiptGasObserver,
+                                   _pairs, _quantity, _hash)
 
 
 class OriginalGasReceiptReader:
@@ -12,7 +13,11 @@ class OriginalGasReceiptReader:
         self.rpc = original_rpc
         self.verify_attempt = verify_original_attempt
 
+    def _chain_context(self):
+        return 11155111, 'Sepolia', ReceiptGasObserver
+
     def read(self, *, attempt_id, transaction_hash, proof_reference):
+        chain_id, network, observer = self._chain_context()
         _hash(transaction_hash)
         for value in (attempt_id, proof_reference):
             if type(value) is not str or not value.strip() or len(value) > 256:
@@ -35,10 +40,16 @@ class OriginalGasReceiptReader:
             return raw, value
 
         _, chain = query('eth_chainId', [])
-        if _quantity(chain) != 11155111:
-            raise GasBudgetRefused('original RPC is not Sepolia')
+        if _quantity(chain) != chain_id:
+            raise GasBudgetRefused('original RPC is not ' + network)
         raw_receipt, receipt = query('eth_getTransactionReceipt', [transaction_hash])
         if receipt is None:
+            # Preserve the legacy Sepolia unknown read contract. The new source
+            # path checks its chain again even when no mined fact is returned.
+            if chain_id == 560048:
+                _, chain_again = query('eth_chainId', [])
+                if _quantity(chain_again) != chain_id:
+                    raise GasBudgetRefused('original RPC chain changed')
             return None
         if type(receipt) is not dict:
             raise GasBudgetRefused('original mined receipt required')
@@ -66,16 +77,26 @@ class OriginalGasReceiptReader:
         _, block_again = query('eth_getBlockByNumber', [hex(number), False])
         canonical(block_again)
         _, chain_again = query('eth_chainId', [])
-        if _quantity(chain_again) != 11155111:
+        if _quantity(chain_again) != chain_id:
             raise GasBudgetRefused('original RPC chain changed')
 
         def verify(evidence):
             # This is the original adapter trust boundary, not an inferred wallet proof.
             return self.verify_attempt({'attemptId': attempt_id,
                 'transactionHash': transaction_hash, 'proofReference': proof_reference,
-                'chainId': 11155111, 'finalizedBlockNumber': finalized_number,
+                'chainId': chain_id, 'finalizedBlockNumber': finalized_number,
                 'finalizedBlockHash': finalized['hash'],
                 'receiptEvidence': evidence, 'reads': tuple(transcript)})
-        return ReceiptGasObserver(verify).observe(raw_receipt, chain_id=11155111,
+        return observer(verify).observe(raw_receipt, chain_id=chain_id,
             attempt_id=attempt_id, transaction_hash=transaction_hash,
             proof_reference=proof_reference)
+
+
+class HoodiOriginalGasReceiptReader(OriginalGasReceiptReader):
+    """Read source-native Hoodi cost through the existing injected transport.
+
+    No provider, source execution, EX payer proof, deferred Fact or destination
+    payment is supplied by this read-only counterpart.
+    """
+    def _chain_context(self):
+        return 560048, 'Hoodi', HoodiReceiptGasObserver
