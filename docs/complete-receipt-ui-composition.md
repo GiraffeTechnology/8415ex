@@ -1,0 +1,13 @@
+# Complete receipt read UI on the current workbench
+
+This composition retains the original per-record signature observations and complete business-terms sections together with the original mint-cutoff and recorded-execution timeline increments. The existing NFT detail and timeline routes consume those same projection/render functions. No second runtime, account store, document reader, checkpoint, journal or native controller is introduced.
+
+Current, on-chain owner and registered-holder positions remain independent. Multiple original signature records at one position remain separate observations, with their own original role/payload/scheme verification. A conservative one-record compatibility summary does not assert that all required roles signed. Private binding identifiers, names and addresses do not become visible labels.
+
+Optional business section metadata organizes unchanged identity-excluding clause labels/text. Consecutive section runs preserve original order, repeated sections keep distinct local anchors, and uncategorized clauses remain visible. The UI does not infer categories, invent omitted clauses, replace signed obligations with summaries or publish private signed originals. Original completeness and source verification remain with the installed reader.
+
+The timeline shows the original domain declaration's trade and registration cutoffs, comparison rules, unit, timezone and precision. It shows recorded trade execution and its original recorded time separately from registration, funding, recovery, block time and protocol finality. Missing or conflicting source values remain unknown. Recovered/withdrawn branches and original predecessor positions remain visible; no transfer or recovery predicate changes.
+
+The integration is based on current mainb1648d7d and retains all twelve changed files and ancestry from the original signature/terms and cutoff/execution branches. The four modified UI files are unchanged between their original common base and current main, so none of the current main fixes is replaced. New fixed translation tables are registered in the existing exact-table Unicode classifier while all current entries are preserved.
+
+The four retained test modules contain thirty-two synthetic definitions. They are existing definitions, not new execution evidence or inherited acceptance. Author product execution is NOT_RUN. This composition adds no installed runtime configuration or real data. Exact-current-source QA/CI, browser/mobile/keyboard review, original document/signature provenance and native financial/chain acceptance remain separate outstanding work.

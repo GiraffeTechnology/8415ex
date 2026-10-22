@@ -4,6 +4,7 @@ from urllib.parse import urlencode
 from .gap_projection import gap_label
 from .register_projection_page import render_register
 from .settlement_record_page import render_settlement
+from .nft_detail import TERM_SECTION_KEYS
 
 LOCALES = {
     "en": ("NFT transfer details", "Back", "This NFT’s individual quote", "Not provided",
@@ -48,6 +49,60 @@ QUOTE_LABELS = {
     "es": ("unidades mínimas / NFT completo", "Cotización simulada", "Cotización de la orden original", "El gas ETH se verifica por separado. EX no convierte divisas."),
     "ja": ("最小単位 / NFT 全体", "模擬見積り", "元の注文の見積り", "ETH gas は別途確認します。EX は通貨を交換しません。"),
 }
+SIGNATURE_OBSERVATION_LABELS = {
+    "en": "Signature observation", "zh-Hans": "签署观察记录", "zh-Hant": "簽署觀察記錄",
+    "fr": "Observation de signature", "es": "Observación de firma", "ja": "署名の観測記録",
+}
+TERM_SECTION_LABELS = {
+    "en": ("Commodity specifications", "Whole quantity", "Storage and delivery",
+           "Immutable NFT0 currencies", "Trade and registration deadlines", "Additional terms",
+           "Complete signed-business-terms view", "Revision history", "Other supplied clauses"),
+    "zh-Hans": ("商品规格", "整体数量", "仓储与交付", "不可变 NFT0 币种", "交易与登记截止时间",
+                "附加条款", "完整签署业务条款视图", "修订历史", "其他已提供条款"),
+    "zh-Hant": ("商品規格", "整體數量", "倉儲與交付", "不可變 NFT0 幣種", "交易與登記截止時間",
+                "附加條款", "完整簽署業務條款檢視", "修訂歷史", "其他已提供條款"),
+    "fr": ("Spécifications du produit", "Quantité totale", "Stockage et livraison",
+           "Devises NFT0 immuables", "Échéances de négociation et d’enregistrement",
+           "Conditions supplémentaires", "Vue intégrale des conditions commerciales signées",
+           "Historique des révisions", "Autres clauses fournies"),
+    "es": ("Especificaciones del producto", "Cantidad total", "Almacenamiento y entrega",
+           "Divisas NFT0 inmutables", "Plazos de negociación y registro", "Condiciones adicionales",
+           "Vista completa de las condiciones comerciales firmadas", "Historial de revisiones",
+           "Otras cláusulas proporcionadas"),
+    "ja": ("商品仕様", "全体数量", "保管と引渡し", "変更不可の NFT0 通貨", "取引と登記の期限",
+           "追加条件", "署名済み業務条件の全文表示", "改訂履歴", "その他の提供済み条項"),
+}
+
+
+def _render_business_terms(clauses, locale):
+    e = lambda value: escape(str(value), quote=True)
+    # Legacy readers retain their original flat view. No category is inferred
+    # from an obligation, language, template name or an identity-bearing source.
+    if not any("section" in clause for clause in clauses):
+        return ''.join('<article><h3>' + e(clause["label"]) + '</h3><p class="terms">'
+                       + e(clause["text"]) + '</p></article>' for clause in clauses)
+    words = TERM_SECTION_LABELS[locale]
+    rendered, links = [], []
+    previous = object()
+    for index, clause in enumerate(clauses):
+        section = clause.get("section")
+        if section != previous:
+            if index:
+                rendered.append('</div>')
+            label = words[TERM_SECTION_KEYS.index(section)] if section in TERM_SECTION_KEYS else words[-1]
+            anchor = "business-terms-" + str(index + 1)
+            links.append('<a href="#' + anchor + '">' + e(label) + '</a>')
+            rendered.append('<div class="terms-section" id="' + anchor
+                            + '"><h3>' + e(label) + '</h3>')
+            previous = section
+        rendered.append('<article><h4>' + e(clause["label"]) + '</h4><p class="terms">'
+                        + e(clause["text"]) + '</p></article>')
+    rendered.append('</div>')
+    # Every clause occurs once, in the original sequence. Repeated categories
+    # receive distinct anchors instead of regrouping or silently deduplicating.
+    return '<nav class="terms-navigation" aria-label="' + e(LOCALES[locale][12]) + '">' + ''.join(links) + '</nav>' + ''.join(rendered)
+
+
 STYLE = """
 :root{color-scheme:dark;--bg:#0b1012;--surface:#121a1d;--raised:#1a2529;--line:#2a363a;--ink:#edf3ef;--muted:#91a3a3;--accent:#c4ee8b;--gold:#c4a574}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px Inter,system-ui,sans-serif;line-height:1.5}
@@ -55,7 +110,7 @@ main{max-width:1440px;margin:auto;padding:40px;display:grid;gap:24px}a{color:var
 header{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}nav{display:flex;gap:12px;flex-wrap:wrap}h1{font-size:32px;margin:0}h2{font-size:16px;margin:0 0 10px}h3{font-size:14px;margin:0}p{margin:8px 0}
 section,article,details{border:1px solid var(--line);border-radius:12px;padding:20px;background:var(--surface);min-width:0}
 .markers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.marker,.node{padding:12px;background:var(--raised);border:1px solid var(--line);border-radius:12px}.marker{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.position,.gap{color:var(--accent);font-family:'IBM Plex Mono',monospace}.position{font-size:28px}.muted{color:var(--muted);font-size:12px}.missing{color:var(--gold)}.timeline{display:flex;gap:12px;overflow:auto;padding:12px 0}.node{flex:0 0 155px}.terms{white-space:pre-wrap;overflow-wrap:anywhere}.gap{font-size:18px}.rule{color:var(--accent)}.gap.yes,.badge.yes{color:#ff7777;border-color:#ff7777;background:#351d21}.gap.no,.badge.no{color:#78d99b;border-color:#78d99b;background:#173026}.gap.unverified,.badge.unverified{color:var(--muted);border-color:var(--line);background:var(--raised)}summary{cursor:pointer}article+article{margin-top:12px}
+.position,.gap{color:var(--accent);font-family:'IBM Plex Mono',monospace}.position{font-size:28px}.muted{color:var(--muted);font-size:12px}.missing{color:var(--gold)}.timeline{display:flex;gap:12px;overflow:auto;padding:12px 0}.node{flex:0 0 155px}.terms{white-space:pre-wrap;overflow-wrap:anywhere}.gap{font-size:18px}.rule{color:var(--accent)}.gap.yes,.badge.yes{color:#ff7777;border-color:#ff7777;background:#351d21}.gap.no,.badge.no{color:#78d99b;border-color:#78d99b;background:#173026}.gap.unverified,.badge.unverified{color:var(--muted);border-color:var(--line);background:var(--raised)}summary{cursor:pointer}article+article{margin-top:12px}.terms-section{scroll-margin-top:20px;margin-top:20px}.terms-section h4{font-size:14px;margin:0}.terms-navigation a{overflow-wrap:anywhere}.terms-section>h3{margin-bottom:12px}
 @media(max-width:650px){main{padding:20px}h1{font-size:24px}.markers{grid-template-columns:1fr}.timeline{display:grid;overflow:visible}.node{display:flex;gap:16px}.position{font-size:24px}section{padding:20px}}
 """
 
@@ -76,16 +131,31 @@ def render_detail(detail, locale="en", *, nft_key=None, choices=(), market_query
                       + e(positions[key] if positions[key] is not None else t[8]) + '</span></div>'
                       for i, key in enumerate(("current", "owner", "holder")))
     signature = {item["position"]: item["status"] for item in detail["signatureStatusByPosition"]}
-    known_positions = sorted(set(signature) | {value for value in positions.values() if value is not None})
+    observations = {}
+    for item in detail.get("signatureObservations", ()):
+        observations.setdefault(item["position"], []).append(item)
+    known_positions = sorted(set(signature) | set(observations)
+                             | {value for value in positions.values() if value is not None})
     nodes = []
     for position in known_positions:
         roles = [t[5 + i] for i, key in enumerate(("current", "owner", "holder")) if positions[key] == position]
         state = {"signed": t[9], "unsigned": t[10], "pending": t[11], "unknown": t[8]}.get(signature.get(position), t[8])
+        records = observations.get(position)
+        if records:
+            states = []
+            for index, record in enumerate(records, 1):
+                label = SIGNATURE_OBSERVATION_LABELS[locale] + " " + str(index)
+                observed = {"signed": t[9], "unsigned": t[10], "pending": t[11], "unknown": t[8]}.get(
+                    record.get("status"), t[8])
+                states.append('<li><span>' + e(label) + '</span>: <span>'
+                              + e(observed) + '</span></li>')
+            status_html = '<ol class="signature-observations">' + ''.join(states) + '</ol>'
+        else:
+            status_html = '<p class="muted">' + e(state) + '</p>'
         nodes.append('<li class="node"><span class="position">' + e(position) + '</span><div><p>'
-                     + e(" / ".join(roles)) + '</p><p class="muted">' + e(state) + '</p></div></li>')
+                     + e(" / ".join(roles)) + '</p>' + status_html + '</div></li>')
     clauses = detail["terms"].get("clauses", [])
-    terms = ''.join('<article><h3>' + e(clause["label"]) + '</h3><p class="terms">'
-                    + e(clause["text"]) + '</p></article>' for clause in clauses)
+    terms = _render_business_terms(clauses, locale) if clauses else ''
     if not clauses:
         terms = '<p class="missing">' + e(t[16] if detail["terms"]["status"] == "unavailable" else t[13]) + '</p>'
     gap, gap_class = gap_label(detail, locale)

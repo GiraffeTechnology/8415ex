@@ -9,6 +9,9 @@ from .gap_projection import display_gap, settlement_record
 from .signature_projection import signature_status
 from .register_projection import register_projection
 
+TERM_SECTION_KEYS = ("commodity", "quantity", "storage-delivery", "currencies",
+                     "deadlines", "additional", "signed-business-terms", "revision-history")
+
 
 def _market_card(row, view):
     card = row.get("marketCard")
@@ -55,6 +58,7 @@ def receipt_detail(exchange, receipt_id, *, read_details=None, verify_details=No
         "positions": {"current": None, "owner": _position(view["owner"]["position"]),
                       "holder": _position(view["holder"]["position"])},
         "gap": "unknown", "displayGap": {"state": "unknown"}, "signatureStatusByPosition": [],
+        "signatureObservations": [],
         "registerProjection": {"status": "not-provided"},
         "settlementRecord": {"status": "not-provided"},
         "terms": {"status": "not-provided", "clauses": [],
@@ -80,7 +84,9 @@ def receipt_detail(exchange, receipt_id, *, read_details=None, verify_details=No
         result["displayGap"] = display_gap(row)
         result["settlementRecord"] = settlement_record(row)
         result["registerProjection"] = register_projection(row)
-        signatures = []
+        signatures = {}
+        observations = []
+        original_bindings = set()
         for item in row.get("signatures", []):
             position = _position(item.get("position"))
             status = item.get("status")
@@ -88,10 +94,27 @@ def receipt_detail(exchange, receipt_id, *, read_details=None, verify_details=No
                 raise ValueError("invalid per-position signature state")
             if status == "signed" and item.get("verified") is not True:
                 raise ValueError("signed status without verified original evidence")
-            if any(previous["position"] == position for previous in signatures):
-                raise ValueError("duplicate signature position")
-            signatures.append({"position": position, "status": signature_status(receipt_id, item, row, verify_signature)})
-        result["signatureStatusByPosition"] = sorted(signatures, key=lambda item: item["position"])
+            keys = ("role", "transferRef", "payloadRef", "schemeRef")
+            if all(type(item.get(key)) is str and item[key].strip() for key in keys):
+                identity = (position,) + tuple(item[key] for key in keys)
+                if identity in original_bindings:
+                    raise ValueError("duplicate original signature binding")
+                original_bindings.add(identity)
+            # Each original record reaches the original verifier with its OWN
+            # role/transfer/payload/scheme. Never collapse by position before
+            # verification or move a historical result to a current role.
+            projected = signature_status(receipt_id, item, row, verify_signature)
+            group = signatures.setdefault(position, [])
+            group.append(projected)
+            observations.append({"position": position, "observation": len(group),
+                                 "status": projected})
+        # Backward-compatible one-record summaries. A multi-record position
+        # stays unknown here; no aggregate asserts all required roles signed.
+        result["signatureStatusByPosition"] = [
+            {"position": position, "status": values[0] if len(values) == 1 else "unknown"}
+            for position, values in sorted(signatures.items())]
+        result["signatureObservations"] = sorted(observations,
+            key=lambda item: (item["position"], item["observation"]))
         terms = row.get("businessTerms")
         if terms is not None:
             if not isinstance(terms, dict) or terms.get("coverageVerified") is not True or terms.get("identityExcluded") is not True:
@@ -101,14 +124,20 @@ def receipt_detail(exchange, receipt_id, *, read_details=None, verify_details=No
                 raise ValueError("empty business projection")
             output = []
             for clause in clauses:
-                if not isinstance(clause, dict) or set(clause) != {"label", "text"}:
+                if (not isinstance(clause, dict)
+                        or set(clause) not in ({"label", "text"}, {"label", "text", "section"})):
                     raise ValueError("business clause schema mismatch")
                 if any(not isinstance(clause[key], str) or not clause[key].strip() for key in ("label", "text")):
                     raise ValueError("missing business clause")
                 # Refuse rather than silently modifying a signed obligation.
                 if re.search(r"0x[0-9a-fA-F]{40}", clause["label"] + clause["text"]):
                     raise ValueError("identity-bearing projection")
-                output.append({"label": clause["label"], "text": clause["text"]})
+                projected = {"label": clause["label"], "text": clause["text"]}
+                if "section" in clause:
+                    if type(clause["section"]) is not str or clause["section"] not in TERM_SECTION_KEYS:
+                        raise ValueError("unknown business section")
+                    projected["section"] = clause["section"]
+                output.append(projected)
             result["terms"].update(status="provided-verified-projection", clauses=output)
         result["sourceStatus"] = "verified-original-reader"
         result["marketCard"] = _market_card(row, view)
@@ -118,6 +147,7 @@ def receipt_detail(exchange, receipt_id, *, read_details=None, verify_details=No
         return {"schema": result["schema"], "receiptId": receipt_id,
                 "positions": {"current": None, "owner": None, "holder": None},
                 "gap": "unknown", "displayGap": {"state": "unknown"}, "signatureStatusByPosition": [],
+                "signatureObservations": [],
                 "registerProjection": {"status": "unavailable"},
                 "settlementRecord": {"status": "unavailable"},
                 "terms": {"status": "unavailable", "clauses": []},

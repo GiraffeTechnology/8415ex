@@ -208,7 +208,7 @@ PYTHON_DISPLAY_TABLES = {
     "exchange/gap_projection.py": ("GAP_LABELS",),
     "exchange/gas_disclosure_locales.py": ("WORDS", "TRANSPORT", "AVAILABILITY", "BUDGET_OBSERVATION"),
     "exchange/market_page.py": ("BASE_UNITS", "WORDS", "STATES", "EMPTY_MODE"),
-    "exchange/nft_detail_page.py": ("LOCALES", "QUOTE_LABELS"),
+    "exchange/nft_detail_page.py": ("LOCALES", "QUOTE_LABELS", "SIGNATURE_OBSERVATION_LABELS", "TERM_SECTION_LABELS"),
     "exchange/queue_status_page.py": ("TEXT", "CONTROL_TEXT", "WINDOW_TEXT"),
     "exchange/reference_provenance_page.py": ("LABELS", "VALUES", "EVIDENCE_LABELS"),
     "exchange/register_projection_page.py": ("BLOCK_TIME", "LABELS"),
@@ -219,7 +219,7 @@ PYTHON_DISPLAY_TABLES = {
     "exchange/remint_receipt_workbench.py": ("WORDS",),
     "exchange/rollback_page.py": ("TEXT", "HISTORY"),
     "exchange/settlement_record_page.py": ("TEXT",),
-    "exchange/timeline_page.py": ("TEXT", "SIMULATION"),
+    "exchange/timeline_page.py": ("TEXT", "SIMULATION", "DEADLINE_TEXT", "DEADLINE_RULES", "EXECUTION_WORDS"),
 }
 
 
