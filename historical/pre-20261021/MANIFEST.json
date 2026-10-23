@@ -1,0 +1,334 @@
+{
+  "schema": "historical-product-code/1",
+  "cutoff": "2026-10-21T00:00:00+08:00",
+  "cutoffUTC": "2026-10-20T16:00:00Z",
+  "purpose": "Preserve previously unuploaded product source variants; not active runtime or current requirement authority",
+  "encoding": "UTF-8; BOM removed and CRLF normalized to LF for content comparison",
+  "files": [
+    {
+      "path": "historical/pre-20261021/01c64ac05d5e/exchange/ledger.py",
+      "logicalPath": "exchange/ledger.py",
+      "gitBlob": "01c64ac05d5edbe25ef61362b5303abd095c5c40"
+    },
+    {
+      "path": "historical/pre-20261021/098dd8517237/exchange/price_balance.py",
+      "logicalPath": "exchange/price_balance.py",
+      "gitBlob": "098dd8517237f61c18e2c8b4fad95198ab83a419"
+    },
+    {
+      "path": "historical/pre-20261021/0f5d1f72833f/exchange/principal_journal_contract.py",
+      "logicalPath": "exchange/principal_journal_contract.py",
+      "gitBlob": "0f5d1f72833f75c3b4f6e4f542200674ab74718c"
+    },
+    {
+      "path": "historical/pre-20261021/19bba99d1d19/exchange/workbench.py",
+      "logicalPath": "exchange/workbench.py",
+      "gitBlob": "19bba99d1d1976a302478caf3adc1947252b3a95"
+    },
+    {
+      "path": "historical/pre-20261021/19f4f5d20df8/exchange/market_page.py",
+      "logicalPath": "exchange/market_page.py",
+      "gitBlob": "19f4f5d20df8dfccbb02a9e2d89c0fbc66ed3f17"
+    },
+    {
+      "path": "historical/pre-20261021/22bbe198f875/exchange/authorization_page.py",
+      "logicalPath": "exchange/authorization_page.py",
+      "gitBlob": "22bbe198f8754fa2a28ccf0d5709422248287b11"
+    },
+    {
+      "path": "historical/pre-20261021/262193ef65f5/exchange/model.py",
+      "logicalPath": "exchange/model.py",
+      "gitBlob": "262193ef65f5c49b14de3b593e1e54344feeb006"
+    },
+    {
+      "path": "historical/pre-20261021/2959553fe587/test-contracts/test/EXNFT0Remint.t.sol",
+      "logicalPath": "test-contracts/test/EXNFT0Remint.t.sol",
+      "gitBlob": "2959553fe587bbbedae8a75417b608f5bdddd0b5"
+    },
+    {
+      "path": "historical/pre-20261021/295b8fc2bda4/exchange/workbench.py",
+      "logicalPath": "exchange/workbench.py",
+      "gitBlob": "295b8fc2bda436c454899789a50f90633109dbf6"
+    },
+    {
+      "path": "historical/pre-20261021/2d53d7861ad9/exchange/workbench.py",
+      "logicalPath": "exchange/workbench.py",
+      "gitBlob": "2d53d7861ad9abe6839f7515ea879e0e5f58b4a1"
+    },
+    {
+      "path": "historical/pre-20261021/2f96184c4892/exchange/wallet_api_client.py",
+      "logicalPath": "exchange/wallet_api_client.py",
+      "gitBlob": "2f96184c489241984b005e9909c052b2c1983735"
+    },
+    {
+      "path": "historical/pre-20261021/3038c18bee1b/exchange/workbench.py",
+      "logicalPath": "exchange/workbench.py",
+      "gitBlob": "3038c18bee1bdbf93449190747ca81fc26fb9e51"
+    },
+    {
+      "path": "historical/pre-20261021/32607375c274/integration/test_queue_status_locales.py",
+      "logicalPath": "integration/test_queue_status_locales.py",
+      "gitBlob": "32607375c27406e4891b2aa8a334b593f72a7ecb"
+    },
+    {
+      "path": "historical/pre-20261021/343722f66801/integration/test_durable_operation.py",
+      "logicalPath": "integration/test_durable_operation.py",
+      "gitBlob": "343722f66801a495361a98df846045232790be3e"
+    },
+    {
+      "path": "historical/pre-20261021/395cb76a9d99/exchange/nft_detail_page.py",
+      "logicalPath": "exchange/nft_detail_page.py",
+      "gitBlob": "395cb76a9d993fde774b11e53b3964288536a0f3"
+    },
+    {
+      "path": "historical/pre-20261021/3fc732a4209d/exchange/queue_status_page.py",
+      "logicalPath": "exchange/queue_status_page.py",
+      "gitBlob": "3fc732a4209db4f62daf6aece870fb5d6d42e48e"
+    },
+    {
+      "path": "historical/pre-20261021/45176e978d70/exchange/workbench.py",
+      "logicalPath": "exchange/workbench.py",
+      "gitBlob": "45176e978d70beccccc5e3f9a41573adbbfe236a"
+    },
+    {
+      "path": "historical/pre-20261021/46d9898360c2/exchange/price_balance.py",
+      "logicalPath": "exchange/price_balance.py",
+      "gitBlob": "46d9898360c24e862ef6e0abbc6c73543ff9f272"
+    },
+    {
+      "path": "historical/pre-20261021/46f5347385c2/exchange/evidence_page.py",
+      "logicalPath": "exchange/evidence_page.py",
+      "gitBlob": "46f5347385c27152d63f06f1b27d00f0e1eb4f04"
+    },
+    {
+      "path": "historical/pre-20261021/48919f52eedc/integration/test_evidence_locales.py",
+      "logicalPath": "integration/test_evidence_locales.py",
+      "gitBlob": "48919f52eedcfe98f7ded5a5c9e9c227602e088c"
+    },
+    {
+      "path": "historical/pre-20261021/4b3eb57ea36d/integration/test_remint_execution.py",
+      "logicalPath": "integration/test_remint_execution.py",
+      "gitBlob": "4b3eb57ea36db9492e26393c2404b7fd051a7a31"
+    },
+    {
+      "path": "historical/pre-20261021/4dd3031ec9c7/exchange/integrated_workbench.py",
+      "logicalPath": "exchange/integrated_workbench.py",
+      "gitBlob": "4dd3031ec9c7161a4b230806ad78173c300ba29f"
+    },
+    {
+      "path": "historical/pre-20261021/62a7bc931e4a/exchange/rollback_page.py",
+      "logicalPath": "exchange/rollback_page.py",
+      "gitBlob": "62a7bc931e4a33b7bf1c96a00a44af71da01b806"
+    },
+    {
+      "path": "historical/pre-20261021/6788f4bdfaa0/exchange/nft_directory.py",
+      "logicalPath": "exchange/nft_directory.py",
+      "gitBlob": "6788f4bdfaa08ecbf8429b0a4202f1fcc81c9ce6"
+    },
+    {
+      "path": "historical/pre-20261021/6ac72b861615/exchange/durable_operation.py",
+      "logicalPath": "exchange/durable_operation.py",
+      "gitBlob": "6ac72b861615b3191d51afe1c94272c0dcf4bd23"
+    },
+    {
+      "path": "historical/pre-20261021/6b3251a4c081/integration/test_receipt_locale_wiring.py",
+      "logicalPath": "integration/test_receipt_locale_wiring.py",
+      "gitBlob": "6b3251a4c081a91ab5be69a778c236b2cb56456b"
+    },
+    {
+      "path": "historical/pre-20261021/6d59c7fc0d31/exchange/workbench.py",
+      "logicalPath": "exchange/workbench.py",
+      "gitBlob": "6d59c7fc0d31626882ea1e2acde5e831357f68fc"
+    },
+    {
+      "path": "historical/pre-20261021/6ecc18adbf03/exchange/eth_trade_gas.py",
+      "logicalPath": "exchange/eth_trade_gas.py",
+      "gitBlob": "6ecc18adbf03cf888cc0911e5886759ddeb1bd4d"
+    },
+    {
+      "path": "historical/pre-20261021/702e0ccb8b00/exchange/timeline_projection.py",
+      "logicalPath": "exchange/timeline_projection.py",
+      "gitBlob": "702e0ccb8b003e6b7dda65a70b3143a2da4eeba0"
+    },
+    {
+      "path": "historical/pre-20261021/7c12f93f1221/integration/test_receipt_locale_wiring.py",
+      "logicalPath": "integration/test_receipt_locale_wiring.py",
+      "gitBlob": "7c12f93f12213deddf9ba7b296e184151eaa127b"
+    },
+    {
+      "path": "historical/pre-20261021/82660361f739/integration/test_wallet_api_client.py",
+      "logicalPath": "integration/test_wallet_api_client.py",
+      "gitBlob": "82660361f7397ea6759521a1099722f528937a0e"
+    },
+    {
+      "path": "historical/pre-20261021/82b8309c9f66/exchange/nft_detail.py",
+      "logicalPath": "exchange/nft_detail.py",
+      "gitBlob": "82b8309c9f667c241f5aa7e3df30a3e33b0ab13f"
+    },
+    {
+      "path": "historical/pre-20261021/8a49282ea947/exchange/workbench.py",
+      "logicalPath": "exchange/workbench.py",
+      "gitBlob": "8a49282ea94750f998bef3274ad8ebc6ba95f770"
+    },
+    {
+      "path": "historical/pre-20261021/9ce62a30ea8e/integration/test_native_navigation.py",
+      "logicalPath": "integration/test_native_navigation.py",
+      "gitBlob": "9ce62a30ea8e3a14ee5d325bdb5ccb41fd578c43"
+    },
+    {
+      "path": "historical/pre-20261021/9f5e0d29adf1/exchange/timeline_projection.py",
+      "logicalPath": "exchange/timeline_projection.py",
+      "gitBlob": "9f5e0d29adf1d2254d707264baff4d0b3ee77038"
+    },
+    {
+      "path": "historical/pre-20261021/a1713246d274/integration/test_native_eth_principal.py",
+      "logicalPath": "integration/test_native_eth_principal.py",
+      "gitBlob": "a1713246d274878eb7d4f0ae4c3f76d74dfac719"
+    },
+    {
+      "path": "historical/pre-20261021/af7ab20d45b9/exchange/fixtures.py",
+      "logicalPath": "exchange/fixtures.py",
+      "gitBlob": "af7ab20d45b9cb0be3fabc1eec41ac724582f978"
+    },
+    {
+      "path": "historical/pre-20261021/b728dc7a6eed/integration/test_authorization_locales.py",
+      "logicalPath": "integration/test_authorization_locales.py",
+      "gitBlob": "b728dc7a6eed08de8bee001eeac4e6c36cdca11e"
+    },
+    {
+      "path": "historical/pre-20261021/b7566d68fa33/exchange/durable_operation.py",
+      "logicalPath": "exchange/durable_operation.py",
+      "gitBlob": "b7566d68fa333dc93831949d29bc71b4b63e4397"
+    },
+    {
+      "path": "historical/pre-20261021/bd713c61027d/exchange/workbench.py",
+      "logicalPath": "exchange/workbench.py",
+      "gitBlob": "bd713c61027d98c29369d8888ac8647cd562d69a"
+    },
+    {
+      "path": "historical/pre-20261021/c32c6fbe832c/exchange/catalogue_serve.py",
+      "logicalPath": "exchange/catalogue_serve.py",
+      "gitBlob": "c32c6fbe832cbdb148cfdd8c2cb99ab81179ff94"
+    },
+    {
+      "path": "historical/pre-20261021/c65a07bfc306/integration/test_nft0_price_admission.py",
+      "logicalPath": "integration/test_nft0_price_admission.py",
+      "gitBlob": "c65a07bfc306dc0cd3422b0f7f967494b0c91ff7"
+    },
+    {
+      "path": "historical/pre-20261021/cbc0310eca29/integration/test_demo_commodity_catalogue.py",
+      "logicalPath": "integration/test_demo_commodity_catalogue.py",
+      "gitBlob": "cbc0310eca291d603dfd5aab259e0a0eb1086778"
+    },
+    {
+      "path": "historical/pre-20261021/d00b268362b2/integration/test_timeline_predecessor.py",
+      "logicalPath": "integration/test_timeline_predecessor.py",
+      "gitBlob": "d00b268362b2ec21c535627db70d92aede8606bc"
+    },
+    {
+      "path": "historical/pre-20261021/d48d037e037f/exchange/workbench.py",
+      "logicalPath": "exchange/workbench.py",
+      "gitBlob": "d48d037e037fe026ccc98ab752a9378239f57ea7"
+    },
+    {
+      "path": "historical/pre-20261021/d90394924b84/integration/test_native_navigation.py",
+      "logicalPath": "integration/test_native_navigation.py",
+      "gitBlob": "d90394924b84a9015be31fb562f9bf066ececfe6"
+    },
+    {
+      "path": "historical/pre-20261021/e332868a3892/exchange/ledger.py",
+      "logicalPath": "exchange/ledger.py",
+      "gitBlob": "e332868a38925079dba83844999d6de14400ff61"
+    },
+    {
+      "path": "historical/pre-20261021/e70e43ef988b/exchange/workbench.py",
+      "logicalPath": "exchange/workbench.py",
+      "gitBlob": "e70e43ef988b87e0a64f69324f19b8a341a83ce1"
+    },
+    {
+      "path": "historical/pre-20261021/ecf20280674b/exchange/demo_commodities.py",
+      "logicalPath": "exchange/demo_commodities.py",
+      "gitBlob": "ecf20280674b07fd79972e38be049750e8422591"
+    },
+    {
+      "path": "historical/pre-20261021/ee1bfa0c444b/exchange/remint_execution.py",
+      "logicalPath": "exchange/remint_execution.py",
+      "gitBlob": "ee1bfa0c444b611918b59fb4d1ace389a12d2357"
+    },
+    {
+      "path": "historical/pre-20261021/ee72a174310d/exchange/workbench.py",
+      "logicalPath": "exchange/workbench.py",
+      "gitBlob": "ee72a174310d44d46b75cd405432b50d1a370469"
+    },
+    {
+      "path": "historical/pre-20261021/f167704084e6/exchange/workbench.py",
+      "logicalPath": "exchange/workbench.py",
+      "gitBlob": "f167704084e6305d911f2defbbe598758eca734f"
+    },
+    {
+      "path": "historical/pre-20261021/f4b2e481a272/exchange/demo_commodity_pages.py",
+      "logicalPath": "exchange/demo_commodity_pages.py",
+      "gitBlob": "f4b2e481a272b05b405ef987cdb7309c9bacda43"
+    },
+    {
+      "path": "historical/pre-20261021/fbfdfd7b3680/exchange/ledger.py",
+      "logicalPath": "exchange/ledger.py",
+      "gitBlob": "fbfdfd7b368032d70404b63a789ef893dcb4a0cd"
+    },
+    {
+      "path": "historical/pre-20261021/ffd0696d8c9d/exchange/rollback_projection.py",
+      "logicalPath": "exchange/rollback_projection.py",
+      "gitBlob": "ffd0696d8c9d5a60284ee07a028ab987ac881310"
+    },
+    {
+      "path": "historical/pre-20261021/129bc19ef489/exchange/tests/test_state_invariants.py",
+      "logicalPath": "exchange/tests/test_state_invariants.py",
+      "gitBlob": "129bc19ef489986c4fb22d99272d7bfe1639b621"
+    },
+    {
+      "path": "historical/pre-20261021/41782edb4067/scenarios/tests/test_handoff.py",
+      "logicalPath": "scenarios/tests/test_handoff.py",
+      "gitBlob": "41782edb40673d5b7f7c340c5864b4b7ad19a867"
+    },
+    {
+      "path": "historical/pre-20261021/b59f1f313333/scenarios/handoff.py",
+      "logicalPath": "scenarios/handoff.py",
+      "gitBlob": "b59f1f313333dbdac2251141baf644dba4522497"
+    },
+    {
+      "path": "historical/pre-20261021/0dabf1fd1b2e/scenarios/evidence_index.py",
+      "logicalPath": "scenarios/evidence_index.py",
+      "gitBlob": "0dabf1fd1b2e10b7c8143d3ee5893d7433417887"
+    },
+    {
+      "path": "historical/pre-20261021/363369e6c7f0/scenarios/tests/test_handoff.py",
+      "logicalPath": "scenarios/tests/test_handoff.py",
+      "gitBlob": "363369e6c7f000248ab49617a2540d443b42ce50"
+    },
+    {
+      "path": "historical/pre-20261021/575f70650330/scenarios/tests/test_evidence_index.py",
+      "logicalPath": "scenarios/tests/test_evidence_index.py",
+      "gitBlob": "575f70650330f99a80ffe96e0bcb2be0b5064b61"
+    },
+    {
+      "path": "historical/pre-20261021/848e9e6f9ce4/scenarios/tests/test_evidence_index.py",
+      "logicalPath": "scenarios/tests/test_evidence_index.py",
+      "gitBlob": "848e9e6f9ce4dee5c49d9d683639902fc75d7614"
+    },
+    {
+      "path": "historical/pre-20261021/b3a8ab06fcdd/scenarios/tests/test_evidence_index.py",
+      "logicalPath": "scenarios/tests/test_evidence_index.py",
+      "gitBlob": "b3a8ab06fcdd57ffe3d8537f0ae440e4bc70b9ad"
+    },
+    {
+      "path": "historical/pre-20261021/debede660aec/exchange/ledger.py",
+      "logicalPath": "exchange/ledger.py",
+      "gitBlob": "debede660aeca5119b49bbdafbf574e0f75a7412"
+    },
+    {
+      "path": "historical/pre-20261021/e54d538b8c22/scenarios/evidence_index.py",
+      "logicalPath": "scenarios/evidence_index.py",
+      "gitBlob": "e54d538b8c22023e75cbde727e9e083a6b2cdde4"
+    }
+  ]
+}
