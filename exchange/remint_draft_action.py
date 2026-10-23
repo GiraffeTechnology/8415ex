@@ -11,7 +11,7 @@ from .checkpointed_operation import CheckpointedOperationBridge
 from .durable_operation import DurableNativeOutcomeUnknown
 from .mint_specification_codec import encode_mint_facts
 from .remint_draft_execution import invoke_draft_remint
-from .remint_draft_workbench import RemintDraftEditorBinding, RemintDraftUnavailable, WORDS as DRAFT_WORDS
+from .remint_draft_workbench import RemintDraftEditorBinding, RemintDraftUnavailable, WORDS as DRAFT_WORDS, _business_text
 from .remint_review_workbench import RemintReviewWorkbenchServer
 from .remint_receipt_workbench import WORDS as RESULT_WORDS
 
@@ -90,13 +90,21 @@ def _business_projection(specification):
 
 def _render_business(value):
     if isinstance(value, dict):
-        return "<dl>" + "".join("<dt>" + escape(key.replace("_", " "))
+        return "<dl>" + "".join("<dt>" + escape(_business_text(key).replace("_", " "))
             + "</dt><dd>" + _render_business(item) + "</dd>"
             for key, item in value.items()) + "</dl>"
     if isinstance(value, (tuple, list)):
         return "<ul>" + "".join("<li>" + _render_business(item) + "</li>"
             for item in value) + "</ul>"
-    return "<pre>" + escape("" if value is None else str(value)) + "</pre>"
+    if isinstance(value, str):
+        value = _business_text(value)
+    elif value is None:
+        value = ""
+    elif type(value) is int:
+        value = str(value)
+    else:
+        raise ValueError("public business projection value refused")
+    return "<pre>" + escape(value) + "</pre>"
 
 
 class RemintDraftActionBinding:

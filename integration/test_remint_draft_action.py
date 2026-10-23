@@ -206,3 +206,29 @@ class RemintActionHTTPContracts(unittest.TestCase):
         self.assertEqual(self.host.calls, [])
         self.assertEqual(self.enquiries, [])
         self.assertEqual(self.host.fixture.claim_db.total_changes, before)
+
+
+    def test_private_identity_in_newly_displayed_terms_fails_closed_without_mutating_original_facts(self):
+        originals = (self.host.old, self.host.new)
+        private = originals[0].receipt.origin_account
+        try:
+            for side in ("old", "new"):
+                for field in ("standard_reference", "commodity_scope"):
+                    self.host.old, self.host.new = originals
+                    specification = getattr(self.host, side)
+                    poisoned = replace(specification, template=replace(specification.template,
+                        **{field: "Public-looking condition " + private}))
+                    setattr(self.host, side, poisoned)
+                    for locale in ("en", "ja"):
+                        status, body = self.request("/remint-action?lang=" + locale)
+                        self.assertEqual(status, 503)
+                        self.assertNotIn(private, body)
+                        self.assertIn(escape(WORDS[locale][3]), body)
+                    self.assertIs(getattr(self.host, side), poisoned)
+                    self.assertEqual(getattr(poisoned.template, field),
+                        "Public-looking condition " + private)
+                    self.assertEqual(self.request("/market")[0], 200)
+        finally:
+            self.host.old, self.host.new = originals
+        self.assertEqual(self.host.calls, [])
+        self.assertEqual(self.enquiries, [])
