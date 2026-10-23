@@ -3,25 +3,19 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from functools import wraps
 from http.cookiejar import CookieJar
+import http.client
 import json
 import re
 import ssl
 import time
 from threading import RLock
-from urllib.error import HTTPError
 from urllib.parse import urlsplit
-from urllib.request import (build_opener, ProxyHandler, HTTPSHandler,
-                            HTTPCookieProcessor, HTTPRedirectHandler, Request)
+from urllib.request import Request
 from .wallet_execution_attempts import WalletExecutionAttempts
 
 
 class WalletAPIRefused(ValueError):
     """Only non-secret codes cross this error boundary."""
-
-
-class _NoRedirect(HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        raise WalletAPIRefused("EX_WALLET_REDIRECT_REFUSED")
 
 
 def _pairs(items):
@@ -82,8 +76,8 @@ class WalletAPIClient:
         self._clock = clock_ms or (lambda: time.time_ns() // 1_000_000)
         self._timeout = timeout_seconds
         self._jar = CookieJar()
-        self._opener = build_opener(ProxyHandler({}), HTTPSHandler(context=ssl.create_default_context()),
-                                    HTTPCookieProcessor(self._jar), _NoRedirect())
+        self._url = url
+        self._tls = ssl.create_default_context()
         self._csrf, self._session = None, None
         self._used_challenges, self._uncertain = set(), set()
         self._operation_lock = RLock()
@@ -111,33 +105,91 @@ class WalletAPIClient:
             headers["Content-Type"] = "application/json"
         req = Request(self._origin + "/auth/" + path, data=data, headers=headers,
                       method="GET" if body is None else "POST")
+        # One decreasing socket-phase/body budget, not one new timeout per
+        # packet. The platform resolver must provide its existing DNS bound.
+        deadline = time.monotonic() + self._timeout
+        connection = response = None
+
+        def remaining():
+            budget = deadline - time.monotonic()
+            if budget <= 0:
+                raise WalletAPIRefused("EX_WALLET_TRANSPORT_DEADLINE")
+            return budget
+
         try:
-            try:
-                response = self._opener.open(req, timeout=self._timeout)
-            except HTTPError as error:
-                response = error
-            with response:
-                if (response.headers.get_content_type() != "application/json"
-                        or response.headers.get("Content-Encoding", "identity") != "identity"):
-                    raise WalletAPIRefused("EX_WALLET_RESPONSE_REFUSED")
-                raw = response.read(65537)
-                if len(raw) > 65536:
+            if self._url.scheme == "https":
+                connection = http.client.HTTPSConnection(
+                    self._url.hostname, self._url.port, timeout=remaining(), context=self._tls)
+            else:
+                connection = http.client.HTTPConnection(
+                    self._url.hostname, self._url.port, timeout=remaining())
+            connection.connect()
+            sock = connection.sock
+            if sock is None:
+                raise WalletAPIRefused("EX_WALLET_TRANSPORT_UNAVAILABLE")
+            # Keep the original CookieJar's URL/path/domain/expiry rules.
+            # No environment proxy, redirect, new endpoint or retry exists.
+            self._jar.add_cookie_header(req)
+            sock.settimeout(remaining())
+            connection.request(req.get_method(), "/auth/" + path,
+                               body=data, headers=dict(req.header_items()))
+            sock.settimeout(remaining())
+            response = connection.getresponse()
+            if 300 <= response.status < 400:
+                raise WalletAPIRefused("EX_WALLET_REDIRECT_REFUSED")
+            if (response.headers.get_content_type() != "application/json"
+                    or response.headers.get_content_charset() not in (None, "utf-8")
+                    or response.getheader("Content-Encoding", "identity").lower() != "identity"):
+                raise WalletAPIRefused("EX_WALLET_RESPONSE_REFUSED")
+            lengths = response.headers.get_all("Content-Length", [])
+            transfer = response.getheader("Transfer-Encoding")
+            if (len(lengths) > 1 or (lengths and transfer)
+                    or (transfer is not None and transfer.lower() != "chunked")):
+                raise WalletAPIRefused("EX_WALLET_RESPONSE_FRAMING_REFUSED")
+            expected = None
+            if lengths:
+                if re.fullmatch(r"[0-9]{1,10}", lengths[0]) is None:
+                    raise WalletAPIRefused("EX_WALLET_RESPONSE_FRAMING_REFUSED")
+                expected = int(lengths[0])
+                if expected > 65536:
                     raise WalletAPIRefused("EX_WALLET_RESPONSE_TOO_LARGE")
-                result = json.loads(raw.decode("utf-8"), object_pairs_hook=_pairs,
-                                    parse_float=_bad_number, parse_constant=_bad_number)
-                if type(result) is not dict:
-                    raise WalletAPIRefused("EX_WALLET_RESPONSE_REFUSED")
-                if response.status != 200:
-                    code = result.get("error")
-                    refusal = WalletAPIRefused(code if type(code) is str and re.fullmatch(r"[A-Z][A-Z0-9_]{0,95}", code)
-                                               else "EX_WALLET_REQUEST_REFUSED")
-                    refusal.http_status = response.status
-                    raise refusal
-                return result
+            chunks, size = [], 0
+            while expected is None or size < expected:
+                sock.settimeout(remaining())
+                chunk = response.read1(min(4096, 65537 - size))
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > 65536:
+                    raise WalletAPIRefused("EX_WALLET_RESPONSE_TOO_LARGE")
+                chunks.append(chunk)
+            if expected is not None and size != expected:
+                raise WalletAPIRefused("EX_WALLET_RESPONSE_TRUNCATED")
+            remaining()
+            result = json.loads(b"".join(chunks).decode("utf-8"), object_pairs_hook=_pairs,
+                                parse_float=_bad_number, parse_constant=_bad_number)
+            if type(result) is not dict:
+                raise WalletAPIRefused("EX_WALLET_RESPONSE_REFUSED")
+            # A partial/invalid response must not replace the prior cookies.
+            self._jar.extract_cookies(response, req)
+            if response.status != 200:
+                code = result.get("error")
+                refusal = WalletAPIRefused(code if type(code) is str and re.fullmatch(r"[A-Z][A-Z0-9_]{0,95}", code)
+                                           else "EX_WALLET_REQUEST_REFUSED")
+                refusal.http_status = response.status
+                raise refusal
+            return result
         except WalletAPIRefused:
             raise
         except Exception:
             raise WalletAPIRefused("EX_WALLET_TRANSPORT_UNAVAILABLE") from None
+        finally:
+            for resource in (response, connection):
+                if resource is not None:
+                    try:
+                        resource.close()
+                    except Exception:
+                        pass
 
     def _bound(self, row, *, challenge=False):
         now = self._clock()
