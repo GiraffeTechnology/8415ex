@@ -1,5 +1,6 @@
 """Synthetic original remint form transport; author execution NOT_RUN."""
 from html import escape
+from dataclasses import replace
 import http.client
 import re
 import threading
@@ -176,3 +177,32 @@ class RemintActionHTTPContracts(unittest.TestCase):
         self.assertEqual(self.request("/remint-result")[0], 503)
         self.assertEqual(self.reads, [])
         self.assertEqual(self.host.calls, [])
+
+
+    def test_complete_original_and_replacement_conditions_precede_the_execute_button(self):
+        self.host.new = replace(self.host.new,
+            template=replace(self.host.new.template, template_id="replacement-template",
+                version="template-version-two", standard_reference="Replacement standard <reviewed>"),
+            voucher_format=replace(self.host.new.voucher_format, format_id="replacement-format",
+                version="format-version-three", path="REG_ELECTRONIC"),
+            receipt=replace(self.host.new.receipt, registration_path="REG_ELECTRONIC"))
+        before = self.host.fixture.claim_db.total_changes
+        for locale in WORDS:
+            status, body = self.request("/remint-action?lang=" + locale)
+            self.assertEqual(status, 200)
+            for value in (self.host.old.template.standard_reference, "replacement-template",
+                    "template-version-two", "Replacement standard <reviewed>",
+                    self.host.old.voucher_format.format_id, "replacement-format",
+                    "format-version-three", "REG_DIRECT", "REG_ELECTRONIC"):
+                self.assertIn(escape(value), body)
+                self.assertLess(body.index(escape(value)), body.index('type="submit"'))
+            self.assertNotIn("Replacement standard <reviewed>", body)
+            self.assertIn('data-bound-business="original"', body)
+            self.assertIn('data-bound-business="replacement"', body)
+            for private in (self.host.old.receipt.origin_account,
+                    self.host.old.receipt.asset.contract, self.host.old.receipt.receipt_id,
+                    self.host.old.original_document_mapping, self.host.old.controlled_access_mapping):
+                self.assertNotIn(private, body)
+        self.assertEqual(self.host.calls, [])
+        self.assertEqual(self.enquiries, [])
+        self.assertEqual(self.host.fixture.claim_db.total_changes, before)
