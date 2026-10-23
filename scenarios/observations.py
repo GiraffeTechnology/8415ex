@@ -216,6 +216,7 @@ PYTHON_DISPLAY_TABLES = {
     "exchange/register_projection_page.py": ("BLOCK_TIME", "LABELS"),
     "exchange/registration_source_locales.py": ("WORDS",),
     "exchange/remint_draft_workbench.py": ("WORDS", "CURRENCY_WORDS", "BUSINESS_LABELS", "ATTRIBUTE_WORDS", "REPLACEMENT_WORDS"),
+    "exchange/remint_draft_action.py": ("WORDS",),
     "exchange/remint_review.py": ("WORDS",),
     "exchange/remint_history_workbench.py": ("WORDS",),
     "exchange/remint_receipt_workbench.py": ("WORDS",),
