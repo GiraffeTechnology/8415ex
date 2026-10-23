@@ -48,7 +48,7 @@ class ExplicitBulkHostProvenanceContracts(unittest.TestCase):
         self.addCleanup(server.shutdown)
 
     def page(self, server, locale):
-        with urlopen(server.origin+"/reference?lang="+locale, timeout=3) as response:
+        with urlopen(server.origin+"/market?reference=1&lang="+locale, timeout=3) as response:
             return response.read().decode()
 
     def test_explicit_host_composes_latest_bulk_feed_without_eager_reads_or_workers(self):

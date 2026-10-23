@@ -26,7 +26,8 @@ class BudgetedDirectReturnCompositionContracts(unittest.TestCase):
             self.assertEqual(len(original.executes(state)),1)
             self.assertEqual(task.binding(),binding)
             paths = [path for _,path,_ in state["calls"][before:]]
-            self.assertEqual(paths,["/auth/tasks/execute"])
+            # Retain the original client session checks; only one execute may be sent.
+            self.assertEqual(paths,["/auth/session","/auth/tasks/execute","/auth/session"])
 
     def test_ambiguous_execute_response_cannot_replace_cookies_or_reset_original_attempt(self):
         with original.direct_task() as (task,client,state,value,options):
@@ -59,8 +60,14 @@ class BudgetedDirectReturnCompositionContracts(unittest.TestCase):
                     return Response()
                 def close(self):
                     pass
-            with patch("exchange.wallet_api_client.http.client.HTTPConnection",
-                       side_effect=Connection):
+            original_request = client._request
+            def request_with_execute_transport(path, payload=None):
+                if path == "tasks/execute":
+                    with patch("exchange.wallet_api_client.http.client.HTTPConnection",
+                               side_effect=Connection):
+                        return original_request(path, payload)
+                return original_request(path, payload)
+            with patch.object(client, "_request", side_effect=request_with_execute_transport):
                 with self.assertRaises(WalletAPIRefused):
                     task.execute("4")
                 with self.assertRaisesRegex(WalletAPIRefused,"RECONCILE_FIRST"):
