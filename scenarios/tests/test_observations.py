@@ -646,3 +646,23 @@ class QueueDeadlineLocalizedUIClassification(unittest.TestCase):
         self.assertIn("configured private fingerprint",
                       {row["pattern"] for row in scan["findings"]})
         self.assertNotIn(marker, str(scan))
+
+
+class CheckpointedOperationLocalizedDataClassification(LocalizedUIClassification):
+    """Literal display resources retain full security scanning."""
+
+    def test_bound_operation_display_table_is_data_and_not_a_file_exemption(self):
+        name = "exchange/checkpointed_operation_page.py"
+        words = {locale: (chr(0x4E2D),) for locale in observations.DISPLAY_LOCALES}
+        source = "TEXT = " + repr(words) + "\n"
+        scan = self._scan({name: source})
+        self.assertTrue(scan["clean"], scan["findings"])
+        self.assertEqual(scan["coverage"]["scanned"], 1)
+        self.assertEqual(scan["coverage"]["skipped"], [])
+        outside = self._scan({name: source + "# " + chr(0x4E2D) + "\n"})
+        self.assertTrue(any(row["kind"] == "non-english" for row in outside["findings"]))
+        for label, _ in observations.SECRET_PATTERNS + observations.PRIVATE_CONTENT_PATTERNS:
+            with self.subTest(pattern=label):
+                words["en"] = (_sample(label),)
+                unsafe = self._scan({name: "TEXT = " + repr(words) + "\n"})
+                self.assertIn(label, {row["pattern"] for row in unsafe["findings"]})
