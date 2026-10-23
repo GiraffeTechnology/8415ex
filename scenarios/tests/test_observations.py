@@ -646,3 +646,23 @@ class QueueDeadlineLocalizedUIClassification(unittest.TestCase):
         self.assertIn("configured private fingerprint",
                       {row["pattern"] for row in scan["findings"]})
         self.assertNotIn(marker, str(scan))
+
+
+class RemintActionLocalizedDataClassification(LocalizedUIClassification):
+    """Only exact literal UI data is classified; raw security scans remain."""
+
+    def test_original_action_translation_values_keep_full_scan_coverage(self):
+        name = "exchange/remint_draft_action.py"
+        words = {locale: (chr(0x4E2D),) for locale in observations.DISPLAY_LOCALES}
+        source = "WORDS = " + repr(words) + "\n"
+        scan = self._scan({name: source})
+        self.assertTrue(scan["clean"], scan["findings"])
+        self.assertEqual(scan["coverage"]["scanned"], 1)
+        self.assertEqual(scan["coverage"]["skipped"], [])
+        scan = self._scan({name: source + "# " + chr(0x4E2D) + "\n"})
+        self.assertTrue(any(row["kind"] == "non-english" for row in scan["findings"]))
+        for label, _ in observations.SECRET_PATTERNS + observations.PRIVATE_CONTENT_PATTERNS:
+            with self.subTest(pattern=label):
+                words["en"] = (_sample(label),)
+                unsafe = self._scan({name: "WORDS = " + repr(words) + "\n"})
+                self.assertIn(label, {row["pattern"] for row in unsafe["findings"]})
