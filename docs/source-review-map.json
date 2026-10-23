@@ -1,0 +1,3370 @@
+{
+  "schema": "8415ex-source-review-map/1",
+  "prdVersion": "1.4",
+  "sourceBaseline": {
+    "commit": "564709c78d0c9e0da8d883965fe1e805e4842518",
+    "tree": "e31ddd55b6b90e620dc53d33b437a0171a57f83c",
+    "prd": {
+      "path": "PRD.md",
+      "bytes": 97728,
+      "sha256": "b3989a91f1d3f7a1de6812fa05777d0dfdf84a4eee4a7909bdda77d1196032ce"
+    }
+  },
+  "meaning": "Review navigation only. File identity is not semantic coverage, test execution, deployment, financial/chain acceptance or product completion.",
+  "requirements": [
+    {
+      "id": "EX-SCOPE-01",
+      "cases": [
+        "T-69"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "PRD.md",
+          "gitBlob": "264d37353099b51c13fd683e771fc35fbf829939",
+          "bytes": 97728
+        },
+        {
+          "path": "README.md",
+          "gitBlob": "59f8dbd87a182065c0c179d405b1a281e15d32d5",
+          "bytes": 9111
+        },
+        {
+          "path": "exchange/market_scenarios.py",
+          "gitBlob": "3f3f1ca73217470098cdd1a4eee7f3463e53bea7",
+          "bytes": 10304
+        }
+      ],
+      "requiredEvidence": "Current PRD boundary plus the relevant original domain, funds, authorization, interface or UI evidence; references below locate review starting points only.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SCOPE-02",
+      "cases": [
+        "T-01",
+        "T-48"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/mint_specification.py",
+          "gitBlob": "6d1d214fff6d4c9710c171ac44e0654be2ccbe48",
+          "bytes": 9317
+        },
+        {
+          "path": "exchange/ledger.py",
+          "gitBlob": "767458aeb65efc8a5bfe153c380ac82ca9565da6",
+          "bytes": 107049
+        }
+      ],
+      "requiredEvidence": "Current PRD boundary plus the relevant original domain, funds, authorization, interface or UI evidence; references below locate review starting points only.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SCOPE-03",
+      "cases": [
+        "T-02",
+        "T-68",
+        "T-78"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/ledger.py",
+          "gitBlob": "767458aeb65efc8a5bfe153c380ac82ca9565da6",
+          "bytes": 107049
+        },
+        {
+          "path": "exchange/priority_exchange.py",
+          "gitBlob": "4939fe1176ee0653741911d8279adaba5ade13d9",
+          "bytes": 9828
+        },
+        {
+          "path": "exchange/oracle_projection_join.py",
+          "gitBlob": "1da0816f239cec901bf6c5504c6672bead96653e",
+          "bytes": 7397
+        }
+      ],
+      "requiredEvidence": "Current PRD boundary plus the relevant original domain, funds, authorization, interface or UI evidence; references below locate review starting points only.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SCOPE-04",
+      "cases": [],
+      "sourceAnchors": [
+        {
+          "path": "exchange/wallet_api_client.py",
+          "gitBlob": "ce0deb5ea9c4fe3dcb37abbbb243edef26ee2ded",
+          "bytes": 13287
+        },
+        {
+          "path": "exchange/wallet_execution_attempts.py",
+          "gitBlob": "045d1768e2e7c85055cee80443d612c4e996a8af",
+          "bytes": 2031
+        }
+      ],
+      "requiredEvidence": "Current PRD boundary plus the relevant original domain, funds, authorization, interface or UI evidence; references below locate review starting points only.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SCOPE-05",
+      "cases": [],
+      "sourceAnchors": [
+        {
+          "path": "exchange/authorization_page.py",
+          "gitBlob": "7a33d15d43a9bda159fdcd5f220b788bb35f9679",
+          "bytes": 10056
+        },
+        {
+          "path": "exchange/ledger.py",
+          "gitBlob": "767458aeb65efc8a5bfe153c380ac82ca9565da6",
+          "bytes": 107049
+        }
+      ],
+      "requiredEvidence": "Current PRD boundary plus the relevant original domain, funds, authorization, interface or UI evidence; references below locate review starting points only.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SCOPE-06",
+      "cases": [],
+      "sourceAnchors": [
+        {
+          "path": "exchange/eth_trade_gas.py",
+          "gitBlob": "a0a77792a4d6101faf7fb9fe7dabd42522c5ba11",
+          "bytes": 4858
+        },
+        {
+          "path": "exchange/gas_budget.py",
+          "gitBlob": "134033da7fbcbe1d1b77e7dffd8c36e92f572de3",
+          "bytes": 13256
+        }
+      ],
+      "requiredEvidence": "Current PRD boundary plus the relevant original domain, funds, authorization, interface or UI evidence; references below locate review starting points only.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SCOPE-07",
+      "cases": [
+        "T-29"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/rollback.py",
+          "gitBlob": "6e3140d49a2fefe640eec09c9d79ffc1b21c9cfd",
+          "bytes": 7365
+        },
+        {
+          "path": "exchange/direct_return_checkpoint.py",
+          "gitBlob": "070a45f9db729216f7e23024c2e5fc9fd85ee5b7",
+          "bytes": 2885
+        }
+      ],
+      "requiredEvidence": "Current PRD boundary plus the relevant original domain, funds, authorization, interface or UI evidence; references below locate review starting points only.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SCOPE-08",
+      "cases": [
+        "T-25"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/mint_specification.py",
+          "gitBlob": "6d1d214fff6d4c9710c171ac44e0654be2ccbe48",
+          "bytes": 9317
+        },
+        {
+          "path": "exchange/exit.py",
+          "gitBlob": "8566f426e8c538a1ba2de1be1dfba4999810d5f1",
+          "bytes": 4259
+        }
+      ],
+      "requiredEvidence": "Current PRD boundary plus the relevant original domain, funds, authorization, interface or UI evidence; references below locate review starting points only.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SCOPE-09",
+      "cases": [
+        "T-10",
+        "T-32",
+        "T-45"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/registration.py",
+          "gitBlob": "7f8efacb997c1c3435cd849064e12e406a832e5f",
+          "bytes": 10789
+        },
+        {
+          "path": "exchange/oracle_projection_join.py",
+          "gitBlob": "1da0816f239cec901bf6c5504c6672bead96653e",
+          "bytes": 7397
+        }
+      ],
+      "requiredEvidence": "Current PRD boundary plus the relevant original domain, funds, authorization, interface or UI evidence; references below locate review starting points only.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SCOPE-10",
+      "cases": [],
+      "sourceAnchors": [
+        {
+          "path": "docs/integrated-component-candidate.md",
+          "gitBlob": "3f7f649326d01bbe1825b70d2879c0c36e8cb81a",
+          "bytes": 4727
+        },
+        {
+          "path": "exchange/receipt_task_projection.py",
+          "gitBlob": "b1ff6392bf83f937b7c873e61510e2476b2acf8d",
+          "bytes": 4052
+        }
+      ],
+      "requiredEvidence": "Current PRD boundary plus the relevant original domain, funds, authorization, interface or UI evidence; references below locate review starting points only.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SCOPE-11",
+      "cases": [
+        "T-35",
+        "T-54",
+        "T-57",
+        "T-58",
+        "T-60",
+        "T-62",
+        "T-82"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/mint_specification.py",
+          "gitBlob": "6d1d214fff6d4c9710c171ac44e0654be2ccbe48",
+          "bytes": 9317
+        },
+        {
+          "path": "exchange/price_balance.py",
+          "gitBlob": "ad8fbc0701156c423ab0e8d2f944465cba43c945",
+          "bytes": 6938
+        },
+        {
+          "path": "exchange/priority_exchange.py",
+          "gitBlob": "4939fe1176ee0653741911d8279adaba5ade13d9",
+          "bytes": 9828
+        }
+      ],
+      "requiredEvidence": "Current PRD boundary plus the relevant original domain, funds, authorization, interface or UI evidence; references below locate review starting points only.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SCOPE-12",
+      "cases": [
+        "T-25",
+        "T-67"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/remint_terms.py",
+          "gitBlob": "f16db7481c3b2c6f0cc4a79fbf566b8dacd9983d",
+          "bytes": 5255
+        },
+        {
+          "path": "exchange/remint_execution.py",
+          "gitBlob": "255b61bb3c44162e7e73c699ffca73783b1bcb7c",
+          "bytes": 4757
+        },
+        {
+          "path": "test-contracts/src/EXNFT0Remint.sol",
+          "gitBlob": "c7f9db1d8b2af3962fb22d48302199a85cfe7c76",
+          "bytes": 6749
+        }
+      ],
+      "requiredEvidence": "Current PRD boundary plus the relevant original domain, funds, authorization, interface or UI evidence; references below locate review starting points only.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SCOPE-13",
+      "cases": [
+        "T-69"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/market_scenarios.py",
+          "gitBlob": "3f3f1ca73217470098cdd1a4eee7f3463e53bea7",
+          "bytes": 10304
+        },
+        {
+          "path": "exchange/collateral_scenario.py",
+          "gitBlob": "ab5b328fdc8ff9890310ecfac77ad4231f7f7ae7",
+          "bytes": 6995
+        }
+      ],
+      "requiredEvidence": "Current PRD boundary plus the relevant original domain, funds, authorization, interface or UI evidence; references below locate review starting points only.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SCOPE-14",
+      "cases": [
+        "T-70"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/collateral_scenario.py",
+          "gitBlob": "ab5b328fdc8ff9890310ecfac77ad4231f7f7ae7",
+          "bytes": 6995
+        },
+        {
+          "path": "exchange/collateral_workbench.py",
+          "gitBlob": "392e28bf4b0b6048163ca9c5caadf4fabf315920",
+          "bytes": 3484
+        }
+      ],
+      "requiredEvidence": "Current PRD boundary plus the relevant original domain, funds, authorization, interface or UI evidence; references below locate review starting points only.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SCOPE-15",
+      "cases": [
+        "T-71"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/reference_feed.py",
+          "gitBlob": "c1efa0f8a6c0757ba6fa57a3a76add1615f559d2",
+          "bytes": 9815
+        },
+        {
+          "path": "exchange/eia_wti_spot_reader.py",
+          "gitBlob": "a199587ad12caedd6bf7383cea9bc111f298babf",
+          "bytes": 7878
+        },
+        {
+          "path": "exchange/market_reference_refresh.py",
+          "gitBlob": "1debd1b5a4a7ac0a63c89cc7ffce444732bdc134",
+          "bytes": 4357
+        }
+      ],
+      "requiredEvidence": "Current PRD boundary plus the relevant original domain, funds, authorization, interface or UI evidence; references below locate review starting points only.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SCOPE-16",
+      "cases": [
+        "T-79"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/priority_exchange.py",
+          "gitBlob": "4939fe1176ee0653741911d8279adaba5ade13d9",
+          "bytes": 9828
+        },
+        {
+          "path": "exchange/intent_workspace.py",
+          "gitBlob": "c919e8e257f04c5993c9b1cae66d036da070456e",
+          "bytes": 6958
+        }
+      ],
+      "requiredEvidence": "Current PRD boundary plus the relevant original domain, funds, authorization, interface or UI evidence; references below locate review starting points only.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SCOPE-17",
+      "cases": [
+        "T-77"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/market_page.py",
+          "gitBlob": "31e8ee414d833accdfc9a189237fdb79b336d9de",
+          "bytes": 12150
+        },
+        {
+          "path": "exchange/integrated_workbench.py",
+          "gitBlob": "0f4e53987be66065e6d3e5255115810e561c78f1",
+          "bytes": 11741
+        }
+      ],
+      "requiredEvidence": "Current PRD boundary plus the relevant original domain, funds, authorization, interface or UI evidence; references below locate review starting points only.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SCOPE-18",
+      "cases": [
+        "T-80"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/gas_disclosure_locales.py",
+          "gitBlob": "0db9fa882c29bde3d989939a2f309bba7694aa9f",
+          "bytes": 21132
+        },
+        {
+          "path": "exchange/registration_source_locales.py",
+          "gitBlob": "f670ae463e6650ec6f17fe8e8126167cd91a7003",
+          "bytes": 8902
+        },
+        {
+          "path": "exchange/nft_detail_page.py",
+          "gitBlob": "2fc447eb8216c593d8adbd007ef1449c4e577e22",
+          "bytes": 11169
+        }
+      ],
+      "requiredEvidence": "Current PRD boundary plus the relevant original domain, funds, authorization, interface or UI evidence; references below locate review starting points only.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-MINT-01",
+      "cases": [
+        "T-01",
+        "T-41",
+        "T-74"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/mint_specification.py",
+          "gitBlob": "6d1d214fff6d4c9710c171ac44e0654be2ccbe48",
+          "bytes": 9317
+        },
+        {
+          "path": "exchange/mint_declaration_view.py",
+          "gitBlob": "32c4e96ba4133cc65cd03e193193a30159125f2e",
+          "bytes": 3842
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-MINT-02",
+      "cases": [
+        "T-41"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/mint_specification.py",
+          "gitBlob": "6d1d214fff6d4c9710c171ac44e0654be2ccbe48",
+          "bytes": 9317
+        },
+        {
+          "path": "exchange/mint_specification_codec.py",
+          "gitBlob": "09ee3bfc99dc4e54de9a747996be7691ae733f5e",
+          "bytes": 4049
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-MINT-03",
+      "cases": [
+        "T-42"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/mint_specification.py",
+          "gitBlob": "6d1d214fff6d4c9710c171ac44e0654be2ccbe48",
+          "bytes": 9317
+        },
+        {
+          "path": "docs/mint-specification.md",
+          "gitBlob": "b3648ebc2281f972e931becb39d1523d3415daf7",
+          "bytes": 3545
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-MINT-04",
+      "cases": [
+        "T-41"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/mint_specification.py",
+          "gitBlob": "6d1d214fff6d4c9710c171ac44e0654be2ccbe48",
+          "bytes": 9317
+        },
+        {
+          "path": "exchange/receipt_checkpoint_codec.py",
+          "gitBlob": "e5cc652f54f2b71b65485e995f56877d415331a6",
+          "bytes": 4860
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-MINT-05",
+      "cases": [
+        "T-10",
+        "T-45"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/mint_specification.py",
+          "gitBlob": "6d1d214fff6d4c9710c171ac44e0654be2ccbe48",
+          "bytes": 9317
+        },
+        {
+          "path": "exchange/registration_source_workbench.py",
+          "gitBlob": "f1627ee2efa2c3f94bd720427c27796039f45da0",
+          "bytes": 6978
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-MINT-06",
+      "cases": [
+        "T-41"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/mint_declaration_view.py",
+          "gitBlob": "32c4e96ba4133cc65cd03e193193a30159125f2e",
+          "bytes": 3842
+        },
+        {
+          "path": "docs/mint-specification.md",
+          "gitBlob": "b3648ebc2281f972e931becb39d1523d3415daf7",
+          "bytes": 3545
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-MINT-07",
+      "cases": [
+        "T-57",
+        "T-58",
+        "T-60",
+        "T-65"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/mint_specification.py",
+          "gitBlob": "6d1d214fff6d4c9710c171ac44e0654be2ccbe48",
+          "bytes": 9317
+        },
+        {
+          "path": "test-contracts/src/EXNFT0Remint.sol",
+          "gitBlob": "c7f9db1d8b2af3962fb22d48302199a85cfe7c76",
+          "bytes": 6749
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-REMINT-01",
+      "cases": [
+        "T-63",
+        "T-68",
+        "T-78"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/remint_execution.py",
+          "gitBlob": "255b61bb3c44162e7e73c699ffca73783b1bcb7c",
+          "bytes": 4757
+        },
+        {
+          "path": "test-contracts/src/EXNFT0Remint.sol",
+          "gitBlob": "c7f9db1d8b2af3962fb22d48302199a85cfe7c76",
+          "bytes": 6749
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-REMINT-02",
+      "cases": [
+        "T-64"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "test-contracts/src/EXNFT0Remint.sol",
+          "gitBlob": "c7f9db1d8b2af3962fb22d48302199a85cfe7c76",
+          "bytes": 6749
+        },
+        {
+          "path": "exchange/checkpointed_remint.py",
+          "gitBlob": "eedc2a0774cf4578ef1c6b597c75f370c3710b0d",
+          "bytes": 2810
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-REMINT-03",
+      "cases": [
+        "T-60",
+        "T-65"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/remint_draft_edit.py",
+          "gitBlob": "4b092399fa80d7fb6770f122311cf910abdb5850",
+          "bytes": 3035
+        },
+        {
+          "path": "exchange/remint_review.py",
+          "gitBlob": "b6cbdf9e6a244ec26772ce16865bec032f1a9504",
+          "bytes": 6198
+        },
+        {
+          "path": "exchange/remint_terms.py",
+          "gitBlob": "f16db7481c3b2c6f0cc4a79fbf566b8dacd9983d",
+          "bytes": 5255
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-REMINT-04",
+      "cases": [
+        "T-32",
+        "T-67"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "test-contracts/src/EXNFT0Remint.sol",
+          "gitBlob": "c7f9db1d8b2af3962fb22d48302199a85cfe7c76",
+          "bytes": 6749
+        },
+        {
+          "path": "exchange/remint_history.py",
+          "gitBlob": "0295cb6d01b6dc8a493db141e9867c23fe3d0e11",
+          "bytes": 6926
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-REMINT-05",
+      "cases": [
+        "T-66"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/durable_operation.py",
+          "gitBlob": "20c173941e208b1016770d998ce43260e59a18a5",
+          "bytes": 15819
+        },
+        {
+          "path": "exchange/checkpointed_remint.py",
+          "gitBlob": "eedc2a0774cf4578ef1c6b597c75f370c3710b0d",
+          "bytes": 2810
+        },
+        {
+          "path": "test-contracts/src/EXNFT0Remint.sol",
+          "gitBlob": "c7f9db1d8b2af3962fb22d48302199a85cfe7c76",
+          "bytes": 6749
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-INV-01",
+      "cases": [
+        "T-03",
+        "T-07"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/ledger.py",
+          "gitBlob": "767458aeb65efc8a5bfe153c380ac82ca9565da6",
+          "bytes": 107049
+        },
+        {
+          "path": "exchange/priority_journal.py",
+          "gitBlob": "2cab75af33ff7a7219861f0cfc2d9bd3a759968b",
+          "bytes": 5768
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-INV-02",
+      "cases": [
+        "T-01"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/ledger.py",
+          "gitBlob": "767458aeb65efc8a5bfe153c380ac82ca9565da6",
+          "bytes": 107049
+        },
+        {
+          "path": "exchange/mint_specification.py",
+          "gitBlob": "6d1d214fff6d4c9710c171ac44e0654be2ccbe48",
+          "bytes": 9317
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-INV-03",
+      "cases": [
+        "T-04",
+        "T-12",
+        "T-18"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/registration.py",
+          "gitBlob": "7f8efacb997c1c3435cd849064e12e406a832e5f",
+          "bytes": 10789
+        },
+        {
+          "path": "exchange/settlement.py",
+          "gitBlob": "9a989213007665e48a29b811d8a276265a8f37a8",
+          "bytes": 10062
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-INV-04",
+      "cases": [
+        "T-05",
+        "T-16",
+        "T-23",
+        "T-31",
+        "T-50",
+        "T-51",
+        "T-55",
+        "T-66"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/settlement.py",
+          "gitBlob": "9a989213007665e48a29b811d8a276265a8f37a8",
+          "bytes": 10062
+        },
+        {
+          "path": "exchange/rollback.py",
+          "gitBlob": "6e3140d49a2fefe640eec09c9d79ffc1b21c9cfd",
+          "bytes": 7365
+        },
+        {
+          "path": "exchange/principal_journal_contract.py",
+          "gitBlob": "66175ef167ef69ed9d1147f95a5ba6dc59d4714f",
+          "bytes": 11207
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-INV-05",
+      "cases": [
+        "T-03",
+        "T-04",
+        "T-05",
+        "T-10",
+        "T-14"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/oracle_projection_join.py",
+          "gitBlob": "1da0816f239cec901bf6c5504c6672bead96653e",
+          "bytes": 7397
+        },
+        {
+          "path": "exchange/register_projection.py",
+          "gitBlob": "cd7fbc4eb520ca9048c3b52db8bb001ef8785174",
+          "bytes": 5777
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-INV-06",
+      "cases": [
+        "T-07"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/ledger.py",
+          "gitBlob": "767458aeb65efc8a5bfe153c380ac82ca9565da6",
+          "bytes": 107049
+        },
+        {
+          "path": "exchange/authorization_page.py",
+          "gitBlob": "7a33d15d43a9bda159fdcd5f220b788bb35f9679",
+          "bytes": 10056
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-INV-07",
+      "cases": [
+        "T-23"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/direct_return_checkpoint.py",
+          "gitBlob": "070a45f9db729216f7e23024c2e5fc9fd85ee5b7",
+          "bytes": 2885
+        },
+        {
+          "path": "exchange/receipt_fact_checkpoint.py",
+          "gitBlob": "8ba8291b9a5891b219a5f0f1e9de1aa6a1aaf1fb",
+          "bytes": 7601
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-INV-08",
+      "cases": [
+        "T-18",
+        "T-25",
+        "T-44",
+        "T-68"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/ledger.py",
+          "gitBlob": "767458aeb65efc8a5bfe153c380ac82ca9565da6",
+          "bytes": 107049
+        },
+        {
+          "path": "exchange/priority_exchange.py",
+          "gitBlob": "4939fe1176ee0653741911d8279adaba5ade13d9",
+          "bytes": 9828
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-INV-09",
+      "cases": [],
+      "sourceAnchors": [
+        {
+          "path": "exchange/registration.py",
+          "gitBlob": "7f8efacb997c1c3435cd849064e12e406a832e5f",
+          "bytes": 10789
+        },
+        {
+          "path": "exchange/operation_recovery.py",
+          "gitBlob": "512891c09b3f65c50caa46838bec400d252691de",
+          "bytes": 3378
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-INV-10",
+      "cases": [
+        "T-30"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/oracle_projection_join.py",
+          "gitBlob": "1da0816f239cec901bf6c5504c6672bead96653e",
+          "bytes": 7397
+        },
+        {
+          "path": "exchange/settlement.py",
+          "gitBlob": "9a989213007665e48a29b811d8a276265a8f37a8",
+          "bytes": 10062
+        },
+        {
+          "path": "exchange/durable_operation.py",
+          "gitBlob": "20c173941e208b1016770d998ce43260e59a18a5",
+          "bytes": 15819
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-INV-11",
+      "cases": [
+        "T-04",
+        "T-05",
+        "T-45"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/registration.py",
+          "gitBlob": "7f8efacb997c1c3435cd849064e12e406a832e5f",
+          "bytes": 10789
+        },
+        {
+          "path": "exchange/oracle_projection_join.py",
+          "gitBlob": "1da0816f239cec901bf6c5504c6672bead96653e",
+          "bytes": 7397
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-INV-12",
+      "cases": [
+        "T-09",
+        "T-62"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/priority_exchange.py",
+          "gitBlob": "4939fe1176ee0653741911d8279adaba5ade13d9",
+          "bytes": 9828
+        },
+        {
+          "path": "exchange/priority_journal.py",
+          "gitBlob": "2cab75af33ff7a7219861f0cfc2d9bd3a759968b",
+          "bytes": 5768
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SETTLE-01",
+      "cases": [
+        "T-11",
+        "T-13"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/price_balance.py",
+          "gitBlob": "ad8fbc0701156c423ab0e8d2f944465cba43c945",
+          "bytes": 6938
+        },
+        {
+          "path": "exchange/gas_budget.py",
+          "gitBlob": "134033da7fbcbe1d1b77e7dffd8c36e92f572de3",
+          "bytes": 13256
+        },
+        {
+          "path": "exchange/principal_journal_contract.py",
+          "gitBlob": "66175ef167ef69ed9d1147f95a5ba6dc59d4714f",
+          "bytes": 11207
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SETTLE-02",
+      "cases": [
+        "T-12"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/settlement.py",
+          "gitBlob": "9a989213007665e48a29b811d8a276265a8f37a8",
+          "bytes": 10062
+        },
+        {
+          "path": "exchange/registration.py",
+          "gitBlob": "7f8efacb997c1c3435cd849064e12e406a832e5f",
+          "bytes": 10789
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SETTLE-03",
+      "cases": [
+        "T-13",
+        "T-31"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/model.py",
+          "gitBlob": "5741c73b0730dc5854f3a4408ca0729cd67bb4e3",
+          "bytes": 9084
+        },
+        {
+          "path": "exchange/ledger.py",
+          "gitBlob": "767458aeb65efc8a5bfe153c380ac82ca9565da6",
+          "bytes": 107049
+        },
+        {
+          "path": "exchange/timeline_projection.py",
+          "gitBlob": "4b80b4ff25ae1f7df4c004362152722543dda02b",
+          "bytes": 4753
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SETTLE-04",
+      "cases": [
+        "T-14",
+        "T-15"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/oracle_projection_join.py",
+          "gitBlob": "1da0816f239cec901bf6c5504c6672bead96653e",
+          "bytes": 7397
+        },
+        {
+          "path": "exchange/settlement.py",
+          "gitBlob": "9a989213007665e48a29b811d8a276265a8f37a8",
+          "bytes": 10062
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SETTLE-05",
+      "cases": [
+        "T-11",
+        "T-16",
+        "T-28"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/settlement.py",
+          "gitBlob": "9a989213007665e48a29b811d8a276265a8f37a8",
+          "bytes": 10062
+        },
+        {
+          "path": "exchange/principal_journal_contract.py",
+          "gitBlob": "66175ef167ef69ed9d1147f95a5ba6dc59d4714f",
+          "bytes": 11207
+        },
+        {
+          "path": "exchange/durable_operation.py",
+          "gitBlob": "20c173941e208b1016770d998ce43260e59a18a5",
+          "bytes": 15819
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-TIME-01",
+      "cases": [
+        "T-24",
+        "T-44"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/mint_specification.py",
+          "gitBlob": "6d1d214fff6d4c9710c171ac44e0654be2ccbe48",
+          "bytes": 9317
+        },
+        {
+          "path": "exchange/ledger.py",
+          "gitBlob": "767458aeb65efc8a5bfe153c380ac82ca9565da6",
+          "bytes": 107049
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-TIME-02",
+      "cases": [
+        "T-24"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/rollback.py",
+          "gitBlob": "6e3140d49a2fefe640eec09c9d79ffc1b21c9cfd",
+          "bytes": 7365
+        },
+        {
+          "path": "exchange/registration.py",
+          "gitBlob": "7f8efacb997c1c3435cd849064e12e406a832e5f",
+          "bytes": 10789
+        },
+        {
+          "path": "exchange/direct_return_checkpoint.py",
+          "gitBlob": "070a45f9db729216f7e23024c2e5fc9fd85ee5b7",
+          "bytes": 2885
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-TIME-03",
+      "cases": [
+        "T-23",
+        "T-24",
+        "T-45"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/registration.py",
+          "gitBlob": "7f8efacb997c1c3435cd849064e12e406a832e5f",
+          "bytes": 10789
+        },
+        {
+          "path": "exchange/oracle_projection_join.py",
+          "gitBlob": "1da0816f239cec901bf6c5504c6672bead96653e",
+          "bytes": 7397
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-EXIT-01",
+      "cases": [
+        "T-25",
+        "T-74"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/exit.py",
+          "gitBlob": "8566f426e8c538a1ba2de1be1dfba4999810d5f1",
+          "bytes": 4259
+        },
+        {
+          "path": "exchange/registration.py",
+          "gitBlob": "7f8efacb997c1c3435cd849064e12e406a832e5f",
+          "bytes": 10789
+        },
+        {
+          "path": "exchange/mint_declaration_view.py",
+          "gitBlob": "32c4e96ba4133cc65cd03e193193a30159125f2e",
+          "bytes": 3842
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-EXIT-02",
+      "cases": [
+        "T-32"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "PRD.md",
+          "gitBlob": "264d37353099b51c13fd683e771fc35fbf829939",
+          "bytes": 97728
+        },
+        {
+          "path": "docs/mint-specification.md",
+          "gitBlob": "b3648ebc2281f972e931becb39d1523d3415daf7",
+          "bytes": 3545
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-EXIT-03",
+      "cases": [
+        "T-32",
+        "T-33"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/exit.py",
+          "gitBlob": "8566f426e8c538a1ba2de1be1dfba4999810d5f1",
+          "bytes": 4259
+        },
+        {
+          "path": "exchange/remint_history.py",
+          "gitBlob": "0295cb6d01b6dc8a493db141e9867c23fe3d0e11",
+          "bytes": 6926
+        },
+        {
+          "path": "test-contracts/src/EXNFT0Remint.sol",
+          "gitBlob": "c7f9db1d8b2af3962fb22d48302199a85cfe7c76",
+          "bytes": 6749
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SETTLE-06",
+      "cases": [
+        "T-19",
+        "T-57",
+        "T-59",
+        "T-61",
+        "T-62"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/price_balance.py",
+          "gitBlob": "ad8fbc0701156c423ab0e8d2f944465cba43c945",
+          "bytes": 6938
+        },
+        {
+          "path": "exchange/settlement.py",
+          "gitBlob": "9a989213007665e48a29b811d8a276265a8f37a8",
+          "bytes": 10062
+        },
+        {
+          "path": "exchange/rollback.py",
+          "gitBlob": "6e3140d49a2fefe640eec09c9d79ffc1b21c9cfd",
+          "bytes": 7365
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-SETTLE-07",
+      "cases": [
+        "T-59",
+        "T-61"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/price_balance.py",
+          "gitBlob": "ad8fbc0701156c423ab0e8d2f944465cba43c945",
+          "bytes": 6938
+        },
+        {
+          "path": "exchange/eth_trade_gas.py",
+          "gitBlob": "a0a77792a4d6101faf7fb9fe7dabd42522c5ba11",
+          "bytes": 4858
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-INV-13",
+      "cases": [
+        "T-52",
+        "T-57",
+        "T-59",
+        "T-60",
+        "T-61"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/price_balance.py",
+          "gitBlob": "ad8fbc0701156c423ab0e8d2f944465cba43c945",
+          "bytes": 6938
+        },
+        {
+          "path": "exchange/eth_trade_gas.py",
+          "gitBlob": "a0a77792a4d6101faf7fb9fe7dabd42522c5ba11",
+          "bytes": 4858
+        },
+        {
+          "path": "exchange/mint_specification.py",
+          "gitBlob": "6d1d214fff6d4c9710c171ac44e0654be2ccbe48",
+          "bytes": 9317
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-INV-14",
+      "cases": [
+        "T-64",
+        "T-66",
+        "T-67"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "test-contracts/src/EXNFT0Remint.sol",
+          "gitBlob": "c7f9db1d8b2af3962fb22d48302199a85cfe7c76",
+          "bytes": 6749
+        },
+        {
+          "path": "exchange/remint_history.py",
+          "gitBlob": "0295cb6d01b6dc8a493db141e9867c23fe3d0e11",
+          "bytes": 6926
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-ROLLBACK-01",
+      "cases": [
+        "T-17"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/rollback.py",
+          "gitBlob": "6e3140d49a2fefe640eec09c9d79ffc1b21c9cfd",
+          "bytes": 7365
+        },
+        {
+          "path": "exchange/rollback_projection.py",
+          "gitBlob": "384c2c8aa75ef79bd8dcf74173b2719563958e83",
+          "bytes": 7745
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-ROLLBACK-02",
+      "cases": [
+        "T-18"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/rollback.py",
+          "gitBlob": "6e3140d49a2fefe640eec09c9d79ffc1b21c9cfd",
+          "bytes": 7365
+        },
+        {
+          "path": "exchange/direct_return_checkpoint.py",
+          "gitBlob": "070a45f9db729216f7e23024c2e5fc9fd85ee5b7",
+          "bytes": 2885
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-ROLLBACK-03",
+      "cases": [
+        "T-19"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/rollback_projection.py",
+          "gitBlob": "384c2c8aa75ef79bd8dcf74173b2719563958e83",
+          "bytes": 7745
+        },
+        {
+          "path": "exchange/rollback_page.py",
+          "gitBlob": "6bd676035999cb8e8d47050d03994072e1a3fae1",
+          "bytes": 13604
+        },
+        {
+          "path": "exchange/principal_journal_contract.py",
+          "gitBlob": "66175ef167ef69ed9d1147f95a5ba6dc59d4714f",
+          "bytes": 11207
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-ROLLBACK-04",
+      "cases": [
+        "T-20",
+        "T-56"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/wallet_direct_return_operation.py",
+          "gitBlob": "8b69473edfc150f49edd85f02e361aa0deb1c0b5",
+          "bytes": 3156
+        },
+        {
+          "path": "exchange/direct_return_checkpoint.py",
+          "gitBlob": "070a45f9db729216f7e23024c2e5fc9fd85ee5b7",
+          "bytes": 2885
+        },
+        {
+          "path": "docs/original-gas-prepayment.md",
+          "gitBlob": "8164935a27069f09e896d385672fc875f96095e2",
+          "bytes": 1415
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-ROLLBACK-05",
+      "cases": [
+        "T-17",
+        "T-33",
+        "T-44"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/rollback.py",
+          "gitBlob": "6e3140d49a2fefe640eec09c9d79ffc1b21c9cfd",
+          "bytes": 7365
+        },
+        {
+          "path": "exchange/closed_rollback_conflict_checkpoint.py",
+          "gitBlob": "04e1e207acfa1c2559a465f6737ada10df306f75",
+          "bytes": 4105
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-GAS-01",
+      "cases": [
+        "T-19"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/gas_budget.py",
+          "gitBlob": "134033da7fbcbe1d1b77e7dffd8c36e92f572de3",
+          "bytes": 13256
+        },
+        {
+          "path": "exchange/receipt_gas_observer.py",
+          "gitBlob": "2fd396bf03e58184e0800bfa7cecfdc54617a39f",
+          "bytes": 5405
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-GAS-02",
+      "cases": [
+        "T-21"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "scenarios/decisions.py",
+          "gitBlob": "b06035c3eaac8f356cd681dd6a44812deb7889b6",
+          "bytes": 434
+        },
+        {
+          "path": "docs/gas-budget-contract.md",
+          "gitBlob": "6938938d7479acfe31940cc44c94c8ee4039cbdd",
+          "bytes": 3964
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-GAS-03",
+      "cases": [
+        "T-22"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/eth_trade_gas.py",
+          "gitBlob": "a0a77792a4d6101faf7fb9fe7dabd42522c5ba11",
+          "bytes": 4858
+        },
+        {
+          "path": "exchange/price_balance.py",
+          "gitBlob": "ad8fbc0701156c423ab0e8d2f944465cba43c945",
+          "bytes": 6938
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-GAS-04",
+      "cases": [
+        "T-43",
+        "T-49",
+        "T-54"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/gas_budget.py",
+          "gitBlob": "134033da7fbcbe1d1b77e7dffd8c36e92f572de3",
+          "bytes": 13256
+        },
+        {
+          "path": "exchange/gas_confirmation_ui.py",
+          "gitBlob": "a3861854e0b9ec82332ff47f94e79049450466dc",
+          "bytes": 9233
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-GAS-05",
+      "cases": [
+        "T-43",
+        "T-50",
+        "T-53",
+        "T-56"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/gas_reconfirmation.py",
+          "gitBlob": "cc0771fa622aa873861b74a7acbd42ba13e701fb",
+          "bytes": 4268
+        },
+        {
+          "path": "exchange/gas_budget.py",
+          "gitBlob": "134033da7fbcbe1d1b77e7dffd8c36e92f572de3",
+          "bytes": 13256
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-GAS-06",
+      "cases": [
+        "T-43",
+        "T-49"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/gas_budget.py",
+          "gitBlob": "134033da7fbcbe1d1b77e7dffd8c36e92f572de3",
+          "bytes": 13256
+        },
+        {
+          "path": "exchange/original_gas_receipt_reader.py",
+          "gitBlob": "ecd01b3b2b6505b7a6463102a301c4a98634b3aa",
+          "bytes": 4352
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-GAS-07",
+      "cases": [
+        "T-20",
+        "T-51",
+        "T-53",
+        "T-54",
+        "T-56",
+        "T-59",
+        "T-61"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/gas_budget.py",
+          "gitBlob": "134033da7fbcbe1d1b77e7dffd8c36e92f572de3",
+          "bytes": 13256
+        },
+        {
+          "path": "exchange/eth_trade_gas.py",
+          "gitBlob": "a0a77792a4d6101faf7fb9fe7dabd42522c5ba11",
+          "bytes": 4858
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-GAS-08",
+      "cases": [
+        "T-51",
+        "T-54",
+        "T-56",
+        "T-59"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/receipt_gas_observer.py",
+          "gitBlob": "2fd396bf03e58184e0800bfa7cecfdc54617a39f",
+          "bytes": 5405
+        },
+        {
+          "path": "exchange/gas_budget.py",
+          "gitBlob": "134033da7fbcbe1d1b77e7dffd8c36e92f572de3",
+          "bytes": 13256
+        },
+        {
+          "path": "exchange/gas_budget_observation_page.py",
+          "gitBlob": "95314bdd591cf137f4e4398a6fee0798f466541f",
+          "bytes": 2707
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-GAS-09",
+      "cases": [
+        "T-35",
+        "T-52",
+        "T-54",
+        "T-65"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/eth_trade_gas.py",
+          "gitBlob": "a0a77792a4d6101faf7fb9fe7dabd42522c5ba11",
+          "bytes": 4858
+        },
+        {
+          "path": "exchange/price_balance.py",
+          "gitBlob": "ad8fbc0701156c423ab0e8d2f944465cba43c945",
+          "bytes": 6938
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-GAS-10",
+      "cases": [
+        "T-20",
+        "T-51",
+        "T-52",
+        "T-53",
+        "T-55",
+        "T-81"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/eth_trade_gas.py",
+          "gitBlob": "a0a77792a4d6101faf7fb9fe7dabd42522c5ba11",
+          "bytes": 4858
+        },
+        {
+          "path": "exchange/gas_confirmation_ui.py",
+          "gitBlob": "a3861854e0b9ec82332ff47f94e79049450466dc",
+          "bytes": 9233
+        }
+      ],
+      "requiredEvidence": "Original principal/gas freezes, receipts, exact native operations, failure/restart/replay and release/refund observations; keep principal, consumed ETH and unused reservations separate.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-AUTH-01",
+      "cases": [
+        "T-06",
+        "T-08",
+        "T-34",
+        "T-63",
+        "T-81"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/ledger.py",
+          "gitBlob": "767458aeb65efc8a5bfe153c380ac82ca9565da6",
+          "bytes": 107049
+        },
+        {
+          "path": "exchange/authorization_page.py",
+          "gitBlob": "7a33d15d43a9bda159fdcd5f220b788bb35f9679",
+          "bytes": 10056
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-AUTH-02",
+      "cases": [
+        "T-06",
+        "T-55"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/ledger.py",
+          "gitBlob": "767458aeb65efc8a5bfe153c380ac82ca9565da6",
+          "bytes": 107049
+        },
+        {
+          "path": "exchange/wallet_execution_attempts.py",
+          "gitBlob": "045d1768e2e7c85055cee80443d612c4e996a8af",
+          "bytes": 2031
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-AUTH-03",
+      "cases": [
+        "T-08"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/wallet_api_client.py",
+          "gitBlob": "ce0deb5ea9c4fe3dcb37abbbb243edef26ee2ded",
+          "bytes": 13287
+        },
+        {
+          "path": "exchange/wallet_direct_return_operation.py",
+          "gitBlob": "8b69473edfc150f49edd85f02e361aa0deb1c0b5",
+          "bytes": 3156
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-AUTH-04",
+      "cases": [
+        "T-06",
+        "T-55",
+        "T-63"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/ledger.py",
+          "gitBlob": "767458aeb65efc8a5bfe153c380ac82ca9565da6",
+          "bytes": 107049
+        },
+        {
+          "path": "exchange/serialized_exchange_access.py",
+          "gitBlob": "7ba485a0aea4e29e2d289eee25a78bcc4b6e9154",
+          "bytes": 3560
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-AUTH-05",
+      "cases": [
+        "T-34"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/checkpointed_workbench_gateway.py",
+          "gitBlob": "f219607cff0b21a947f62e560341bd0592ce558d",
+          "bytes": 9714
+        },
+        {
+          "path": "exchange/wallet_api_client.py",
+          "gitBlob": "ce0deb5ea9c4fe3dcb37abbbb243edef26ee2ded",
+          "bytes": 13287
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-MATCH-01",
+      "cases": [
+        "T-09",
+        "T-57",
+        "T-62",
+        "T-79",
+        "T-82"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/priority_exchange.py",
+          "gitBlob": "4939fe1176ee0653741911d8279adaba5ade13d9",
+          "bytes": 9828
+        },
+        {
+          "path": "exchange/price_balance.py",
+          "gitBlob": "ad8fbc0701156c423ab0e8d2f944465cba43c945",
+          "bytes": 6938
+        }
+      ],
+      "requiredEvidence": "Current PRD boundary plus the relevant original domain, funds, authorization, interface or UI evidence; references below locate review starting points only.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-MATCH-02",
+      "cases": [
+        "T-48",
+        "T-79"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "PRD.md",
+          "gitBlob": "264d37353099b51c13fd683e771fc35fbf829939",
+          "bytes": 97728
+        },
+        {
+          "path": "exchange/priority_exchange.py",
+          "gitBlob": "4939fe1176ee0653741911d8279adaba5ade13d9",
+          "bytes": 9828
+        },
+        {
+          "path": "exchange/intent_workspace.py",
+          "gitBlob": "c919e8e257f04c5993c9b1cae66d036da070456e",
+          "bytes": 6958
+        }
+      ],
+      "requiredEvidence": "Current PRD boundary plus the relevant original domain, funds, authorization, interface or UI evidence; references below locate review starting points only.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-MATCH-03",
+      "cases": [],
+      "sourceAnchors": [
+        {
+          "path": "exchange/priority_exchange.py",
+          "gitBlob": "4939fe1176ee0653741911d8279adaba5ade13d9",
+          "bytes": 9828
+        },
+        {
+          "path": "exchange/registration.py",
+          "gitBlob": "7f8efacb997c1c3435cd849064e12e406a832e5f",
+          "bytes": 10789
+        },
+        {
+          "path": "exchange/settlement.py",
+          "gitBlob": "9a989213007665e48a29b811d8a276265a8f37a8",
+          "bytes": 10062
+        }
+      ],
+      "requiredEvidence": "Current PRD boundary plus the relevant original domain, funds, authorization, interface or UI evidence; references below locate review starting points only.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-PRICE-01",
+      "cases": [
+        "T-71"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/reference_feed.py",
+          "gitBlob": "c1efa0f8a6c0757ba6fa57a3a76add1615f559d2",
+          "bytes": 9815
+        },
+        {
+          "path": "exchange/reference_catalogue_runtime.py",
+          "gitBlob": "cc26bd7f40ca94bed6e57bf757079b1d2ec149e4",
+          "bytes": 2653
+        },
+        {
+          "path": "exchange/market_reference_refresh.py",
+          "gitBlob": "1debd1b5a4a7ac0a63c89cc7ffce444732bdc134",
+          "bytes": 4357
+        }
+      ],
+      "requiredEvidence": "Actual original source observations plus desktop/mobile browser, locale and unavailable/stale/error behavior; source labels and screenshots alone do not establish live input or complete signed terms.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-PRICE-02",
+      "cases": [
+        "T-71",
+        "T-72"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/eia_wti_spot_reader.py",
+          "gitBlob": "a199587ad12caedd6bf7383cea9bc111f298babf",
+          "bytes": 7878
+        },
+        {
+          "path": "exchange/reference_provenance_page.py",
+          "gitBlob": "9b375803c7cbed882e122e2a182aa7ee4136c147",
+          "bytes": 5612
+        }
+      ],
+      "requiredEvidence": "Actual original source observations plus desktop/mobile browser, locale and unavailable/stale/error behavior; source labels and screenshots alone do not establish live input or complete signed terms.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-PRICE-03",
+      "cases": [
+        "T-72",
+        "T-84"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/reference_feed.py",
+          "gitBlob": "c1efa0f8a6c0757ba6fa57a3a76add1615f559d2",
+          "bytes": 9815
+        },
+        {
+          "path": "exchange/reference_catalogue_runtime.py",
+          "gitBlob": "cc26bd7f40ca94bed6e57bf757079b1d2ec149e4",
+          "bytes": 2653
+        }
+      ],
+      "requiredEvidence": "Actual original source observations plus desktop/mobile browser, locale and unavailable/stale/error behavior; source labels and screenshots alone do not establish live input or complete signed terms.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-PRICE-04",
+      "cases": [
+        "T-72",
+        "T-82"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/reference_feed.py",
+          "gitBlob": "c1efa0f8a6c0757ba6fa57a3a76add1615f559d2",
+          "bytes": 9815
+        },
+        {
+          "path": "exchange/market_page.py",
+          "gitBlob": "31e8ee414d833accdfc9a189237fdb79b336d9de",
+          "bytes": 12150
+        },
+        {
+          "path": "exchange/price_balance.py",
+          "gitBlob": "ad8fbc0701156c423ab0e8d2f944465cba43c945",
+          "bytes": 6938
+        }
+      ],
+      "requiredEvidence": "Actual original source observations plus desktop/mobile browser, locale and unavailable/stale/error behavior; source labels and screenshots alone do not establish live input or complete signed terms.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-UI-01",
+      "cases": [
+        "T-73",
+        "T-84"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/market_page.py",
+          "gitBlob": "31e8ee414d833accdfc9a189237fdb79b336d9de",
+          "bytes": 12150
+        },
+        {
+          "path": "exchange/nft_directory.py",
+          "gitBlob": "bf0153047fefd5923376728ca23a4abd558781a8",
+          "bytes": 2626
+        },
+        {
+          "path": "exchange/gap_projection.py",
+          "gitBlob": "a8b626435226b60286c47c9f71ae5d8eaf36d929",
+          "bytes": 4498
+        }
+      ],
+      "requiredEvidence": "Actual original source observations plus desktop/mobile browser, locale and unavailable/stale/error behavior; source labels and screenshots alone do not establish live input or complete signed terms.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-UI-02",
+      "cases": [
+        "T-75",
+        "T-76"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/nft_detail.py",
+          "gitBlob": "26aea8cefcaa4bc1c25ea800d16feae11ef529d4",
+          "bytes": 7520
+        },
+        {
+          "path": "exchange/signature_projection.py",
+          "gitBlob": "220bc031509bff3c24c74e84fe012f7c256eba98",
+          "bytes": 1179
+        },
+        {
+          "path": "exchange/register_projection.py",
+          "gitBlob": "cd7fbc4eb520ca9048c3b52db8bb001ef8785174",
+          "bytes": 5777
+        }
+      ],
+      "requiredEvidence": "Actual original source observations plus desktop/mobile browser, locale and unavailable/stale/error behavior; source labels and screenshots alone do not establish live input or complete signed terms.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-UI-03",
+      "cases": [
+        "T-77"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/nft_detail.py",
+          "gitBlob": "26aea8cefcaa4bc1c25ea800d16feae11ef529d4",
+          "bytes": 7520
+        },
+        {
+          "path": "exchange/public_workbench.py",
+          "gitBlob": "b632a51ad2f3dfd495f4795df07c9e87a362e5ab",
+          "bytes": 5786
+        }
+      ],
+      "requiredEvidence": "Actual original source observations plus desktop/mobile browser, locale and unavailable/stale/error behavior; source labels and screenshots alone do not establish live input or complete signed terms.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-UI-04",
+      "cases": [
+        "T-74",
+        "T-84"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/nft_detail.py",
+          "gitBlob": "26aea8cefcaa4bc1c25ea800d16feae11ef529d4",
+          "bytes": 7520
+        },
+        {
+          "path": "exchange/nft_detail_page.py",
+          "gitBlob": "2fc447eb8216c593d8adbd007ef1449c4e577e22",
+          "bytes": 11169
+        },
+        {
+          "path": "exchange/remint_review.py",
+          "gitBlob": "b6cbdf9e6a244ec26772ce16865bec032f1a9504",
+          "bytes": 6198
+        }
+      ],
+      "requiredEvidence": "Actual original source observations plus desktop/mobile browser, locale and unavailable/stale/error behavior; source labels and screenshots alone do not establish live input or complete signed terms.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-UI-05",
+      "cases": [
+        "T-78"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/ledger.py",
+          "gitBlob": "767458aeb65efc8a5bfe153c380ac82ca9565da6",
+          "bytes": 107049
+        },
+        {
+          "path": "exchange/priority_exchange.py",
+          "gitBlob": "4939fe1176ee0653741911d8279adaba5ade13d9",
+          "bytes": 9828
+        },
+        {
+          "path": "exchange/nft_detail.py",
+          "gitBlob": "26aea8cefcaa4bc1c25ea800d16feae11ef529d4",
+          "bytes": 7520
+        }
+      ],
+      "requiredEvidence": "Actual original source observations plus desktop/mobile browser, locale and unavailable/stale/error behavior; source labels and screenshots alone do not establish live input or complete signed terms.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-UI-06",
+      "cases": [
+        "T-81"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/integrated_workbench.py",
+          "gitBlob": "0f4e53987be66065e6d3e5255115810e561c78f1",
+          "bytes": 11741
+        },
+        {
+          "path": "exchange/authorization_page.py",
+          "gitBlob": "7a33d15d43a9bda159fdcd5f220b788bb35f9679",
+          "bytes": 10056
+        }
+      ],
+      "requiredEvidence": "Actual original source observations plus desktop/mobile browser, locale and unavailable/stale/error behavior; source labels and screenshots alone do not establish live input or complete signed terms.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-I18N-01",
+      "cases": [
+        "T-80"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/gas_disclosure_locales.py",
+          "gitBlob": "0db9fa882c29bde3d989939a2f309bba7694aa9f",
+          "bytes": 21132
+        },
+        {
+          "path": "exchange/registration_source_locales.py",
+          "gitBlob": "f670ae463e6650ec6f17fe8e8126167cd91a7003",
+          "bytes": 8902
+        },
+        {
+          "path": "exchange/nft_detail_page.py",
+          "gitBlob": "2fc447eb8216c593d8adbd007ef1449c4e577e22",
+          "bytes": 11169
+        }
+      ],
+      "requiredEvidence": "Actual original source observations plus desktop/mobile browser, locale and unavailable/stale/error behavior; source labels and screenshots alone do not establish live input or complete signed terms.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-I18N-02",
+      "cases": [
+        "T-80",
+        "T-84"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/market_page.py",
+          "gitBlob": "31e8ee414d833accdfc9a189237fdb79b336d9de",
+          "bytes": 12150
+        },
+        {
+          "path": "exchange/timeline_page.py",
+          "gitBlob": "5e7a33eac0bc7b9fb5a0f5a9b8e75ade9dd8b5c9",
+          "bytes": 9417
+        },
+        {
+          "path": "exchange/rollback_page.py",
+          "gitBlob": "6bd676035999cb8e8d47050d03994072e1a3fae1",
+          "bytes": 13604
+        }
+      ],
+      "requiredEvidence": "Actual original source observations plus desktop/mobile browser, locale and unavailable/stale/error behavior; source labels and screenshots alone do not establish live input or complete signed terms.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-I18N-03",
+      "cases": [
+        "T-80"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/gap_projection.py",
+          "gitBlob": "a8b626435226b60286c47c9f71ae5d8eaf36d929",
+          "bytes": 4498
+        },
+        {
+          "path": "exchange/nft_detail_page.py",
+          "gitBlob": "2fc447eb8216c593d8adbd007ef1449c4e577e22",
+          "bytes": 11169
+        },
+        {
+          "path": "exchange/remint_review.py",
+          "gitBlob": "b6cbdf9e6a244ec26772ce16865bec032f1a9504",
+          "bytes": 6198
+        }
+      ],
+      "requiredEvidence": "Actual original source observations plus desktop/mobile browser, locale and unavailable/stale/error behavior; source labels and screenshots alone do not establish live input or complete signed terms.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-NFR-01",
+      "cases": [
+        "T-27"
+      ],
+      "sourceAnchors": [
+        {
+          "path": ".github/workflows/contracts.yml",
+          "gitBlob": "cbc9b08f19dd9d8c96fa33831bc42fdc5e6e9fb8",
+          "bytes": 6620
+        },
+        {
+          "path": ".github/workflows/bootstrap.yml",
+          "gitBlob": "e40f6d26a338e9b594ae6422eb509d9a317953b7",
+          "bytes": 8019
+        },
+        {
+          "path": "scenarios/manifest.py",
+          "gitBlob": "eef5565bab6988c4013f467194adb9d1004855bc",
+          "bytes": 15549
+        }
+      ],
+      "requiredEvidence": "Applicable exact-source checks and separately observed runtime/security/recovery/configuration/measurement evidence; no inherited pass or invented operational threshold.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-NFR-02",
+      "cases": [],
+      "sourceAnchors": [
+        {
+          "path": "exchange/durable_operation.py",
+          "gitBlob": "20c173941e208b1016770d998ce43260e59a18a5",
+          "bytes": 15819
+        },
+        {
+          "path": "exchange/ledger.py",
+          "gitBlob": "767458aeb65efc8a5bfe153c380ac82ca9565da6",
+          "bytes": 107049
+        },
+        {
+          "path": "test-contracts/src/EXNFT0Remint.sol",
+          "gitBlob": "c7f9db1d8b2af3962fb22d48302199a85cfe7c76",
+          "bytes": 6749
+        }
+      ],
+      "requiredEvidence": "Applicable exact-source checks and separately observed runtime/security/recovery/configuration/measurement evidence; no inherited pass or invented operational threshold.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-NFR-03",
+      "cases": [
+        "T-28",
+        "T-30"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/operation_recovery.py",
+          "gitBlob": "512891c09b3f65c50caa46838bec400d252691de",
+          "bytes": 3378
+        },
+        {
+          "path": "exchange/oracle_projection_join.py",
+          "gitBlob": "1da0816f239cec901bf6c5504c6672bead96653e",
+          "bytes": 7397
+        },
+        {
+          "path": "exchange/wallet_execution_attempts.py",
+          "gitBlob": "045d1768e2e7c85055cee80443d612c4e996a8af",
+          "bytes": 2031
+        }
+      ],
+      "requiredEvidence": "Applicable exact-source checks and separately observed runtime/security/recovery/configuration/measurement evidence; no inherited pass or invented operational threshold.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-NFR-04",
+      "cases": [
+        "T-16",
+        "T-28"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/aggregate_checkpoint.py",
+          "gitBlob": "4a14ed290bb3f071184f81a5d0cc18d4dd9f6c0d",
+          "bytes": 9206
+        },
+        {
+          "path": "exchange/durable_operation.py",
+          "gitBlob": "20c173941e208b1016770d998ce43260e59a18a5",
+          "bytes": 15819
+        },
+        {
+          "path": "exchange/principal_journal_contract.py",
+          "gitBlob": "66175ef167ef69ed9d1147f95a5ba6dc59d4714f",
+          "bytes": 11207
+        }
+      ],
+      "requiredEvidence": "Applicable exact-source checks and separately observed runtime/security/recovery/configuration/measurement evidence; no inherited pass or invented operational threshold.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-NFR-05",
+      "cases": [
+        "T-26",
+        "T-40"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/errors.py",
+          "gitBlob": "287cf06f4f7e7377013d49d25d3fcb034889ed89",
+          "bytes": 628
+        },
+        {
+          "path": "exchange/operational_facts_codec.py",
+          "gitBlob": "da8b899977c724a3fd9bdef4a2b6587062d73853",
+          "bytes": 7831
+        }
+      ],
+      "requiredEvidence": "Applicable exact-source checks and separately observed runtime/security/recovery/configuration/measurement evidence; no inherited pass or invented operational threshold.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-NFR-06",
+      "cases": [
+        "T-39",
+        "T-42"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/mint_specification.py",
+          "gitBlob": "6d1d214fff6d4c9710c171ac44e0654be2ccbe48",
+          "bytes": 9317
+        },
+        {
+          "path": "exchange/nft_detail.py",
+          "gitBlob": "26aea8cefcaa4bc1c25ea800d16feae11ef529d4",
+          "bytes": 7520
+        },
+        {
+          "path": "exchange/operational_facts_codec.py",
+          "gitBlob": "da8b899977c724a3fd9bdef4a2b6587062d73853",
+          "bytes": 7831
+        }
+      ],
+      "requiredEvidence": "Applicable exact-source checks and separately observed runtime/security/recovery/configuration/measurement evidence; no inherited pass or invented operational threshold.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-NFR-07",
+      "cases": [
+        "T-27",
+        "T-38"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/observation_policy.py",
+          "gitBlob": "8cb8960232487efe78377f0eafdaf38f3ee0ae99",
+          "bytes": 3339
+        },
+        {
+          "path": "exchange/runtime_references.py",
+          "gitBlob": "6d61d49afcc7118dfc9fc80f4043b04ad3f95493",
+          "bytes": 2727
+        },
+        {
+          "path": "scenarios/manifest.py",
+          "gitBlob": "eef5565bab6988c4013f467194adb9d1004855bc",
+          "bytes": 15549
+        }
+      ],
+      "requiredEvidence": "Applicable exact-source checks and separately observed runtime/security/recovery/configuration/measurement evidence; no inherited pass or invented operational threshold.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-NFR-08",
+      "cases": [
+        "T-40"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/runtime_metrics.py",
+          "gitBlob": "2070e05a772c7eafc4f440e0d64cdc50ce3135e5",
+          "bytes": 7057
+        }
+      ],
+      "requiredEvidence": "Applicable exact-source checks and separately observed runtime/security/recovery/configuration/measurement evidence; no inherited pass or invented operational threshold.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-NFR-09",
+      "cases": [
+        "T-39",
+        "T-83"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "README.md",
+          "gitBlob": "59f8dbd87a182065c0c179d405b1a281e15d32d5",
+          "bytes": 9111
+        },
+        {
+          "path": "PRD.md",
+          "gitBlob": "264d37353099b51c13fd683e771fc35fbf829939",
+          "bytes": 97728
+        }
+      ],
+      "requiredEvidence": "Applicable exact-source checks and separately observed runtime/security/recovery/configuration/measurement evidence; no inherited pass or invented operational threshold.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-NFR-11",
+      "cases": [
+        "T-76"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/reference_provenance_page.py",
+          "gitBlob": "9b375803c7cbed882e122e2a182aa7ee4136c147",
+          "bytes": 5612
+        },
+        {
+          "path": "exchange/nft_detail.py",
+          "gitBlob": "26aea8cefcaa4bc1c25ea800d16feae11ef529d4",
+          "bytes": 7520
+        },
+        {
+          "path": "exchange/remint_review.py",
+          "gitBlob": "b6cbdf9e6a244ec26772ce16865bec032f1a9504",
+          "bytes": 6198
+        }
+      ],
+      "requiredEvidence": "Applicable exact-source checks and separately observed runtime/security/recovery/configuration/measurement evidence; no inherited pass or invented operational threshold.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-NFR-10",
+      "cases": [
+        "T-29"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/closed_rollback_conflict_checkpoint.py",
+          "gitBlob": "04e1e207acfa1c2559a465f6737ada10df306f75",
+          "bytes": 4105
+        },
+        {
+          "path": "exchange/receipt_fact_checkpoint.py",
+          "gitBlob": "8ba8291b9a5891b219a5f0f1e9de1aa6a1aaf1fb",
+          "bytes": 7601
+        },
+        {
+          "path": "exchange/serialized_exchange_access.py",
+          "gitBlob": "7ba485a0aea4e29e2d289eee25a78bcc4b6e9154",
+          "bytes": 3560
+        }
+      ],
+      "requiredEvidence": "Applicable exact-source checks and separately observed runtime/security/recovery/configuration/measurement evidence; no inherited pass or invented operational threshold.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-ARCH-01",
+      "cases": [
+        "T-46"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "docs/integrated-component-candidate.md",
+          "gitBlob": "3f7f649326d01bbe1825b70d2879c0c36e8cb81a",
+          "bytes": 4727
+        },
+        {
+          "path": "exchange/receipt_task_projection.py",
+          "gitBlob": "b1ff6392bf83f937b7c873e61510e2476b2acf8d",
+          "bytes": 4052
+        },
+        {
+          "path": "exchange/original_task_journal_reader.py",
+          "gitBlob": "8f04b0b6e9a94fa506177463c9311c5e4fce9608",
+          "bytes": 6347
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-ARCH-02",
+      "cases": [
+        "T-47"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/registration_source_workbench.py",
+          "gitBlob": "f1627ee2efa2c3f94bd720427c27796039f45da0",
+          "bytes": 6978
+        },
+        {
+          "path": "exchange/registration.py",
+          "gitBlob": "7f8efacb997c1c3435cd849064e12e406a832e5f",
+          "bytes": 10789
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-ARCH-03",
+      "cases": [
+        "T-47",
+        "T-84"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/registration_source_workbench.py",
+          "gitBlob": "f1627ee2efa2c3f94bd720427c27796039f45da0",
+          "bytes": 6978
+        },
+        {
+          "path": "exchange/recovered_workbench_ui.py",
+          "gitBlob": "8181dcae2cf2283cd4e0b20ed1126cbbcbb0c8f1",
+          "bytes": 2029
+        },
+        {
+          "path": "exchange/gas_confirmation_ui.py",
+          "gitBlob": "a3861854e0b9ec82332ff47f94e79049450466dc",
+          "bytes": 9233
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-ARCH-04",
+      "cases": [
+        "T-48"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "PRD.md",
+          "gitBlob": "264d37353099b51c13fd683e771fc35fbf829939",
+          "bytes": 97728
+        },
+        {
+          "path": "exchange/mint_specification.py",
+          "gitBlob": "6d1d214fff6d4c9710c171ac44e0654be2ccbe48",
+          "bytes": 9317
+        }
+      ],
+      "requiredEvidence": "Original authority, asset/declaration, registration/position, native journal and state/effect correlations, including conflicts and UNKNOWN; source presence is not installed execution evidence.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-DEMO-01",
+      "cases": [
+        "T-35",
+        "T-58"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/fixtures.py",
+          "gitBlob": "ad0ff89c7a367b1c30bfbe6906a0b1863ad15cb4",
+          "bytes": 18764
+        },
+        {
+          "path": "scenarios/demos.py",
+          "gitBlob": "87bfb45077aa130f715f260d1d16cd01ff43a433",
+          "bytes": 32292
+        }
+      ],
+      "requiredEvidence": "Six current demonstrations with exact-source steps and observations; independent usable UI, editable presentation and playable-film evidence with simulation/chain boundaries.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-DEMO-02",
+      "cases": [
+        "T-36"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/demo_package.py",
+          "gitBlob": "05f34578e83a48f369a260ea4300f76a2bc620af",
+          "bytes": 7745
+        },
+        {
+          "path": "scenarios/demos.py",
+          "gitBlob": "87bfb45077aa130f715f260d1d16cd01ff43a433",
+          "bytes": 32292
+        },
+        {
+          "path": "scenarios/evidence_index.py",
+          "gitBlob": "90f226fca2c6f5fbbbbbacf0c090443f62c36e74",
+          "bytes": 12642
+        }
+      ],
+      "requiredEvidence": "Six current demonstrations with exact-source steps and observations; independent usable UI, editable presentation and playable-film evidence with simulation/chain boundaries.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "EX-DEMO-03",
+      "cases": [
+        "T-37"
+      ],
+      "sourceAnchors": [
+        {
+          "path": "exchange/browser_materials.py",
+          "gitBlob": "a6c68b142a610e26a4287b90fbc44b8264c2baff",
+          "bytes": 9421
+        },
+        {
+          "path": "exchange/demo_materials.py",
+          "gitBlob": "69af370c490d45e28f7d62f7e8fb0c791bc593cd",
+          "bytes": 10760
+        },
+        {
+          "path": "docs/native-presentation-export.md",
+          "gitBlob": "e5965f07ed2bfe351bb374a27505cbfc37cbd6cb",
+          "bytes": 3942
+        },
+        {
+          "path": "docs/native-film-preparation.md",
+          "gitBlob": "d9e04a0799e7d8640f3acf39cb5c76a3cf251cbb",
+          "bytes": 3186
+        }
+      ],
+      "requiredEvidence": "Six current demonstrations with exact-source steps and observations; independent usable UI, editable presentation and playable-film evidence with simulation/chain boundaries.",
+      "semanticAcceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    }
+  ],
+  "cases": [
+    {
+      "id": "T-01",
+      "requirementIds": [
+        "EX-SCOPE-02",
+        "EX-INV-02",
+        "EX-MINT-01"
+      ],
+      "assertion": "One NFT is one whole receipt; preserve full receipt and underlying goods quantity; reject fractions and duplicate mappings.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-02",
+      "requirementIds": [
+        "EX-SCOPE-03"
+      ],
+      "assertion": "Initial equality and subsequent independent positions are accurate. ownerOf is an address, not a position; currentEntry latest admission and holderAsOf historical effective holder are distinct; future effectiveAt is not current effectiveness.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-03",
+      "requirementIds": [
+        "EX-INV-01",
+        "EX-INV-05"
+      ],
+      "assertion": "Record A to B to C to D in order, with a separate registration request for every hop.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-04",
+      "requirementIds": [
+        "EX-INV-03",
+        "EX-INV-05",
+        "EX-INV-11"
+      ],
+      "assertion": "Sequential EX/Oracle registration remains contiguous and replayable without skipping or a second receipt. Protocol versions are contiguous and effectiveAt strictly increases; same-holder confirmation is valid. Version, transfer count and holderPosition never substitute for one another.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-05",
+      "requirementIds": [
+        "EX-INV-04",
+        "EX-INV-05",
+        "EX-INV-11"
+      ],
+      "assertion": "Consume the same Oracle record idempotently; reject different content under the same identity; no second business receipt.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-06",
+      "requirementIds": [
+        "EX-AUTH-01",
+        "EX-AUTH-02",
+        "EX-AUTH-04"
+      ],
+      "assertion": "Reject absent, expired, revoked or altered asset, amount or chain-domain authorization.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-07",
+      "requirementIds": [
+        "EX-INV-01",
+        "EX-INV-06"
+      ],
+      "assertion": "Reject nonce replay; concurrent transfers to two buyers advance only one valid head.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-08",
+      "requirementIds": [
+        "EX-AUTH-01",
+        "EX-AUTH-03"
+      ],
+      "assertion": "Account switching, disconnect or lost session must not reuse the previous account's authorization.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-09",
+      "requirementIds": [
+        "EX-MATCH-01",
+        "EX-INV-12"
+      ],
+      "assertion": "Independently submitted bids and asks follow price priority, equal-price FIFO and best executable price; no queue jumping, altered limits or specified-counterparty substitution.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-10",
+      "requirementIds": [
+        "EX-INV-05",
+        "EX-SCOPE-09",
+        "EX-MINT-05"
+      ],
+      "assertion": "All three Oracle adapters satisfy one registration contract using mint-declared formats; holder follows the same receipt; simulated roles are labelled.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-11",
+      "requirementIds": [
+        "EX-SETTLE-01",
+        "EX-SETTLE-05"
+      ],
+      "assertion": "Principal uses the explicit selected member of the immutable NFT0 set through freeze/release/refund. Refuse missing/changed currency, conversion/substitution and insufficient/unknown selected-currency balance even with sufficient ETH gas. Freeze each liability separately before trade; no second principal debit after registration.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-12",
+      "requirementIds": [
+        "EX-SETTLE-02",
+        "EX-INV-03"
+      ],
+      "assertion": "Release eligible AB without waiting for C or D.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-13",
+      "requirementIds": [
+        "EX-SETTLE-01",
+        "EX-SETTLE-03"
+      ],
+      "assertion": "Keep every segment's price and funds separate; pending later funds cannot subsidize an earlier release.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-14",
+      "requirementIds": [
+        "EX-INV-05",
+        "EX-SETTLE-04"
+      ],
+      "assertion": "Reject wrong asset/segment/journal/network/source and bind chain/token contract/tokenId/registerId/verificationProfile/authority to the remote finalized record. Any account may relay valid proof; caller allowlists and ordinary signatures do not replace proof verification.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-15",
+      "requirementIds": [
+        "EX-SETTLE-04"
+      ],
+      "assertion": "Historical C and current D coexist correctly. Historical finality holds first.effectiveAt <= t < latest.effectiveAt; latest and later remain provisional. Earlier-than-first holderAsOf/entryAsOf revert and isFinalAsOf is false. Cancellation adds no finality; EX prefix completion is distinct.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-16",
+      "requirementIds": [
+        "EX-SETTLE-05",
+        "EX-INV-04",
+        "EX-NFR-04"
+      ],
+      "assertion": "Recover unknown RPC or execution results for release of already frozen funds idempotently; no new buyer-payment business failure, duplicate debit or gas charge.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-17",
+      "requirementIds": [
+        "EX-ROLLBACK-01",
+        "EX-ROLLBACK-05"
+      ],
+      "assertion": "When registration of B is refused and holder is A, refund the unregistered suffix and return owner to A; holder stays A and the NFT is not burned.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-18",
+      "requirementIds": [
+        "EX-ROLLBACK-02",
+        "EX-INV-03",
+        "EX-INV-08"
+      ],
+      "assertion": "When AB is registered and registration of C is refused, withdraw BC/CD only and return owner to effective holder B; keep registration and settled AB; never reset to issuer.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-19",
+      "requirementIds": [
+        "EX-GAS-01",
+        "EX-ROLLBACK-03",
+        "EX-SETTLE-06"
+      ],
+      "assertion": "Return each segment's unreleased principal to its original buyer; show actual gas and net proceeds with explicit units.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-20",
+      "requirementIds": [
+        "EX-ROLLBACK-04",
+        "EX-GAS-07",
+        "EX-GAS-10"
+      ],
+      "assertion": "Intermediate wallets with zero ordinary ETH do not change recovery duties or require serial wallet-by-wallet NFT return.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-21",
+      "requirementIds": [
+        "EX-GAS-02"
+      ],
+      "assertion": "One shared operation must not be charged in full to multiple segments.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-22",
+      "requirementIds": [
+        "EX-GAS-03"
+      ],
+      "assertion": "ETH is the sole gas asset. Zero/insufficient/unverified applicable ETH warns and refuses new trading even if price funds suffice; selected-currency shortage also refuses. Original sufficient frozen gas remains usable for its approved recovery without second prepayment or double counting.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-23",
+      "requirementIds": [
+        "EX-INV-04",
+        "EX-INV-07",
+        "EX-TIME-03"
+      ],
+      "assertion": "Resume crashed rollback without duplicate refunds/gas or revival of failed segments. cancelSettlement is not refund/owner return/registration reversal; enforce recorded initiator and strict protocol deadline independently. Gap closure cannot fabricate refusal or completion.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-24",
+      "requirementIds": [
+        "EX-TIME-01",
+        "EX-TIME-02",
+        "EX-TIME-03"
+      ],
+      "assertion": "Honor mint time units and boundaries; refuse new trades after cutoff; overdue unregistered suffix fails and owner returns to effective holder; preserve registered and settled prefix.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-25",
+      "requirementIds": [
+        "EX-SCOPE-08",
+        "EX-EXIT-01",
+        "EX-INV-08",
+        "EX-SCOPE-12"
+      ],
+      "assertion": "EX transfers the bill of lading without physical collection, transport, warehouse exit or collection-driven burn. Terms remain readable; owner ahead of holder may resell. Authorized atomic holder remint is separately covered by T63-68.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-26",
+      "requirementIds": [
+        "EX-NFR-05"
+      ],
+      "assertion": "Separate simulated/real, pending/complete, owner/holder, NONE/OPEN/ADMITTED/CANCELLED/SUPERSEDED, historical provisional/final, Oracle application refusal, admission and funds. No protocol REJECTED or overall-complete inference from NO/green.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-27",
+      "requirementIds": [
+        "EX-NFR-01",
+        "EX-NFR-07"
+      ],
+      "assertion": "Record exact source/config/run/commands/fixtures for GitHub Actions CI or the project-supported Linux configuration, as applicable. CI validates only checks actually run; it does not prove deployment or live-chain acceptance.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-28",
+      "requirementIds": [
+        "EX-NFR-03",
+        "EX-NFR-04",
+        "EX-SETTLE-05"
+      ],
+      "assertion": "On duplicate consumption, restart or unknown freeze/release/refund, query before retry; never duplicate funds or gas actions.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-29",
+      "requirementIds": [
+        "EX-SCOPE-07",
+        "EX-NFR-10"
+      ],
+      "assertion": "Reject rollback without sufficient authority; no arbitrary confiscation or rewriting a finalized prefix.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-30",
+      "requirementIds": [
+        "EX-INV-10",
+        "EX-NFR-03"
+      ],
+      "assertion": "Recover reorg, duplicate logs, RPC timeout and reordered events without early or repeated release.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-31",
+      "requirementIds": [
+        "EX-INV-04",
+        "EX-SETTLE-03"
+      ],
+      "assertion": "Release and refund are mutually exclusive; reconcile segment principal, fees and final balances.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-32",
+      "requirementIds": [
+        "EX-EXIT-02",
+        "EX-EXIT-03",
+        "EX-SCOPE-09",
+        "EX-REMINT-04"
+      ],
+      "assertion": "Trace bill-of-lading terms, original Oracle registration, holder and funds. Physical collection or collection-driven destruction is not completion; authorized remint separately preserves old/new NFT links and existing evidence.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-33",
+      "requirementIds": [
+        "EX-EXIT-03",
+        "EX-ROLLBACK-05"
+      ],
+      "assertion": "Reject duplicate valid mappings, transfer replay and repeated funds actions; failed old segments stay dead, valid NFTs can start a new chain, history remains.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-34",
+      "requirementIds": [
+        "EX-AUTH-01",
+        "EX-AUTH-05"
+      ],
+      "assertion": "Agent actions already authorized in the wallet need no extra platform step approval; refuse out-of-scope actions.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-35",
+      "requirementIds": [
+        "EX-DEMO-01",
+        "EX-SCOPE-11",
+        "EX-GAS-09"
+      ],
+      "assertion": "Sepolia 11155111 only; fixture NFT0 immutably permits the verified designated test PYUSD and each scenario order explicitly selects it; gas is test ETH. Refuse wrong chain/asset/NFT0 selection before sending, without currency substitution, conversion or Hoodi.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-36",
+      "requirementIds": [
+        "EX-DEMO-02"
+      ],
+      "assertion": "All six scenarios have matching actual transactions, simulated registration evidence, UI states and final assertions.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-37",
+      "requirementIds": [
+        "EX-DEMO-03"
+      ],
+      "assertion": "Demo, PPT and playable film consistently label real test-chain actions, simulated roles and animation; no implied institutional cooperation.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-38",
+      "requirementIds": [
+        "EX-NFR-07"
+      ],
+      "assertion": "Required CI belongs to exact head; actual deployed commit matches; read back artifact bytes and hashes.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-39",
+      "requirementIds": [
+        "EX-NFR-06",
+        "EX-NFR-09"
+      ],
+      "assertion": "Verify that receipt-access secrets and wallet private keys are absent from product outputs, logs, chain data and NFT metadata; product documentation is in English.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-40",
+      "requirementIds": [
+        "EX-NFR-05",
+        "EX-NFR-08"
+      ],
+      "assertion": "Record real resource and performance baselines and diagnosable errors; no invented production SLA.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-41",
+      "requirementIds": [
+        "EX-MINT-01",
+        "EX-MINT-02",
+        "EX-MINT-04",
+        "EX-MINT-06"
+      ],
+      "assertion": "Mint complete asset-specific receipt data, terms, both cutoffs and time semantics; reject missing required fields; do not copy unrelated commodity rules.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-42",
+      "requirementIds": [
+        "EX-MINT-03",
+        "EX-NFR-06"
+      ],
+      "assertion": "Encrypt receipt-access secrets only in controlled off-chain storage; NFT has only opaque nonsecret mapping; no wallet private keys held by EX.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-43",
+      "requirementIds": [
+        "EX-GAS-04",
+        "EX-GAS-05",
+        "EX-GAS-06"
+      ],
+      "assertion": "Before trade show both cap and median in ETH and contemporaneous USD with source, time, scope and buyer confirmation; unavailable quote, FX or confirmation blocks submission; no fake zero.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-44",
+      "requirementIds": [
+        "EX-ROLLBACK-05",
+        "EX-INV-08",
+        "EX-TIME-01"
+      ],
+      "assertion": "Rollback aligns owner only to effective holder; unexpired valid NFT may trade again, expired NFT stays closed; ordinary owner-ahead-of-holder resale remains allowed.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-45",
+      "requirementIds": [
+        "EX-SCOPE-09",
+        "EX-MINT-05",
+        "EX-INV-11",
+        "EX-TIME-03"
+      ],
+      "assertion": "The voucher is the one receipt; Oracle alone ingests/verifies/writes it and holder follows it. No EX raw intake, independent holder writer, second receipt or late wait. Proof validates the accepted profile's remote finalized record, not legal title/source honesty/goods/payment; expectedHolder/initiator do not prove admitted holder.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-46",
+      "requirementIds": [
+        "EX-ARCH-01"
+      ],
+      "assertion": "Align ArtFi whole-artwork and EX backend receipt, authorization, Oracle, journal, freeze/release, rollback and audit contracts; provide difference map and shared regression evidence.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-47",
+      "requirementIds": [
+        "EX-ARCH-02",
+        "EX-ARCH-03"
+      ],
+      "assertion": "Direct, electronic and intermediary registration each has an operable UI and source route into one trading/settlement backend; verify route, Oracle, chain and UI together; placeholder buttons do not pass.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-48",
+      "requirementIds": [
+        "EX-ARCH-04",
+        "EX-SCOPE-02",
+        "EX-MATCH-02"
+      ],
+      "assertion": "Backend and all sources retain whole artwork/receipt semantics; no charity fractions, shares or newly invented spot/futures/leverage modes.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-49",
+      "requirementIds": [
+        "EX-GAS-06",
+        "EX-GAS-04"
+      ],
+      "assertion": "Recompute P50 from real applicable algorithm, sample population/count/window/time and source; refuse fabricated or unrelated samples and single-point or cap-average substitutes; estimate is not a guarantee.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-50",
+      "requirementIds": [
+        "EX-GAS-05",
+        "EX-INV-04"
+      ],
+      "assertion": "Buyer confirmation binds quote version, scope and cap; send/retry stays within it and wallet grant; exceeding or unprovable cap stops for fresh confirmation; splitting, retry or quote replacement cannot reset aggregate cap.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-51",
+      "requirementIds": [
+        "EX-GAS-07",
+        "EX-GAS-08",
+        "EX-GAS-10",
+        "EX-INV-04"
+      ],
+      "assertion": "Freeze the confirmed maximum gas amount separately from principal before sending; insufficient or unknown freeze stops; debit actual consumption, unfreeze unused balance, keep failed-tx gas charged and process duplicates once.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-52",
+      "requirementIds": [
+        "EX-GAS-09",
+        "EX-GAS-10",
+        "EX-INV-13"
+      ],
+      "assertion": "Zero ETH warns and refuses a new trade despite sufficient NFT0 principal or other tokens; no transaction signing/broadcast, valid trade/registration task or owner advance. UI/API/Agent agree.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-53",
+      "requirementIds": [
+        "EX-GAS-05",
+        "EX-GAS-07",
+        "EX-GAS-10"
+      ],
+      "assertion": "Check available ETH at zero, one wei below the maximum, exactly the maximum and above it, after other reservations. Sufficient P50 but insufficient cap refuses; sufficient funds proceed only when all other conditions hold.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-54",
+      "requirementIds": [
+        "EX-GAS-04",
+        "EX-GAS-07",
+        "EX-GAS-08",
+        "EX-GAS-09",
+        "EX-SCOPE-11"
+      ],
+      "assertion": "Gas quote confirmation, freeze, debit and unused unfreeze settle in ETH; USD is display only. Refuse PYUSD/WETH/other gas assets, conversion, non-ETH-principal gas deductions and subsidy bypass. Preserve cap/median and consumption idempotence.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-55",
+      "requirementIds": [
+        "EX-GAS-10",
+        "EX-AUTH-02",
+        "EX-AUTH-04",
+        "EX-INV-04"
+      ],
+      "assertion": "Recheck changed account/chain, concurrent ETH use, invalid freeze, old-signature replay and retries before signing/broadcast. Direct backend calls cannot bypass; prebroadcast refusal cannot invent consumed gas.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-56",
+      "requirementIds": [
+        "EX-ROLLBACK-04",
+        "EX-GAS-05",
+        "EX-GAS-07",
+        "EX-GAS-08"
+      ],
+      "assertion": "Sufficient original frozen ETH for the same approved rollback obligation remains usable with zero unfrozen cash. No second prepayment, early unfreeze or cancelled rollback. A remaining shortage uses the original confirmed replenishment flow; no automatic exchange/subsidy.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-57",
+      "requirementIds": [
+        "EX-SCOPE-11",
+        "EX-MINT-07",
+        "EX-MATCH-01",
+        "EX-SETTLE-06",
+        "EX-INV-13"
+      ],
+      "assertion": "Each order selects one immutable NFT0-allowed currency; both intents and leg freeze/release/refund match it. Wrong currency refuses consistently across three sources and UI/API/Agent, without conversion or substitution.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-58",
+      "requirementIds": [
+        "EX-MINT-07",
+        "EX-SCOPE-11",
+        "EX-DEMO-01"
+      ],
+      "assertion": "Absent, conflicting, changed or unverifiable NFT0 currencies or an order without explicit selection refuse. No ETH/PYUSD default or balance-based automatic choice. PYUSD fixtures require mint-time membership and explicit selection.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-59",
+      "requirementIds": [
+        "EX-SETTLE-06",
+        "EX-SETTLE-07",
+        "EX-GAS-07",
+        "EX-GAS-08",
+        "EX-INV-13"
+      ],
+      "assertion": "When selected principal is ETH, independently cover and account for principal and maximum gas. Refuse coverage of only one or counting the same balance/freeze twice. Reconcile principal refund and unused gas separately without restoring consumed gas.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-60",
+      "requirementIds": [
+        "EX-MINT-07",
+        "EX-SCOPE-11",
+        "EX-INV-13",
+        "EX-REMINT-03"
+      ],
+      "assertion": "Mint-time one-currency and multiple-currency sets are recorded/read correctly. No later UI/API/Agent/contract/admin path can add, remove or replace the same NFT set. Valid remint creates a new NFT while atomically burning the old one.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-61",
+      "requirementIds": [
+        "EX-SETTLE-07",
+        "EX-SETTLE-06",
+        "EX-GAS-07",
+        "EX-INV-13"
+      ],
+      "assertion": "Warn and refuse selected-currency principal at zero or one smallest unit short before signing/broadcast, despite sufficient other currencies/gas. Exact sufficiency may proceed under other conditions. Exclude concurrent reservations; reuse only this operation own effective freeze.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-62",
+      "requirementIds": [
+        "EX-MATCH-01",
+        "EX-SCOPE-11",
+        "EX-SETTLE-06",
+        "EX-INV-12"
+      ],
+      "assertion": "For multiple allowed currencies, both orders select the same currency; verify price priority/FIFO/best executable price independently inside each currency. No raw cross-currency numeric comparison, FX ranking, mixed principal sum or automatic conversion.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-63",
+      "requirementIds": [
+        "EX-REMINT-01",
+        "EX-AUTH-01",
+        "EX-AUTH-04"
+      ],
+      "assertion": "A holder possessing the original NFT with holder equal to owner may remint under valid existing wallet authority. Refuse non-holder, no possession, unequal owner, admin-only identity and invalid/revoked/replayed authority.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-64",
+      "requirementIds": [
+        "EX-REMINT-02",
+        "EX-INV-14"
+      ],
+      "assertion": "Successful remint atomically burns the old NFT and validly mints the new one. Failure of either leaves no one-sided asset loss or two simultaneously valid bills; retain same-operation evidence.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-65",
+      "requirementIds": [
+        "EX-REMINT-03",
+        "EX-MINT-07",
+        "EX-GAS-09"
+      ],
+      "assertion": "Before new mint holder may add/remove/change new terms including allowed currencies; preserve old terms/history. New minted currencies become immutable. New terms cannot bypass ETH gas, no-conversion, Oracle or authority boundaries.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-66",
+      "requirementIds": [
+        "EX-REMINT-05",
+        "EX-INV-04",
+        "EX-INV-14"
+      ],
+      "assertion": "Remint concurrent with trade/registration atomically rechecks possession and holder equal to owner, yielding one valid result. Duplicate/RPC-timeout/failed/UNKNOWN requests reconcile and recover idempotently, never repeating burn/mint/debit.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-67",
+      "requirementIds": [
+        "EX-REMINT-04",
+        "EX-SCOPE-12",
+        "EX-INV-14"
+      ],
+      "assertion": "Read old/new NFT links both ways, term differences and original registration/trade/funds evidence. A burned predecessor cannot trade/remint again. New terms cannot delete or rewrite completed history.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-68",
+      "requirementIds": [
+        "EX-REMINT-01",
+        "EX-INV-08",
+        "EX-SCOPE-03"
+      ],
+      "assertion": "Possession and holder equality establish the confirmed EX remint business predicate with existing authority; no cleanup/refund/unfreeze/migration approval. Address equality is not an ERC proof of no gap/escrow/tasks and cannot block ordinary owner-ahead-of-holder resale.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-69",
+      "requirementIds": [
+        "EX-SCOPE-01",
+        "EX-SCOPE-13"
+      ],
+      "assertion": "Market is an ordinary commodity spot-intermediary infrastructure DEMO with crypto/commodity styling, BTC/ETH and soybean/iron-ore scenes and simulation labels; no real financial or institutional endorsement.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-70",
+      "requirementIds": [
+        "EX-SCOPE-14"
+      ],
+      "assertion": "Both crypto and warehouse NFTs are selectable collateral. Do not invent valuation/LTV/financing/liquidation/returns; undefined mechanisms affect only dependent actions while core spot work continues.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-71",
+      "requirementIds": [
+        "EX-SCOPE-15",
+        "EX-PRICE-01",
+        "EX-PRICE-02"
+      ],
+      "assertion": "Continuously read/update actual external spot sources with traceable successful reads and source changes. Separate source/fetch times faithfully, preserving precision; static designs/manual values cannot pass actual integration.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-72",
+      "requirementIds": [
+        "EX-PRICE-02",
+        "EX-PRICE-03",
+        "EX-PRICE-04"
+      ],
+      "assertion": "Show provider/currency/unit/specification/market/priceType/as-of/fetch/delay. Reproduce stale/unavailable/parse failure/recovery honestly without fake zero, per-second-source claims or silent futures/unit substitution.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-73",
+      "requirementIds": [
+        "EX-UI-01"
+      ],
+      "assertion": "Each NFT has independent quote/status and correct click/keyboard/back/switch detail navigation. Only supported successful openGapOf nonzero/zero bytes32 maps to openGapOF=YES red/NO green. Unsupported/unknown/loading/error never maps to NO/green, another NFT's state or inferred positions.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-74",
+      "requirementIds": [
+        "EX-UI-04",
+        "EX-MINT-01",
+        "EX-EXIT-01"
+      ],
+      "assertion": "Show all business conditions completely in an identity-excluding projection without summary or changed obligations. Keep unchanged complete private originals for hash/signature checks; never render identity-bearing originals or claim projection byte identity. Missing/placeholders fail completeness; locale explanation is informative.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-75",
+      "requirementIds": [
+        "EX-UI-02"
+      ],
+      "assertion": "Bind current/owner/holder independently to actual records on one timeline; 8/7/1 is a fixture. Cover equality, divergence, long chains and unknown values without hardcoded offsets or merged markers.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-76",
+      "requirementIds": [
+        "EX-UI-02",
+        "EX-NFR-11"
+      ],
+      "assertion": "Every signature status binds its position/transfer, role, payload, applicable scheme version/domain/nonce or equivalent and verification. Distinguish unknown/unsigned/pending/signed and transaction/order/registration-proof/admission; never infer signing from alignment, chain length or proof success or move historic signatures to current owner.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-77",
+      "requirementIds": [
+        "EX-UI-03",
+        "EX-SCOPE-17"
+      ],
+      "assertion": "No wallet names or full/truncated addresses across cards/details/terms/embeddings/popups/hover/title/accessibility/download/copy. Raw documents/JSON/metadata cannot leak identities. Backend originals/hash/signature/authority stay intact; add no identity permission prompt.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-78",
+      "requirementIds": [
+        "EX-UI-05",
+        "EX-SCOPE-03",
+        "EX-REMINT-01"
+      ],
+      "assertion": "openGapOF=YES red and owner!=holder do not automatically block ordinary transfers. Independent deadline/principal/gas/authority reasons remain accurate; remint qualification remains separate.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-79",
+      "requirementIds": [
+        "EX-SCOPE-16",
+        "EX-MATCH-01",
+        "EX-MATCH-02"
+      ],
+      "assertion": "Market makers and ordinary participants follow same-currency price/FIFO without identity priority, selected-counterparty bypass or default AMM/rebate/incentive/return promises.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-80",
+      "requirementIds": [
+        "EX-SCOPE-18",
+        "EX-I18N-01",
+        "EX-I18N-02",
+        "EX-I18N-03"
+      ],
+      "assertion": "All six candidate languages cover markets/cards/terms/timeline/unknown/errors/principal/gas without mixed language or clipping. Preserve protocol identifiers and exact openGapOF=YES/NO with YES red/NO green; unknown stays unknown and original signed language remains unchanged.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-81",
+      "requirementIds": [
+        "EX-UI-06",
+        "EX-AUTH-01",
+        "EX-GAS-10"
+      ],
+      "assertion": "No wallet asset/account/security/validator/Agent-permission-management routes; per-trade authority, balance/freeze and gas confirmation remain enforced.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-82",
+      "requirementIds": [
+        "EX-PRICE-04",
+        "EX-MATCH-01",
+        "EX-SCOPE-11"
+      ],
+      "assertion": "Separate external references, simulated NFT quotes/trades and real chain evidence. A per-tonne reference cannot replace whole-receipt price or trigger FX-based cross-currency matching/payment/gas conversion.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-83",
+      "requirementIds": [
+        "EX-NFR-09"
+      ],
+      "assertion": "Documents/design/code/runtime have independent identities. v1.4 cannot inherit a historical loader pass or clickable design as runtime acceptance; preserve T-01..68, six stages/demos and the current product edition.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    },
+    {
+      "id": "T-84",
+      "requirementIds": [
+        "EX-ARCH-03",
+        "EX-UI-01",
+        "EX-UI-04",
+        "EX-PRICE-03",
+        "EX-I18N-02"
+      ],
+      "assertion": "Responsive market/details navigation and loading/error/empty/long-chain states recover; all three sources share real states and six-language rules. Missing feed/original terms stays explicit, never overall-complete.",
+      "acceptance": "NOT_ESTABLISHED_BY_THIS_MAP"
+    }
+  ],
+  "fullProductAcceptance": "OPEN",
+  "historicalPassInherited": false
+}

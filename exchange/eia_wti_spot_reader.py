@@ -135,9 +135,27 @@ class EIAWTISpotReader:
                     if (status != 200 or response.headers.get_content_type() != "text/html"
                             or response.headers.get("Content-Encoding", "identity") != "identity"):
                         raise SpotSourceUnavailable("SPOT_SOURCE_RESPONSE_REFUSED")
+                    # Hash/cache only a complete, unambiguous representation.
+                    # The original HTTP port decodes transfer chunk framing;
+                    # Content-Length still describes the representation bytes.
+                    lengths = response.headers.get_all("Content-Length", [])
+                    transfers = response.headers.get_all("Transfer-Encoding", [])
+                    if (len(lengths) > 1 or len(transfers) > 1 or (lengths and transfers)
+                            or (transfers and transfers[0].lower() != "chunked")):
+                        raise SpotSourceUnavailable("SPOT_SOURCE_FRAMING_REFUSED")
+                    expected = None
+                    if lengths:
+                        text = lengths[0]
+                        if re.fullmatch(r"[0-9]{1,10}", text) is None:
+                            raise SpotSourceUnavailable("SPOT_SOURCE_FRAMING_REFUSED")
+                        expected = int(text)
+                        if expected > LIMIT:
+                            raise SpotSourceUnavailable("SPOT_SOURCE_RESPONSE_TOO_LARGE")
                     raw = response.read(LIMIT + 1)
                     if type(raw) is not bytes or len(raw) > LIMIT:
                         raise SpotSourceUnavailable("SPOT_SOURCE_RESPONSE_TOO_LARGE")
+                    if expected is not None and len(raw) != expected:
+                        raise SpotSourceUnavailable("SPOT_SOURCE_LENGTH_DIFFERS")
                     parsed = parse_eia_wti_spot_table(raw)
                     etag = self._validator(response.headers.get("ETag"))
                     modified = self._validator(response.headers.get("Last-Modified"))
@@ -150,7 +168,8 @@ class EIAWTISpotReader:
                 self._next = max(self._next, self._monotonic() + self._failure)
                 allowed = {"SPOT_SOURCE_VALIDATOR_REFUSED", "SPOT_SOURCE_ORIGIN_DIFFERS",
                            "SPOT_SOURCE_HTTP_DEFERRED", "SPOT_SOURCE_CACHE_ABSENT",
-                           "SPOT_SOURCE_RESPONSE_REFUSED", "SPOT_SOURCE_RESPONSE_TOO_LARGE"}
+                           "SPOT_SOURCE_RESPONSE_REFUSED", "SPOT_SOURCE_RESPONSE_TOO_LARGE",
+                           "SPOT_SOURCE_FRAMING_REFUSED", "SPOT_SOURCE_LENGTH_DIFFERS"}
                 code = str(error) if isinstance(error, SpotSourceUnavailable) and str(error) in allowed else "SPOT_SOURCE_READ_UNAVAILABLE"
                 self._last = {"status": "unavailable", "code": code,
                               "retainedSource": self._cached is not None}

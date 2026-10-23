@@ -1,5 +1,6 @@
 """Optional HTTP control for one original, already bound remint proposal."""
 from copy import deepcopy
+from dataclasses import asdict
 import hashlib
 from html import escape
 import re
@@ -10,7 +11,7 @@ from .checkpointed_operation import CheckpointedOperationBridge
 from .durable_operation import DurableNativeOutcomeUnknown
 from .mint_specification_codec import encode_mint_facts
 from .remint_draft_execution import invoke_draft_remint
-from .remint_draft_workbench import RemintDraftEditorBinding, RemintDraftUnavailable
+from .remint_draft_workbench import RemintDraftEditorBinding, RemintDraftUnavailable, WORDS as DRAFT_WORDS, _business_text
 from .remint_review_workbench import RemintReviewWorkbenchServer
 from .remint_receipt_workbench import WORDS as RESULT_WORDS
 
@@ -59,6 +60,53 @@ def _proposal(old, replacement):
     return hashlib.sha256(len(before).to_bytes(8, "big") + before + after).hexdigest()
 
 
+
+def _business_projection(specification):
+    """Complete public business terms; exclude technical NFT and access identities."""
+    receipt = specification.receipt
+    return {
+        "template": asdict(specification.template),
+        "voucher format": asdict(specification.voucher_format),
+        "receipt": {
+            "commodity name": receipt.commodity_name,
+            "commodity quantity": receipt.commodity_quantity,
+            "commodity unit": receipt.commodity_unit,
+            "receipt number": receipt.receipt_number,
+            "registration path": receipt.registration_path,
+            "trade stop at": receipt.trade_stop_at,
+            "allowed price currencies": receipt.allowed_price_currencies,
+            "currency reference": receipt.nft0_currency_reference,
+        },
+        "bill of lading number": specification.bill_of_lading_number,
+        "issuer": specification.issuer,
+        "registrar": specification.registrar,
+        "storage location": specification.storage_location,
+        "commodity attributes": dict(specification.public_attributes),
+        "bill terms": specification.bill_terms,
+        "registration deadline": specification.registration_deadline,
+        "registration comparison": specification.registration_comparison,
+    }
+
+
+def _render_business(value):
+    if isinstance(value, dict):
+        return "<dl>" + "".join("<dt>" + escape(_business_text(key).replace("_", " "))
+            + "</dt><dd>" + _render_business(item) + "</dd>"
+            for key, item in value.items()) + "</dl>"
+    if isinstance(value, (tuple, list)):
+        return "<ul>" + "".join("<li>" + _render_business(item) + "</li>"
+            for item in value) + "</ul>"
+    if isinstance(value, str):
+        value = _business_text(value)
+    elif value is None:
+        value = ""
+    elif type(value) is int:
+        value = str(value)
+    else:
+        raise ValueError("public business projection value refused")
+    return "<pre>" + escape(value) + "</pre>"
+
+
 class RemintDraftActionBinding:
     """Original host supplies one existing operation and its reviewed options."""
     def __init__(self, bridge, editor, binding, expected_revision,
@@ -94,7 +142,12 @@ class RemintDraftActionBinding:
                 read_currency_choices=lambda receipt_id: replacement.receipt.allowed_price_currencies)
             body = frozen.render(csrf, locale)
         words = WORDS[locale]
-        return ('<p>' + escape(words[2]) + '</p><fieldset disabled>' + body + '</fieldset>'
+        labels = DRAFT_WORDS[locale]
+        complete = ''.join('<section data-bound-business="' + side + '"><h2>'
+            + escape(title) + '</h2>' + _render_business(_business_projection(specification))
+            + '</section>' for side, title, specification in
+            (("original", labels[1], old), ("replacement", labels[2], replacement)))
+        return ('<p>' + escape(words[2]) + '</p>' + complete + '<fieldset disabled>' + body + '</fieldset>'
             + '<form method="post" action="' + PATH + '" autocomplete="off">'
             + '<input type="hidden" name="csrf" value="' + escape(csrf, quote=True) + '">'
             + '<input type="hidden" name="lang" value="' + locale + '">'

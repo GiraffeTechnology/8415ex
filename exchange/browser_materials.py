@@ -167,3 +167,92 @@ async def finish_video(captured, read_approved_bytes):
         "collectedUTC":datetime.now(timezone.utc).isoformat(),"playbackQA":"NOT_RUN",
         "contentQA":"NOT_RUN","meaning":"collected bytes from the original page video handle, not final acceptance"}
     return result
+
+
+async def capture_market(page, origin, source):
+    """Capture the current read-only catalogue and selectors in all six locales.
+
+    Reuse the host's permitted Page and loopback origin. No simulation form,
+    native command, provider refresh or original receipt is needed or invoked.
+    A complete market capture is NOT a complete native/demo capture.
+    """
+    from .nft_detail_page import LOCALES
+
+    origin = checked_origin(origin)
+    source = checked_identity(source)
+    started = datetime.now(timezone.utc).isoformat()
+    files = {}
+    captures = []
+    total = 0
+
+    def retain(name, data, maximum):
+        nonlocal total
+        if type(data) is not bytes or not 1 <= len(data) <= maximum:
+            raise ValueError("bounded nonempty market capture bytes required")
+        total += len(data)
+        if total > MAX_TOTAL:
+            raise ValueError("market browser material total limit exceeded")
+        files[name] = data
+
+    def location(url, path, query):
+        actual = urlsplit(url)
+        if ((actual.scheme + "://" + actual.netloc) != origin
+                or actual.path != path or actual.query != query or actual.fragment):
+            raise ValueError("market capture navigated away from the selected entry")
+
+    async def health(name):
+        response = await page.request.get(origin + "/healthz")
+        if response.status != 200:
+            raise ValueError("market runtime health observation unavailable")
+        location(response.url, "/healthz", "")
+        raw = await response.body()
+        if type(raw) is not bytes or not 1 <= len(raw) <= 262144:
+            raise ValueError("bounded market health bytes required")
+        try:
+            value = json.loads(raw)
+        except (ValueError, UnicodeError, RecursionError):
+            raise ValueError("invalid market health observation") from None
+        if (type(value) is not dict
+                or value.get("schema") != "8415ex-http-health-observation/1"
+                or value.get("httpProcess") != "serving"
+                or not same_source(value.get("declaredSource"), source)):
+            raise ValueError("market runtime source differs from requested capture")
+        retain("evidence/" + name + ".json", raw, 262144)
+
+    await health("market-start")
+    for locale in LOCALES:
+        for entry in ("market", "collateral", "scenarios"):
+            path = "/" + entry
+            query = urlencode({"lang": locale})
+            url = origin + path + "?" + query
+            response = await page.goto(url, wait_until="domcontentloaded")
+            if response is None or response.status != 200:
+                raise RuntimeError("market browser entry unavailable: " + entry)
+            location(response.url, path, query)
+            location(page.url, path, query)
+            await page.locator("main, body").first.wait_for(state="visible")
+            png = await page.screenshot(full_page=True, type="png")
+            # Recheck after awaiting visibility and capture. A redirect to a
+            # different local page is not evidence of the requested selector.
+            location(page.url, path, query)
+            if type(png) is not bytes or not png.startswith(b"\x89PNG\r\n\x1a\n"):
+                raise ValueError("market browser screenshot is not PNG")
+            name = "screens/" + entry + "-" + locale + ".png"
+            retain(name, png, MAX_IMAGE)
+            captures.append({"entry": entry, "locale": locale, "url": page.url,
+                "observedUTC": datetime.now(timezone.utc).isoformat(),
+                "HTTP": response.status, "path": name,
+                "pngSHA256": hashlib.sha256(png).hexdigest()})
+    await health("market-end")
+    manifest = {"schema": "8415ex-market-browser-materials/1", "source": source,
+        "startedUTC": started, "finishedUTC": datetime.now(timezone.utc).isoformat(),
+        "contentKind": "ACTUAL_BROWSER_SCREENSHOTS_OF_READ_ONLY_MARKET",
+        "captures": captures,
+        "files": {key: {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+                  for key, data in sorted(files.items())},
+        "sourceIdentity": "DECLARED_ONLY",
+        "independentVisualQA": "NOT_RUN", "languageRendering": "NOT_VERIFIED",
+        "nativeReceiptAndSixDemos": "NOT_RUN", "providerSigningChain": "NOT_RUN",
+        "deploymentAcceptance": "NOT_RUN", "finalProductAcceptance": "NOT_RUN",
+        "meaning": "Actual market page observations only; not native execution or independent acceptance"}
+    return {"files": files, "manifest": manifest}
