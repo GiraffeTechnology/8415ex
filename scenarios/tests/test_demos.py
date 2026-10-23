@@ -136,12 +136,13 @@ class ScenarioContent(unittest.TestCase):
                 self.assertNotEqual(value, str(price - GAS["trade"]),
                                     "a net across two units is not an amount")
 
-    def test_demo_03_leaves_the_fee_deduction_policy_unexecuted(self):
+    def test_demo_03_keeps_actual_eth_accounting_unexecuted_without_a_new_policy_gate(self):
         scenario = self.by_id["DEMO-03"]
         owed = [e for e in scenario["expectations"]
-                if e["outcome"] == "not-run" and "fee deduction" in e["name"]]
+                if e["outcome"] == "not-run" and "actual ETH consumption" in e["name"]]
         self.assertEqual(len(owed), 1)
-        self.assertIn("D-04", owed[0]["detail"])
+        self.assertIn("original source-bound reservation", owed[0]["detail"])
+        self.assertNotIn("not decided", owed[0]["detail"])
         self.assertEqual(owed[0]["observed"], "NOT_RUN")
         self.assertTrue(any("netToOriginalBuyer" in note for note in scenario["notes"]))
 
@@ -151,7 +152,7 @@ class ScenarioContent(unittest.TestCase):
         self.assertIn("payment to A are unchanged", names)
         self.assertIn("finalized prefix is refused", names)
 
-    def test_demo_05_covers_the_shortfall_without_disposal(self):
+    def test_demo_05_covers_prearranged_return_without_disposal(self):
         names = self._names("DEMO-05")
         self.assertIn("no custody, forced sale or liquidation", names)
         self.assertIn("needs no intermediate wallet gas", names)

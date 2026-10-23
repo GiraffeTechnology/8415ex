@@ -294,8 +294,9 @@ def demo_03(recorder):
     # Principal and gas are two different obligations in two different units.
     # The refund returns the whole principal in the quote asset; the gas figure
     # is a fixture count of gas units borne by that leg's buyer. Subtracting one
-    # from the other would state a net in no unit at all, and whether a fee is
-    # deducted from a refund at all is open decision D-04.
+    # from the other would state a net in no unit at all. Principal returns in
+    # full; actual ETH gas debit and unused-prepayment unfreeze are separate.
+    # D-04 only leaves allocation of a genuinely shared operation undecided.
     funds = _segment_funds(exchange)
     recorder.expect("each refund returns the whole principal in the quote asset", ("T-19",),
                     {0: (str(PRICES["AB"]), F.QUOTE_ASSET, True),
@@ -313,10 +314,11 @@ def demo_03(recorder):
     recorder.expect("no quoted principal is reduced by a gas figure", ("T-19", "T-21"),
                     {0: str(PRICES["AB"]), 1: str(PRICES["BC"]), 2: str(PRICES["CD"])},
                     {index: funds[index]["principal"] for index in (0, 1, 2)})
-    recorder.not_run("actual fee deduction from a refunded principal", ("T-19", "T-21"),
-                     "D-04 is open: whether a real fee is deducted from a refund, in which "
-                     "asset, and who bears it, is not decided, so no deduction is modelled "
-                     "and no net across the two units is asserted here")
+    recorder.not_run("actual ETH consumption and unused gas unfreeze", ("T-19", "T-21"),
+                     "Actual ETH gas consumption and unused-prepayment unfreeze require "
+                     "original source-bound reservation and receipt evidence. Synthetic "
+                     "gas-unit counts are not real ETH balances or debits; the full "
+                     "original-currency principal refund is already fixed.")
     recorder.note("the rollback report carries netToOriginalBuyer as the full original-currency principal. It "
                   f"is observed as {[entry['netToOriginalBuyer'] for entry in report['funds']]} "
                   "and is not read here as the amount returned to any buyer.")
@@ -403,53 +405,46 @@ def demo_04(recorder):
 # ---------------------------------------------------------------- DEMO-05
 
 def demo_05(recorder):
-    """The intermediate ordinary wallets hold no gas budget."""
+    """Zero intermediate ceilings do not gate the prearranged direct return.
+
+    These are synthetic gas-unit ceilings, not observed ordinary-wallet ETH
+    balances or real gas prepayments. A shortfall of the actual return bearer's
+    own ceiling is a separate negative control in the existing domain tests.
+    """
     path = MAIN_PATHS["DEMO-05"]
     exchange, _ = F.rollback_chain_to_d(registration_path=path,
-                                        gas_budgets={F.B: 0, F.C: 0, F.D: 0})
+                                        gas_budgets={F.B: 0, F.C: 0, F.D: 100_000})
     _setup(recorder, exchange, dict(PRICES),
            {"trade": GAS["trade"], "refund": GAS["refund"],
-            "shared-return": GAS["shared-return"], "budgets": {"B": 0, "C": 0, "D": 0},
-            "note": "a fixture ceiling used to exercise the shortfall path; not a fee mechanism"})
+            "shared-return": GAS["shared-return"], "budgets": {"B": 0, "C": 0, "D": 100_000},
+            "budgetUnit": GAS_UNIT, "ordinaryWalletETHBalances": "NOT_OBSERVED",
+            "note": "synthetic intermediate ceilings are zero; original return bearer has "
+                    "its fixture ceiling from setup, without a mid-recovery top-up"})
     requests = F.submit_all(exchange)
     F.refuse(exchange, requests[0], "res-ab-refused")
     exchange.begin_rollback(RECEIPT, 0, F.rollback_authority(exchange, 0, "rb-1"))
     first = exchange.advance_rollback(RECEIPT)
-    recorder.step("rollback attempted with an exhausted budget", state=first["state"],
+    recorder.step("prearranged direct return without intermediate top-up",
+                  state=first["state"], complete=first["complete"],
                   outstanding=[step["stepId"] for step in first["outstandingSteps"]],
                   **_positions(exchange))
-    blocked = [step for step in first["outstandingSteps"] if step["status"] == "blocked"]
-    recorder.expect("the shortfall blocks the return with a named reason", ("T-22",),
-                    {"state": "blocked", "blockedSteps": 1, "kind": "asset-return",
-                     "reason": "EX_GAS_BUDGET_EXHAUSTED"},
-                    {"state": first["state"], "blockedSteps": len(blocked),
-                     "kind": blocked[0]["kind"] if blocked else None,
-                     "reason": blocked[0]["detail"].get("reason") if blocked else None})
-    record = next(entry for entry in exchange.receipt_timeline(RECEIPT)
-                  if entry["kind"] == "rollback-step-blocked")
+    recorder.expect("zero intermediate ceilings do not block the prearranged return", ("T-20",),
+                    {"state": "complete", "owner": F.A, "returns": 1},
+                    {"state": first["state"], "owner": exchange.owner_of(RECEIPT),
+                     "returns": exchange.asset_control.returns})
     recorder.expect("no custody, forced sale or liquidation is used", ("T-22",),
-                    {"custodyTaken": False, "forcedSale": False, "liquidation": False,
-                     "resumable": True},
-                    {key: record["detail"][key]
-                     for key in ("custodyTaken", "forcedSale", "liquidation", "resumable")})
+                    ("temporary-custody", "time-limited-redemption", "overdue-sale",
+                     "instant-liquidation"),
+                    first["withdrawnMechanismsNotUsed"])
     recorder.expect("the refunds still reached their own buyers", ("T-20", "T-19"),
                     {0: True, 1: True, 2: True},
                     {entry["legIndex"]: entry["refundedToOriginalBuyer"]
                      for entry in first["funds"]})
-    recorder.expect("the withdrawn mechanisms are reported unused", ("T-22",),
-                    ("temporary-custody", "time-limited-redemption", "overdue-sale",
-                     "instant-liquidation"),
-                    first["withdrawnMechanismsNotUsed"])
-
-    exchange._budgets[F.D] = 100_000
     second = exchange.advance_rollback(RECEIPT)
-    recorder.step("rollback resumed once the budget allowed", state=second["state"],
-                  complete=second["complete"], segmentFunds=_segment_funds(exchange),
-                  **_positions(exchange))
-    recorder.expect("the rollback resumes and completes", ("T-23",),
-                    {"complete": True, "owner": F.A}, 
-                    {"complete": second["complete"], "owner": exchange.owner_of(RECEIPT)})
-    recorder.expect("nothing was repeated across the interruption", ("T-23",),
+    recorder.step("completed return observed again without another movement",
+                  state=second["state"], complete=second["complete"],
+                  segmentFunds=_segment_funds(exchange), **_positions(exchange))
+    recorder.expect("nothing was repeated across the completion enquiry", ("T-23",),
                     {"payments": 3, "returns": 1},
                     {"payments": exchange.payments.movements,
                      "returns": exchange.asset_control.returns})
@@ -464,6 +459,10 @@ def demo_05(recorder):
     recorder.expect("each leg's buyer still bears that leg's gas", ("T-21",),
                     {0: F.B, 1: F.C, 2: F.D},
                     {entry["legIndex"]: entry["gasBorneBy"] for entry in second["funds"]})
+    recorder.not_run("actual zero-ETH intermediate-wallet execution", ("T-20", "T-21", "T-23"),
+                     "The local ceilings and simulated return are not observed ETH balances, "
+                     "buyer-confirmed maximum-gas prepayments, actual wallet authority or "
+                     "chain/restart receipts. Those original runtime observations remain owed.")
     _not_run_chain(recorder)
 
 
@@ -531,7 +530,7 @@ DEMOS = (
              ("T-17", "T-19", "T-21"), MAIN_PATHS["DEMO-03"], demo_03, prd_version="1.4"),
     Scenario("DEMO-04", "finalized prefix survives a later refusal",
              ("T-18", "T-19", "T-29"), MAIN_PATHS["DEMO-04"], demo_04, prd_version="1.4"),
-    Scenario("DEMO-05", "intermediate wallets hold no gas budget",
+    Scenario("DEMO-05", "prearranged direct return with zero intermediate fixture ceilings",
              ("T-20", "T-21", "T-22", "T-23"), MAIN_PATHS["DEMO-05"], demo_05, prd_version="1.4"),
     Scenario("DEMO-06", "cutoff refuses a new trade while in-flight work continues",
              ("T-24", "T-25", "T-32", "T-33"), MAIN_PATHS["DEMO-06"], demo_06, prd_version="1.4"),
