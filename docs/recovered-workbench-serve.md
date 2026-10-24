@@ -38,11 +38,12 @@ execution is NOT_RUN; applicable exact-source checks belong to the existing
 review workflow. Published source and a declared source identity do not
 establish an installed service, public route, original live API/store binding
 or native financial/chain acceptance.
-\nFour additional foreground contracts in
+
+Four additional foreground contracts in
 `integration/test_recovered_operation_serve.py` cover actual enquiry without a
 current draft, shared restored access for action and enquiry, route-local missing
 configuration and generic native-enquiry failures. These authored contracts are
 NOT_RUN by the author. Existing interrupt, loop-error and store-ownership
 contracts remain applicable. The caller still owns every external service and
 must supply its actual original bindings; no deployed service is switched by
-this source change.\n
+this source change.

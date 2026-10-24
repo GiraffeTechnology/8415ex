@@ -51,3 +51,12 @@ UNKNOWN as the existing localized HTTP 503 response. New cases exercise actual
 command POSTs from a separate serving thread, native uncertainty without replay,
 and early refusal of a thread-bound original connection. Current exact-source
 CI establishes execution results separately.
+
+The command workbench composes the recovered operation composition, so the
+original remint action (`remint_action_inputs`) and read-only operation enquiry
+(`operation_observation_inputs`) are mounted on the same restored access as the
+primary command gateway. Both inputs remain optional trusted host configuration.
+When either is absent, only its own route returns the localized unavailable
+response; market, command and other original routes remain served. Two
+additional contracts in `integration/test_checkpointed_command_workbench.py`
+cover route-local absence and shared restored access for enquiry and commands.

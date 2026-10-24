@@ -14,7 +14,8 @@ from exchange.checkpoint_runtime_load import load_exchange_checkpoint
 from exchange.checkpointed_workbench_gateway import CheckpointedWorkbenchGateway
 from exchange.durable_operation import DurableEXOperationJournal
 from exchange.checkpoint_workbench_composition import CheckpointWorkbenchUnavailable
-from exchange.recovered_workbench_ui import compose_recovered_workbench_ui
+from exchange.recovered_operation_observation import (
+    OriginalOperationObservationInputs, compose_recovered_operation_observation)
 from integration.test_exchange_fact_rehydration import current_runtime
 from integration import test_recovered_workbench_ui as original_ui
 
@@ -163,11 +164,11 @@ class CheckpointedCommandWorkbenchTests(unittest.TestCase):
     def test_bad_port_builder_closes_constructed_socket_without_schema_or_native_work(self):
         captured = []
         def capture(*args, **kwargs):
-            loaded = compose_recovered_workbench_ui(*args, **kwargs)
+            loaded = compose_recovered_operation_observation(*args, **kwargs)
             captured.append(loaded.server)
             return loaded
         before = self.claims.total_changes
-        with patch("exchange.checkpointed_command_workbench.compose_recovered_workbench_ui", side_effect=capture):
+        with patch("exchange.checkpointed_command_workbench.compose_recovered_operation_observation", side_effect=capture):
             with self.assertRaises(ValueError):
                 self.compose(builder=lambda access, previous: {"resolve_command": lambda *args: None})
         self.assertEqual(len(captured), 1)
@@ -224,9 +225,44 @@ class CheckpointedCommandWorkbenchTests(unittest.TestCase):
         # Reuse the established journal identity only to exercise the actual
         # thread-boundary refusal before any serving socket is constructed.
         with patch.object(self.journal, "connection", bound):
-            with patch("exchange.checkpointed_command_workbench.compose_recovered_workbench_ui") as compose:
+            with patch("exchange.checkpointed_command_workbench.compose_recovered_operation_observation") as compose:
                 with self.assertRaisesRegex(ValueError, "serving thread"):
                     self.compose()
                 compose.assert_not_called()
         self.assertEqual(self.builders, [])
+        self.assertEqual(self.native_calls, [])
+
+    def original_scope(self):
+        asset = self.ui.host.exchange.receipt("receipt-1").asset
+        return {"receiptId": "receipt-1", "chainId": asset.chain_id,
+            "contract": asset.contract, "tokenId": str(asset.token_id), "globalLegId": 0,
+            "action": "rollback", "nativeOperationId": "synthetic-original-native-command",
+            "intentDigest": "c" * 64, "journalReference": "synthetic-original-journal"}
+
+    def test_unconfigured_action_and_enquiry_are_route_local_on_command_workbench(self):
+        result = self.compose()
+        self.assertEqual(self.request(result.server, "/remint-action")[0], 503)
+        self.assertEqual(self.request(result.server, "/operation-observation")[0], 503)
+        self.assertEqual(self.request(result.server, "/market")[0], 200)
+        self.assertEqual(self.post(result)[0], 303)
+        self.assertEqual(len(self.native_calls), 1)
+
+    def test_command_workbench_enquiry_shares_restored_access_with_commands(self):
+        enquiries = []
+        def enquire(scope):
+            enquiries.append(deepcopy(scope))
+            return None
+        result = self.compose(operation_observation_inputs=OriginalOperationObservationInputs(
+            self.journal, self.original_scope(), enquire))
+        server = result.server
+        self.assertEqual(len(self.builders), 1)
+        self.assertIs(server.checkpointed_observation.bridge.access, self.builders[0][0])
+        self.assertIs(server.binding.gateway.bridge.access, self.builders[0][0])
+        self.assertIs(server.checkpointed_observation.bridge.journal, self.journal)
+        self.assertEqual(enquiries, [])
+        status, body = self.request(server, "/operation-observation?lang=fr")
+        self.assertEqual(status, 200)
+        self.assertIn('lang="fr"', body)
+        self.assertEqual(len(enquiries), 1)
+        self.assertNotIn("synthetic-original-native-command", body)
         self.assertEqual(self.native_calls, [])

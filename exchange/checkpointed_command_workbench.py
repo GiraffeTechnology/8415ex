@@ -5,7 +5,7 @@ import threading
 from .checkpointed_operation import CheckpointedOperationBridge
 from .checkpointed_workbench_gateway import CheckpointedWorkbenchGateway
 from .durable_operation import DurableEXOperationJournal
-from .recovered_workbench_ui import compose_recovered_workbench_ui
+from .recovered_operation_observation import compose_recovered_operation_observation
 
 
 def _shared_connection(connection):
@@ -46,8 +46,8 @@ def compose_checkpointed_command_workbench(checkpoint, scope, runtime, receipt_i
     operation_journal._clean()
     _shared_connection(operation_journal.connection)
     _shared_connection(checkpoint.store.connection)
-    loaded = compose_recovered_workbench_ui(checkpoint, scope, runtime, receipt_id,
-                                           **original_ui_options)
+    loaded = compose_recovered_operation_observation(checkpoint, scope, runtime,
+                                                     receipt_id, **original_ui_options)
     server = loaded.server
     try:
         original_gateway = server.binding.gateway
