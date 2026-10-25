@@ -103,3 +103,7 @@ except Exception as exc:
     raise
 finally:
     (evidence / 'summary.json').write_text(json.dumps(result, indent=2) + '\n')
+    print(json.dumps(result, indent=2), flush=True)
+    for record in result['runs']:
+        print('Log tail: ' + record['log'], flush=True)
+        print('\n'.join((evidence / record['log']).read_text(errors='replace').splitlines()[-12:]), flush=True)

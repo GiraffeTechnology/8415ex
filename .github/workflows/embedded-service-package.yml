@@ -18,14 +18,14 @@ jobs:
       - name: Prepare isolated verifier image
         run: |
           set -euo pipefail
-          docker pull python:3.12-bookworm
+          docker pull python@sha256:14a4933e6cef421424f7a66d89a3f4eafcbd0d90e0a822251f298e05132dc735
           mkdir "$RUNNER_TEMP/package-evidence"
-          docker image inspect python:3.12-bookworm > "$RUNNER_TEMP/package-evidence/verifier-image.json"
-          echo "VERIFIER_IMAGE=$(docker image inspect python:3.12-bookworm --format '{{.Id}}')" >> "$GITHUB_ENV"
+          docker image inspect python@sha256:14a4933e6cef421424f7a66d89a3f4eafcbd0d90e0a822251f298e05132dc735 > "$RUNNER_TEMP/package-evidence/verifier-image.json"
+          echo "VERIFIER_IMAGE=$(docker image inspect python@sha256:14a4933e6cef421424f7a66d89a3f4eafcbd0d90e0a822251f298e05132dc735 --format '{{.Id}}')" >> "$GITHUB_ENV"
       - name: Verify exact embedded source and run offline suites
         run: |
           set -euo pipefail
-          docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+          docker run --rm --user "$(id -u):$(id -g)" --network none --cap-drop ALL --security-opt no-new-privileges \
             --read-only --tmpfs /tmp:rw,nosuid,nodev,size=1g \
             -v "$GITHUB_WORKSPACE:/input:ro" \
             -v "$RUNNER_TEMP/package-evidence:/evidence:rw" \
