@@ -20,6 +20,10 @@ jobs:
           set -euo pipefail
           docker pull python@sha256:14a4933e6cef421424f7a66d89a3f4eafcbd0d90e0a822251f298e05132dc735
           mkdir "$RUNNER_TEMP/package-evidence"
+          node_binary="$(readlink -f "$(command -v node)")"
+          "$node_binary" --version > "$RUNNER_TEMP/package-evidence/node-version.txt"
+          sha256sum "$node_binary" > "$RUNNER_TEMP/package-evidence/node-sha256.txt"
+          echo "NODE_BINARY=$node_binary" >> "$GITHUB_ENV"
           docker image inspect python@sha256:14a4933e6cef421424f7a66d89a3f4eafcbd0d90e0a822251f298e05132dc735 > "$RUNNER_TEMP/package-evidence/verifier-image.json"
           echo "VERIFIER_IMAGE=$(docker image inspect python@sha256:14a4933e6cef421424f7a66d89a3f4eafcbd0d90e0a822251f298e05132dc735 --format '{{.Id}}')" >> "$GITHUB_ENV"
       - name: Verify exact embedded source and run offline suites
@@ -28,6 +32,7 @@ jobs:
           docker run --rm --user "$(id -u):$(id -g)" --network none --cap-drop ALL --security-opt no-new-privileges \
             --read-only --tmpfs /tmp:rw,nosuid,nodev,size=1g \
             -v "$GITHUB_WORKSPACE:/input:ro" \
+            -v "$NODE_BINARY:/usr/local/bin/node:ro" \
             -v "$RUNNER_TEMP/package-evidence:/evidence:rw" \
             -e PYTHONDONTWRITEBYTECODE=1 -e PR_HEAD_SHA="${{ github.event.pull_request.head.sha }}" -e TESTED_MERGE_SHA="$GITHUB_SHA" \
             "$VERIFIER_IMAGE" python3 -B /input/scripts/verify_embedded_service_package.py \

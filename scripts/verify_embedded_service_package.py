@@ -88,6 +88,9 @@ try:
     receipt = json.loads(Path('/tmp/installed/INSTALL-RECEIPT.json').read_text())
     check(receipt['sourceTree'] == TREE and receipt['sourceCommit'] == ORIGIN
           and receipt['sourceFiles'] == 698 and receipt['stateInitialized'] is False, 'installation receipt mismatch')
+    test_root = Path('/tmp/bootstrap-tests'); test_root.mkdir(mode=0o700)
+    os.environ['BOOTSTRAP_TEST_ROOT'] = str(test_root)
+    result['nodeVersion'] = subprocess.check_output(['node', '--version'], text=True).strip()
     failures = []
     for name, directory in [('ci', 'ci/tests'), ('domain', 'exchange/tests'),
                             ('integration', 'integration'), ('scenarios', 'scenarios/tests')]:
