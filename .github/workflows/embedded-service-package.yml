@@ -1,0 +1,42 @@
+name: Embedded service package checks
+on:
+  pull_request:
+    paths:
+      - 'deliveries/v15-service-preparation-20261025/**'
+      - '.github/workflows/embedded-service-package.yml'
+      - 'scripts/verify_embedded_service_package.py'
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare isolated verifier image
+        run: |
+          set -euo pipefail
+          docker pull python:3.12-bookworm
+          mkdir "$RUNNER_TEMP/package-evidence"
+          docker image inspect python:3.12-bookworm > "$RUNNER_TEMP/package-evidence/verifier-image.json"
+          echo "VERIFIER_IMAGE=$(docker image inspect python:3.12-bookworm --format '{{.Id}}')" >> "$GITHUB_ENV"
+      - name: Verify exact embedded source and run offline suites
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+            --read-only --tmpfs /tmp:rw,nosuid,nodev,size=1g \
+            -v "$GITHUB_WORKSPACE:/input:ro" \
+            -v "$RUNNER_TEMP/package-evidence:/evidence:rw" \
+            -e PYTHONDONTWRITEBYTECODE=1 -e PR_HEAD_SHA="${{ github.event.pull_request.head.sha }}" -e TESTED_MERGE_SHA="$GITHUB_SHA" \
+            "$VERIFIER_IMAGE" python3 -B /input/scripts/verify_embedded_service_package.py \
+            /input/deliveries/v15-service-preparation-20261025/8415ex-v15-service-candidate.tar
+      - name: Retain exact package evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: embedded-service-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/package-evidence
+          if-no-files-found: error
+          retention-days: 7
