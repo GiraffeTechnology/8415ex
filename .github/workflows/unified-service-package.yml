@@ -1,0 +1,49 @@
+name: Unified service package public-core checks
+on:
+  pull_request:
+    paths:
+      - 'deliveries/v15-unified-wiring-preparation-20261026/**'
+      - '.github/workflows/unified-service-package.yml'
+      - 'scripts/verify_unified_service_package.py'
+      - 'scripts/run_public_core_tests.py'
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare isolated verifier image
+        run: |
+          set -euo pipefail
+          docker pull python@sha256:14a4933e6cef421424f7a66d89a3f4eafcbd0d90e0a822251f298e05132dc735
+          mkdir "$RUNNER_TEMP/package-evidence"
+          node_binary="$(readlink -f "$(command -v node)")"
+          "$node_binary" --version > "$RUNNER_TEMP/package-evidence/node-version.txt"
+          sha256sum "$node_binary" > "$RUNNER_TEMP/package-evidence/node-sha256.txt"
+          echo "NODE_BINARY=$node_binary" >> "$GITHUB_ENV"
+          docker image inspect python@sha256:14a4933e6cef421424f7a66d89a3f4eafcbd0d90e0a822251f298e05132dc735 > "$RUNNER_TEMP/package-evidence/verifier-image.json"
+          echo "VERIFIER_IMAGE=$(docker image inspect python@sha256:14a4933e6cef421424f7a66d89a3f4eafcbd0d90e0a822251f298e05132dc735 --format '{{.Id}}')" >> "$GITHUB_ENV"
+      - name: Verify exact embedded source and run offline suites
+        run: |
+          set -euo pipefail
+          docker run --rm --user "$(id -u):$(id -g)" --network none --cap-drop ALL --security-opt no-new-privileges \
+            --read-only --tmpfs /tmp:rw,nosuid,nodev,size=1g \
+            -v "$GITHUB_WORKSPACE:/input:ro" \
+            -v "$NODE_BINARY:/usr/local/bin/node:ro" \
+            -v "$RUNNER_TEMP/package-evidence:/evidence:rw" \
+            -e PYTHONDONTWRITEBYTECODE=1 -e PR_HEAD_SHA="${{ github.event.pull_request.head.sha }}" -e TESTED_MERGE_SHA="$GITHUB_SHA" \
+            "$VERIFIER_IMAGE" python3 -B /input/scripts/verify_unified_service_package.py \
+            /input/deliveries/v15-unified-wiring-preparation-20261026/8415ex-v15-unified-wiring-service-preparation-20261026.tar
+      - name: Retain exact package evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unified-service-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/package-evidence
+          if-no-files-found: error
+          retention-days: 7
+
