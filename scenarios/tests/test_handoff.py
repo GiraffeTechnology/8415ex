@@ -43,7 +43,7 @@ class Handoff(unittest.TestCase):
 
     def test_the_remaining_obligations_come_from_the_matrix(self):
         self.assertEqual(sorted(self.built["remainingObligations"]),
-                         ["T-%02d" % n for n in range(1, 85)])
+                         ["T-%02d" % n for n in range(1, 97)])
 
     def test_an_unfilled_handoff_would_be_refused_as_evidence(self):
         """A checklist is not a result: feeding it back as evidence must fail."""

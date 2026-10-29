@@ -118,6 +118,12 @@ AUDIT_GROUPS = (
 #: are not reported as undeclared, and kept out of the groups so they never
 #: count as coverage of something they do not evidence.
 ANCILLARY_KINDS = (
+    {"kind": "registration-prepared",
+     "why": "detached original request correlation; not registrar submission or registration verification"},
+    {"kind": "prepared-deferred-rollback-cancelled",
+     "why": "cancellation of a prepared recovery before dispatch, not asset return"},
+    {"kind": "retired-recovery-confirmed",
+     "why": "reconciled retired-generation terminal; no native asset return or mint is executed"},
     {"kind": "receipt-minted",
      "why": "a technical record of one receipt as one token; it asserts no right"},
     {"kind": "gas-recorded",

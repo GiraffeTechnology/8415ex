@@ -686,3 +686,39 @@ class CheckpointedOperationLocalizedDataClassification(LocalizedUIClassification
                 words["en"] = (_sample(label),)
                 unsafe = self._scan({name: "TEXT = " + repr(words) + "\n"})
                 self.assertIn(label, {row["pattern"] for row in unsafe["findings"]})
+
+
+class LinkedOperationLocalizedDataClassification(unittest.TestCase):
+    _scan = LocalizedUIClassification._scan
+    name = "exchange/linked_operation_locales.py"
+    tables = ("WORDS", "TASK_LABELS", "RECOVERY_LABELS", "ECONOMIC_LABELS",
+              "RECOVERY_CONFIRM_LABELS", "ASSET_RETURN_CONFIRM_LABELS")
+
+    def source(self, table, value=None):
+        value = chr(0x4E2D) if value is None else value
+        return table + " = " + repr({locale: (value,) for locale in observations.DISPLAY_LOCALES}) + "\n"
+
+    def test_exact_complete_literal_tables_remain_fully_scanned(self):
+        for table in self.tables:
+            with self.subTest(table=table):
+                scan = self._scan({self.name: self.source(table)})
+                self.assertTrue(scan["clean"], scan["findings"])
+                self.assertEqual(scan["coverage"]["scanned"], 1)
+                self.assertEqual(scan["coverage"]["skipped"], [])
+
+    def test_prose_dynamic_values_and_missing_locales_are_not_exempt(self):
+        for source in (self.source("WORDS") + "# " + chr(0x4E2D),
+                       self.source("WORDS").replace("'ja':", "'other':"),
+                       "WORDS = make(" + repr(chr(0x4E2D)) + ")\n",
+                       "OTHER = " + repr(chr(0x4E2D)) + "\n"):
+            scan = self._scan({self.name: source})
+            self.assertTrue(any(x["kind"] == "non-english" for x in scan["findings"]))
+
+    def test_every_secret_pattern_and_private_fingerprint_still_checks_raw_data(self):
+        for label, _ in observations.SECRET_PATTERNS + observations.PRIVATE_CONTENT_PATTERNS:
+            scan = self._scan({self.name: self.source("WORDS", _sample(label))})
+            self.assertIn(label, {row["pattern"] for row in scan["findings"]})
+        marker = "linked-fingerprint-" + "x" * 12
+        scan = self._scan({self.name: self.source("WORDS", marker)}, markers=(marker,))
+        self.assertIn("configured private fingerprint", {row["pattern"] for row in scan["findings"]})
+        self.assertNotIn(marker, str(scan))

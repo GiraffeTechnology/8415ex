@@ -303,8 +303,8 @@ def _authorization(recorder):
                     {"statuses": statuses, "ownerIndex": chain.owner_index(RECEIPT)})
     parameters = sorted(inspect.signature(Exchange.execute_transfer).parameters)
     recorder.expect("there is no approval argument to pass", ("T-34",),
-                    ["escrow_id", "match", "now", "self", "transfer_id"], parameters,
-                    detail="escrow_id funds the leg; it is not an approval token")
+                    ["deferred_admission", "escrow_id", "match", "now", "self", "transfer_id"], parameters,
+                    detail="escrow_id and optional deferred_admission identify funding; neither is a platform approval token")
 
     beyond, _ = F.minted(registration_path=CONTRACT_PATH)
     F.hop(beyond, F.A, F.B, 1, "transfer-ab", "session-a", "session-b")

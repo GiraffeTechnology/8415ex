@@ -114,6 +114,13 @@ NOT_MEASURED = {
 #: accounted for here or it is a finding; it is never simply absent from the
 #: count.
 NOT_EXERCISED_LOCALLY = {
+    "exchange.ledger.Exchange.record_prepared_registration_request":
+        "the original aggregate host persists prepared task correlation; "
+        "this scenario run does not bind that writer and does not count its method as exercised",
+    "exchange.ledger.Exchange.confirm_retired_asset_recovery":
+        "the legacy scenario groups do not install a remint generation verifier; "
+        "retired-generation recovery is exercised separately by domain tests, "
+        "not counted as entered by this scenario run",
     "exchange.registration.SimulatedRegistrar.handover_record":
         "every concrete registrar defines its own hand-over record, so the base "
         "class's default is on no path this delivery can take; the three "

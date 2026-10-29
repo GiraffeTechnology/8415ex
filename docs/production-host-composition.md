@@ -95,3 +95,16 @@ safety logic with real Exchange/checkpoint/attempt implementations in isolated
 temporary Linux databases. Synthetic authority callbacks and intercepted
 composition are unit-test evidence only. They are not production source,
 identity, chain, deployment or end-to-end runtime acceptance.
+
+## Existing runtime validation entry
+
+For an already bound original host, the source entry point accepts:
+
+```sh
+python3 -B -m exchange.service_runtime --config /private/ex/host-config.json --check
+```
+
+`--check` validates the pinned original host and checkpoint without binding HTTP.
+It initializes no state, creates no credential and preserves a refusal as a
+failure. Starting a listener is a separate authorized deployment action after
+source admission and real capability binding.

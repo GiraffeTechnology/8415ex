@@ -1,14 +1,19 @@
 {
   "schema": "8415ex-prd-lock/1",
-  "version": "1.4",
+  "version": "1.5",
   "prd": {
     "path": "PRD.md",
-    "bytes": 97728,
-    "sha256": "b3989a91f1d3f7a1de6812fa05777d0dfdf84a4eee4a7909bdda77d1196032ce"
+    "bytes": 114065,
+    "sha256": "e5124bb30d408ae6ce8bcaba7c1ba6d14eda2a461c25e0c9c7202410278856c6"
   },
   "executionPlan": {
     "path": "config/execution-plan.json",
-    "bytes": 94921,
-    "sha256": "77678d33c7a06b1c2b8bcd2f25a540273e3b7e5b7852589e89ae2f76b5efdb39"
+    "bytes": 113973,
+    "sha256": "9bb578a2f5f6d664441025b77ecb36ef100fcee84ba043055f54481a860d180d"
+  },
+  "deferredModule": {
+    "path": "docs/cross-chain-deferred-settlement.md",
+    "bytes": 11512,
+    "sha256": "17a8f0407907c135b9d71cc0eb8d3e5f5c4559f1e9845792e408f11091ff9b45"
   }
 }

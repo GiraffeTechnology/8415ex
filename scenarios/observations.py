@@ -202,6 +202,7 @@ _LOCALE_TOKEN = re.compile(
 # Only literal product display resources are language data. Credential and
 # private-content scanning still uses every original byte, including literals.
 PYTHON_DISPLAY_TABLES = {
+    "exchange/linked_operation_locales.py": ("WORDS", "TASK_LABELS", "RECOVERY_LABELS", "ECONOMIC_LABELS", "RECOVERY_CONFIRM_LABELS", "ASSET_RETURN_CONFIRM_LABELS"),
     "exchange/collateral_scenario.py": ("WORDS",),
     "exchange/authorization_page.py": ("TEXT",),
     "exchange/evidence_page.py": ("_TEXT", "LANGUAGES", "UNVERIFIED"),

@@ -112,7 +112,7 @@ class InteractiveDemoJourney(unittest.TestCase):
             recorder.step("<script>unsafe</script>", observed="<img src=x>")
             recorder.expect("injected mismatch", ("T-36",), "expected", "actual")
             raise RuntimeError("synthetic failure")
-        scenario = Scenario("DEMO-01", "<script>title</script>", ("T-36",), "REG_DIRECT", broken, prd_version="1.4")
+        scenario = Scenario("DEMO-01", "<script>title</script>", ("T-36",), "REG_DIRECT", broken, prd_version="1.5")
         with patch.object(demo_ui, "DEMOS", (scenario,)), running() as server:
             _, headers, _ = post(server)
             key = headers["Location"].split("id=")[1]

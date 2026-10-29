@@ -23,6 +23,7 @@ CURRENT_DOMAIN_KINDS = {
     "gas-recorded", "rollback-opened", "rollback-advanced", "segment-refunded",
     "segment-refund-attempt", "asset-returned", "rollback-step-blocked",
     "asset-return-attempt", "late-result-conflict",
+    "prepared-deferred-rollback-cancelled", "retired-recovery-confirmed", "registration-prepared",
 }
 CURRENT_AUDIT_GROUPS = {
     "intent-decision", "transfer", "registration", "final-prefix", "funding", "rollback",
@@ -364,3 +365,11 @@ class Replay(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 
+
+
+class PreparedCorrelationBoundary(unittest.TestCase):
+    def test_prepared_correlation_is_declared_but_is_not_registration_acceptance(self):
+        kind = "registration-prepared"
+        self.assertIn(kind, events.DECLARED_KINDS)
+        self.assertIn(kind, {row["kind"] for row in events.ANCILLARY_KINDS})
+        self.assertFalse(any(kind in group["kinds"] for group in events.AUDIT_GROUPS))
