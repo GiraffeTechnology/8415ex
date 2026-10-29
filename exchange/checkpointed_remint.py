@@ -38,6 +38,8 @@ def invoke_checkpointed_remint(bridge, binding, expected_revision, old, replacem
         return execute_original(scope, history)
 
     with bridge.access._lock:
+        if bridge.access.asset_lifecycle(old.receipt.receipt_id)["state"] != "ACTIVE":
+            raise CheckpointedOperationRefused("pending or retired original generation cannot remint")
         try:
             result = invoke_remint(bridge.journal, binding, expected_revision,
                 old, replacement, verify_declaration, resolve_original_bill_link,

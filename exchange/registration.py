@@ -17,7 +17,7 @@ adapters are simulated business roles; none of them is a real institution.
 from dataclasses import dataclass, field
 
 from .errors import require
-from .ids import digest, identifier, instant
+from .ids import HEX32, digest, identifier, instant
 from .model import REGISTRATION_PATHS, Asset
 
 OUTCOMES = ("confirmed", "rejected")
@@ -97,6 +97,11 @@ class RegistrationEvidence:
     result_version: int = 1
     record_commitment: str = None
     simulated: bool = True
+    effective_at: int = None
+    query_at: int = None
+    observation_block: int = None
+    observation_block_hash: str = None
+    temporal_evidence_reference: str = None
 
     def __post_init__(self):
         identifier(self.result_id, "EX_REGISTRATION_EVIDENCE_REFUSED")
@@ -117,10 +122,29 @@ class RegistrationEvidence:
             identifier(self.record_commitment, "EX_REGISTRATION_EVIDENCE_REFUSED")
         require(isinstance(self.simulated, bool), "EX_REGISTRATION_EVIDENCE_REFUSED",
                 "the simulated flag must be a boolean")
+        temporal = (self.effective_at, self.query_at, self.observation_block,
+                    self.observation_block_hash, self.temporal_evidence_reference)
+        require(all(v is None for v in temporal) or all(v is not None for v in temporal),
+                "EX_REGISTRATION_EVIDENCE_REFUSED", "partial temporal evidence refused")
+        if self.effective_at is not None:
+            instant(self.effective_at, "EX_REGISTRATION_EVIDENCE_REFUSED")
+            instant(self.query_at, "EX_REGISTRATION_EVIDENCE_REFUSED")
+            require(type(self.observation_block) is int and self.observation_block >= 0,
+                    "EX_REGISTRATION_EVIDENCE_REFUSED", "original observation block required")
+            require(type(self.observation_block_hash) is str and HEX32.fullmatch(self.observation_block_hash),
+                    "EX_REGISTRATION_EVIDENCE_REFUSED", "original bytes32 block identity required")
+            identifier(self.temporal_evidence_reference, "EX_REGISTRATION_EVIDENCE_REFUSED")
+
+    @property
+    def temporal_projection(self):
+        return {"effectiveAt": self.effective_at, "queryAt": self.query_at,
+                "observationBlock": self.observation_block,
+                "observationBlockHash": self.observation_block_hash,
+                "evidenceReference": self.temporal_evidence_reference}
 
     @property
     def content_digest(self):
-        return digest({
+        payload = {
             "resultId": self.result_id,
             "requestId": self.request_id,
             "receiptId": self.receipt_id,
@@ -134,7 +158,12 @@ class RegistrationEvidence:
             "tokenId": self.asset.token_id,
             "resultVersion": self.result_version,
             "recordCommitment": self.record_commitment,
-        })
+        }
+        if self.effective_at is not None:
+            payload["temporalProjection"] = self.temporal_projection
+            payload["observedAt"] = self.observed_at
+            payload["simulated"] = self.simulated
+        return digest(payload)
 
 
 class SimulatedRegistrar:

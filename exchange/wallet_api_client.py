@@ -46,10 +46,17 @@ class WalletAPIClient:
     loader, transaction-signer fallback, account provisioning or scope widening.
     Native policy/child construction and atomic execution remain server-owned.
     """
+    _BOUND_CHAIN = "11155111"
+
     _FIELDS = {
         "prepare": {"policy"},
+        "prepare-operation-verification": {"taskDigest", "operationId", "childDigest", "expectedBudgetRevision"},
+        "confirm-operation-verification": {"challengeId", "requestDigest", "code"},
         "authorize": {"challengeId", "taskDigest", "executorDigest", "observationPolicyDigest", "code"},
         "status": {"taskDigest"}, "resume": {"taskDigest"},
+        "revoke": {"taskDigest", "expectedGrantPolicyVersion"},
+        "cancel-reservation": {"taskDigest", "operationId", "childDigest", "expectedBudgetRevision"},
+        "plan-reserve": {"taskDigest", "expectedBudgetRevision"},
         "reserve": {"taskDigest", "child", "expectedBudgetRevision"},
         "execute": {"taskDigest", "operationId", "childDigest", "expectedBudgetRevision"},
         "recover": {"taskDigest", "operationId", "childDigest", "expectedBudgetRevision"},
@@ -58,7 +65,14 @@ class WalletAPIClient:
     }
 
     def __init__(self, origin, tenant, account, chain_id, *, clock_ms=None,
-                 timeout_seconds=10, allow_loopback_http=False, execution_attempts=None):
+                 timeout_seconds=10, allow_loopback_http=False, execution_attempts=None, base_path=""):
+        # V3 tenant routing is explicit deployment configuration, not discovery.
+        # The signing origin and durable operation identity remain unchanged.
+        if type(base_path) is not str or (base_path != "" and
+                (type(tenant) is not str or tenant in ("v2", "v3", "auth", "api", "web", "assets", "dist", "docs", "scripts", "server",
+                    "tests", "config", "login", "logout", "register", "about", "settings", "default",
+                    "__proto__", "constructor", "prototype") or base_path != "/" + tenant)):
+            raise WalletAPIRefused("EX_WALLET_BASE_PATH_REFUSED")
         if type(origin) is not str:
             raise WalletAPIRefused("EX_WALLET_BINDING_REFUSED")
         url = urlsplit(origin)
@@ -68,10 +82,11 @@ class WalletAPIClient:
                 or any(c in origin for c in "\r\n\t")
                 or type(tenant) is not str or not re.fullmatch(r"[a-z][a-z0-9-]{0,47}", tenant)
                 or type(account) is not str or not re.fullmatch(r"0x[0-9a-fA-F]{40}", account)
-                or int(account, 16) == 0 or str(chain_id) != "11155111"
+                or int(account, 16) == 0 or str(chain_id) != self._BOUND_CHAIN
                 or type(timeout_seconds) not in (int, float) or not 0 < timeout_seconds <= 30):
             raise WalletAPIRefused("EX_WALLET_BINDING_REFUSED")
         self._origin, self._tenant = origin, tenant
+        self._base_path = base_path
         self._account, self._chain = account.lower(), str(chain_id)
         self._clock = clock_ms or (lambda: time.time_ns() // 1_000_000)
         self._timeout = timeout_seconds
@@ -103,7 +118,8 @@ class WalletAPIClient:
             if len(data) > 65536:
                 raise WalletAPIRefused("EX_WALLET_REQUEST_TOO_LARGE")
             headers["Content-Type"] = "application/json"
-        req = Request(self._origin + "/auth/" + path, data=data, headers=headers,
+        request_path = self._base_path + "/auth/" + path
+        req = Request(self._origin + request_path, data=data, headers=headers,
                       method="GET" if body is None else "POST")
         # One decreasing socket-phase/body budget, not one new timeout per
         # packet. The platform resolver must provide its existing DNS bound.
@@ -131,7 +147,7 @@ class WalletAPIClient:
             # No environment proxy, redirect, new endpoint or retry exists.
             self._jar.add_cookie_header(req)
             sock.settimeout(remaining())
-            connection.request(req.get_method(), "/auth/" + path,
+            connection.request(req.get_method(), request_path,
                                body=data, headers=dict(req.header_items()))
             sock.settimeout(remaining())
             response = connection.getresponse()

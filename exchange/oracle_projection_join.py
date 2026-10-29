@@ -5,7 +5,7 @@ No URL, credential, provider, signer or registry is constructed by this module.
 from copy import deepcopy
 import re
 
-from .errors import require
+from .errors import require, DomainError
 from .ids import canonical_json, digest
 from .principal_journal_contract import PrincipalBinding
 
@@ -14,6 +14,34 @@ PREFIX = "/v1/oracle/projection"
 BYTES32 = re.compile(r"\A0x[0-9a-fA-F]{64}\Z")
 ADDRESS = re.compile(r"\A0x[0-9a-fA-F]{40}\Z")
 DECIMAL = re.compile(r"\A(0|[1-9][0-9]*)\Z")
+
+
+class OracleProjectionReadError(DomainError):
+    """Sanitized application-read outcome, never a registrar's business refusal."""
+    def __init__(self, status, error_code):
+        super().__init__(CODE, "Oracle projection read unavailable")
+        self.observation_status = status
+        self.error_code = error_code
+
+
+def _read_error(status, body):
+    # Only codes from the original Oracle application contract are exposed.
+    codes = {
+        400: {"TOKEN_ID_INVALID", "VERSION_INVALID", "INSTANT_INVALID"},
+        404: {"INSTANT_NOT_COVERED", "UNKNOWN_TOKEN", "UNKNOWN_VERSION", "EMPTY_PROJECTION"},
+        502: {"PROJECTION_SOURCE_MALFORMED", "PROJECTION_SOURCE_REFUSED",
+              "PROJECTION_SOURCE_IDENTITY_MISMATCH", "POSITION_SOURCE_MALFORMED"},
+        503: {"PROJECTION_SOURCE_NOT_CONFIGURED", "PROJECTION_BINDING_INVALID",
+              "PROJECTION_SOURCE_UNAVAILABLE", "POSITION_SOURCE_UNAVAILABLE"},
+    }
+    code = body.get("errorCode") if type(body) is dict else None
+    if type(code) is not str or code not in codes.get(status, set()):
+        return OracleProjectionReadError("UNAVAILABLE", "ORACLE_READ_UNAVAILABLE")
+    state = ("UNBOUND" if code == "PROJECTION_SOURCE_NOT_CONFIGURED" else
+             "NOT_OBSERVED" if status == 404 else
+             "READ_REFUSED" if status in (400, 502) or code == "PROJECTION_BINDING_INVALID" else
+             "UNAVAILABLE")
+    return OracleProjectionReadError(state, code)
 
 
 def _decimal(value, bits):
@@ -84,8 +112,10 @@ class OracleProjectionJoin:
         result = self._read("GET", path)
         require(type(result) is tuple and len(result) == 2, CODE, "Oracle response required")
         status, raw = result
-        require(type(status) is int and status == 200 and type(raw) is dict,
-                CODE, "Oracle unavailable or refused")
+        require(type(status) is int, CODE, "Oracle response status required")
+        if status != 200:
+            raise _read_error(status, raw)
+        require(type(raw) is dict, CODE, "Oracle response body required")
         body = deepcopy(raw)
         require(len(canonical_json(body).encode("ascii")) <= 65536,
                 CODE, "decoded Oracle body exceeds bound")

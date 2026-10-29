@@ -1,0 +1,95 @@
+{
+  "schema": "8415ex-service-readiness-gaps/1",
+  "productionReady": false,
+  "items": [
+    {
+      "area": "offline source installation",
+      "implementation": [
+        "exchange/service_install.py",
+        "scripts/build_service_bundle.py"
+      ],
+      "state": "IMPLEMENTED_LOCAL_TESTED",
+      "remaining": "Independent review and exact remote CI; operator selects an approved fresh version directory."
+    },
+    {
+      "area": "foreground start and readiness",
+      "implementation": [
+        "exchange/service_runtime.py",
+        "exchange/recovered_operation_observation.py",
+        "exchange/production_host.py"
+      ],
+      "state": "PRODUCTION_COMPOSITION_IMPLEMENTED_EXTERNAL_BINDINGS_REQUIRED",
+      "remaining": "Production runtime construction, pinned aggregate/config validation, scoped caller and original journal/attempt composition are implemented. An approved environment host and actual native authority/current-session/mTLS/held-grant/Oracle bindings remain required; no such identity or credentials are bundled."
+    },
+    {
+      "area": "full authoritative aggregate and restart",
+      "implementation": [
+        "exchange/aggregate_checkpoint.py",
+        "exchange/composite_exchange_checkpoint.py",
+        "exchange/remint_generation_store.py",
+        "exchange/checkpoint_runtime_load.py"
+      ],
+      "state": "CORE_IMPLEMENTED_HOST_BINDING_MISSING",
+      "remaining": "Original connection, complete components, exact scope, persisted generation/digest and source identity. Remint asset views and mixed deferred execution must share the same original physical aggregate; a replacement database is prohibited."
+    },
+    {
+      "area": "Wallet Sepolia and Hoodi ports",
+      "implementation": [
+        "exchange/wallet_api_client.py",
+        "exchange/deferred_wallet_ports.py",
+        "exchange/reserved_wallet_task_gateway.py",
+        "exchange/wallet_execution_attempts.py",
+        "exchange/production_host.py",
+        "exchange/original_task_journal_wire.py"
+      ],
+      "state": "CLIENT_AND_HOST_COMPOSITION_IMPLEMENTED_EXTERNAL_BINDINGS_REQUIRED",
+      "remaining": "Original HTTPS origins, session/account binding, authorized message signer, original durable task resolver and attempted-operation journal, exact policy/digest/native verifier. A generic host factory does not supply these implementations. Loopback auth interoperability is supplemental only."
+    },
+    {
+      "area": "deferred transfer and mixed rollback dispatch",
+      "implementation": [
+        "exchange/deferred_runtime_composition.py",
+        "exchange/deferred_owned_transition.py",
+        "exchange/joint_deferred_transition.py",
+        "exchange/deferred_checkpoint.py",
+        "exchange/remint_lifecycle.py"
+      ],
+      "state": "SAME_STORE_COMPOSITION_IMPLEMENTED_AUTHENTICATED_NATIVE_PORTS_MISSING",
+      "remaining": "Connect original task bindings, proof verifier, collateral lifecycle, cost/penalty evidence and registered-state authority into the original host. Do not infer bridge/exchange routes, rates, grants or new B payment."
+    },
+    {
+      "area": "registration and Oracle authority",
+      "implementation": [
+        "exchange/registration.py",
+        "exchange/registration_source_workbench.py"
+      ],
+      "state": "HOST_BINDINGS_NOT_VERIFIED",
+      "remaining": "Actual three-source source/profile/asset/segment/journal-bound authority inputs, observed network/version and canonical chain evidence. Simulation registrars cannot substitute."
+    },
+    {
+      "area": "complete UI",
+      "implementation": [
+        "exchange/recovered_workbench_ui.py",
+        "exchange/recovered_remint_action.py",
+        "exchange/recovered_operation_observation.py"
+      ],
+      "state": "ROUTES_IMPLEMENTED_BINDINGS_AND_BROWSER_ACCEPTANCE_MISSING",
+      "remaining": "Original gas/registration/reference feeds and draft/history/remint action/enquiry ports; installed source and real browser recovery against served version. Missing optional ports yield route-local unavailable, not full acceptance."
+    },
+    {
+      "area": "schema migration and rollback",
+      "implementation": [
+        "exchange/service_install.py",
+        "exchange/aggregate_checkpoint.py"
+      ],
+      "state": "NO_AUTOMATIC_MIGRATION",
+      "remaining": "New release installs alongside old code without editing original stores. Downgrade requires original checkpoint compatibility verification. Never restore old database bytes, clear UNKNOWN or replay operations to roll back code."
+    },
+    {
+      "area": "production acceptance",
+      "implementation": [],
+      "state": "NOT_RUN",
+      "remaining": "Exact served SHA, runtime/store binding, N06/X02/X03/X04 evidence, genuine UI restoration and applicable native-chain evidence by the authorized owner."
+    }
+  ]
+}

@@ -5,6 +5,10 @@ from html import escape
 from types import MappingProxyType
 import re
 from .registration_source_locales import WORDS
+from .principal_journal_contract import PrincipalBinding
+from .oracle_projection_join import OracleProjectionJoin, OracleProjectionReadError
+from .oracle_http_transport import OracleHTTPTransport, OracleHTTPRefused
+from .errors import DomainError
 from .model import WarehouseReceipt
 from .original_task_journal_reader import OriginalTaskJournalReader
 
@@ -32,6 +36,18 @@ class SourceTaskBinding:
     principal: dict
     native_operation_id: str
     expected_wallet: str
+    oracle_query: object = None
+
+
+@dataclass(frozen=True)
+class SourceOracleQuery:
+    """Original host resolution, not HTTP-selected source or authority."""
+    principal_binding: PrincipalBinding
+    task_operation_id: str
+    version: str
+    record_commitment: str
+    as_of: str
+    cutoff: str
 
 
 def _identifier(value):
@@ -40,11 +56,57 @@ def _identifier(value):
 
 class RegistrationSourceWorkbench:
     """Resolve existing mint/task identity; never accept an off-chain voucher."""
-    def __init__(self, original_reader, resolve_binding):
+    def __init__(self, original_reader, resolve_binding, *, oracle_join=None):
         if not isinstance(original_reader, OriginalTaskJournalReader) or not callable(resolve_binding):
             raise RegistrationSourceRefused('one original reader and existing binding resolver required')
+        if oracle_join is not None and type(oracle_join) is not OracleProjectionJoin:
+            raise RegistrationSourceRefused('original Oracle projection join required')
+        self.oracle_join = oracle_join
         self.reader = original_reader
         self.resolve_binding = resolve_binding
+
+    @classmethod
+    def with_oracle_http(cls, original_reader, resolve_binding, *, origin, source,
+                         verify_mapping, timeout_ms=5000):
+        """Assemble the original HTTP read path without performing any I/O.
+
+        Pass this workbench as OriginalServiceBinding.options['registration_sources'].
+        The original host supplies its approved origin/source and mapping verifier.
+        No URL, credential, source mapping or empty store is discovered or created.
+        """
+        join = OracleProjectionJoin(source, OracleHTTPTransport(origin, timeout_ms), verify_mapping)
+        return cls(original_reader, resolve_binding, oracle_join=join)
+
+    def _oracle_view(self, binding):
+        result = {'status': 'UNBOUND', 'errorCode': None, 'registrationRefused': False,
+                  'atomicSettlementAuthority': False, 'fundsDispatched': False,
+                  'holderWritten': False, 'finalityWritten': False}
+        if binding.oracle_query is None or self.oracle_join is None:
+            return result
+        query = binding.oracle_query
+        if (type(query) is not SourceOracleQuery
+                or type(query.principal_binding) is not PrincipalBinding
+                or query.principal_binding.asset != binding.receipt.asset
+                or query.principal_binding.position.receipt_id != binding.receipt.receipt_id
+                or query.task_operation_id != binding.native_operation_id):
+            return dict(result, status='READ_REFUSED', errorCode='ORACLE_TASK_BINDING_MISMATCH')
+        try:
+            facts = self.oracle_join.inspect(query.principal_binding, query.version,
+                query.record_commitment, query.as_of, query.cutoff)
+        except OracleProjectionReadError as error:
+            return dict(result, status=error.observation_status, errorCode=error.error_code)
+        except OracleHTTPRefused:
+            return dict(result, status='UNAVAILABLE', errorCode='ORACLE_TRANSPORT_UNAVAILABLE')
+        except DomainError:
+            return dict(result, status='READ_REFUSED', errorCode='ORACLE_JOIN_BINDING_REFUSED')
+        except Exception:
+            return dict(result, status='UNAVAILABLE', errorCode='ORACLE_READ_UNAVAILABLE')
+        # No holder/address, private mapping or raw record is sent to the UI.
+        # These are independent observations; never create release authority.
+        return dict(result, status='READ_ONLY_JOIN', version=facts['entry']['version'],
+            effectiveAt=facts['entry']['effectiveAt'], asOf=facts['asOf'],
+            finalAsOf=facts['finalAsOf'], withinCutoff=facts['withinCutoff'],
+            registeredHolderIsBuyer=facts['registeredHolderIsBuyer'])
 
     def read_source(self, source, receipt_id):
         if type(source) is not str or source not in SOURCES or not _identifier(receipt_id):
@@ -66,13 +128,15 @@ class RegistrationSourceWorkbench:
             raise RegistrationSourceRefused('source must match existing mint format and original task binding')
         projection = self.reader.read(binding.principal, binding.native_operation_id,
                                       binding.receipt.asset.chain_id, binding.expected_wallet)
+        oracle = self._oracle_view(binding)
         return {'receiptId': receipt_id, 'source': source, 'domainPath': SOURCES[source][0],
                 'sourceLabel': SOURCES[source][1], 'sourceExplanation': SOURCES[source][2],
                 'simulatedRole': True, 'voucherFormatId': binding.voucher_format_id,
                 'voucherFormatVersion': binding.voucher_format_version,
                 'requiredVoucherFields': list(binding.required_voucher_fields),
                 'taskProjection': projection, 'canExecute': False,
-                'oracleRecord': 'UNBOUND', 'ownerHolderEvidence': 'UNBOUND',
+                'oracleRecord': oracle['status'], 'oracleObservation': oracle,
+                'ownerHolderEvidence': 'NOT_VERIFIED' if oracle['status'] == 'READ_ONLY_JOIN' else 'UNBOUND',
                 'principalFunds': 'NOT_VERIFIED', 'gasFunds': 'NOT_VERIFIED'}
 
     @staticmethod
@@ -97,6 +161,12 @@ class RegistrationSourceWorkbench:
             ('transaction', native.get('transactionHash', 'NOT_OBSERVED')),
             ('oracle', data['oracleRecord']), ('authority', data['ownerHolderEvidence']),
             ('principal', data['principalFunds']), ('gas', data['gasFunds'])]
+        observation = data['oracleObservation']
+        for key in ('version', 'effectiveAt', 'asOf', 'finalAsOf', 'withinCutoff',
+                    'registeredHolderIsBuyer', 'errorCode'):
+            if key in observation and observation[key] is not None:
+                value = observation[key]
+                fields.append((key, words['yes' if value else 'no'] if type(value) is bool else value))
         source_key = {'REG-DIRECT': 'direct', 'REG-ELECTRONIC': 'electronic',
                       'REG-INTERMEDIARY': 'intermediary'}[source]
         return ('<section lang="' + locale + '"><h2>' + esc(words[source_key]) + '</h2>'

@@ -12,13 +12,14 @@ Positions are occurrence indices in one receipt's accepted chain. "owner has
 reached B or later" is a statement about that index, never about the numeric
 value of an address.
 """
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 from copy import deepcopy
 import re
 
 from .errors import DomainError, require
 from .eth_trade_gas import ETHTradeGasGate
 from .price_balance import NFT0PriceBalanceGate
+from .deferred_trade_admission import DeferredTradeAdmissionPort
 from .ids import address, amount, digest, identifier, instant
 from .model import WHOLE_RECEIPT_UNITS, Asset, AuthorizationReference, TradeIntent, WarehouseReceipt
 from .mint_specification import MintSpecification, MintDeclarationBook
@@ -33,7 +34,8 @@ from .settlement import (EscrowPosition, ReleaseAuthority, SimulatedPaymentAdapt
 EXECUTION_STATUSES = ("executed",)
 REGISTRATION_STATUSES = ("not-submitted", "pending", "confirmed", "rejected")
 FUNDING_STATUSES = ("not-modelled", "locked", "released", "refunded",
-                    "release-failed", "release-outcome-unknown")
+                    "release-failed", "release-outcome-unknown",
+                    "reserved-allowance", "independent-debt")
 
 #: Rollback capability. A released segment loses it and never regains it.
 ROLLBACK_STATUSES = ("none", "available", "detached", "in-progress", "returned")
@@ -60,6 +62,9 @@ class Transfer:
     registration_status: str = "not-submitted"
     funding_status: str = "not-modelled"
     rollback_status: str = "none"
+    deferred_obligation_id: str | None = None
+    deferred_terms_digest: str | None = None
+    deferred_deadline: int | None = None
 
     def __post_init__(self):
         identifier(self.transfer_id, "EX_TRANSFER_REFUSED")
@@ -67,6 +72,26 @@ class Transfer:
         require(self.funding_status in FUNDING_STATUSES, "EX_TRANSFER_REFUSED", self.funding_status)
         require(self.rollback_status in ROLLBACK_STATUSES, "EX_TRANSFER_REFUSED", self.rollback_status)
         require(self.seller != self.buyer, "EX_TRANSFER_REFUSED", "a leg must move the receipt between parties")
+        deferred = self.deferred_obligation_id is not None
+        if deferred:
+            identifier(self.deferred_obligation_id, "EX_TRANSFER_REFUSED")
+            identifier(self.deferred_terms_digest, "EX_TRANSFER_REFUSED")
+            require(type(self.deferred_deadline) is int and self.deferred_deadline > self.executed_at,
+                    "EX_TRANSFER_REFUSED", "exact deferred deadline required")
+            require(self.funding_status in ("reserved-allowance", "independent-debt"),
+                    "EX_TRANSFER_REFUSED", "deferred allowance is not a cash escrow outcome")
+            if self.registration_status == "confirmed":
+                require(self.funding_status == "independent-debt" and self.rollback_status == "detached",
+                        "EX_TRANSFER_REFUSED", "registered deferred cut is permanently detached")
+            else:
+                require(self.funding_status == "reserved-allowance"
+                        and self.rollback_status in ("available", "in-progress", "returned"),
+                        "EX_TRANSFER_REFUSED", "unregistered allowance cannot be independent debt")
+        else:
+            require(self.deferred_terms_digest is None and self.deferred_deadline is None
+                    and self.funding_status not in ("reserved-allowance", "independent-debt"),
+                    "EX_TRANSFER_REFUSED", "deferred funding requires complete explicit binding")
+
 
 
 @dataclass(frozen=True)
@@ -175,6 +200,8 @@ class Exchange:
         require(self._mint_book is not None, "EX_MINT_VERIFIER_REQUIRED",
                 "existing schema, controlled-storage and privacy verification is required")
         require(receipt.receipt_id not in self._receipts, "EX_RECEIPT_DUPLICATE_REFUSED", receipt.receipt_id)
+        require(receipt.receipt_id not in self._mint_book._receipts,
+                "EX_RECEIPT_DUPLICATE_REFUSED", "existing asset generation must use its original remint route")
         existing = self._asset_keys.get(receipt.asset.key)
         require(existing is None, "EX_ASSET_DUPLICATE_REFUSED",
                 f"{receipt.asset.key} already maps to receipt {existing}")
@@ -336,6 +363,8 @@ class Exchange:
         if receipt is None:
             reasons.append("EX_ASSET_UNKNOWN")
         else:
+            if self.asset_lifecycle(receipt_id)["state"] != "ACTIVE":
+                reasons.append("EX_ASSET_GENERATION_CLOSED")
             try:
                 allowed, reference = self._check_nft0_currencies(receipt_id)
                 if intent.quote_asset not in allowed:
@@ -472,7 +501,17 @@ class Exchange:
                 "EX_MATCH_BINDING_REFUSED", "match terms differ from the signed pairing")
         return canonical
 
+    def asset_lifecycle(self, receipt_id):
+        """Read the persisted original asset generation, not a UI receipt alias."""
+        asset = list(self.receipt(receipt_id).asset.key)
+        for event in reversed(self._events[receipt_id]):
+            if event["kind"] == "remint-lifecycle" and event["detail"].get("asset") == asset:
+                return deepcopy(event["detail"])
+        return {"asset": asset, "state": "ACTIVE"}
+
     def _check_trade_open(self, receipt_id, now):
+        require(self.asset_lifecycle(receipt_id)["state"] == "ACTIVE",
+                "EX_ASSET_GENERATION_CLOSED", "pending or retired original asset cannot trade")
         require(now < self.receipt(receipt_id).trade_stop_at, "EX_TRADE_WINDOW_CLOSED",
                 "new trades are refused at or after the stop-trading instant")
         require(self._returned_to[receipt_id] is None, "EX_TRADE_RETURNED_CHAIN_CLOSED",
@@ -481,6 +520,11 @@ class Exchange:
                 "a rollback freezes the receipt's trade chain")
         require(self._exits[receipt_id] is None, "EX_TRADE_EXIT_OPEN",
                 "an exit freezes resale, including while a step is unresolved")
+        require(not any(self.leg(receipt_id, index).deferred_obligation_id is not None
+                        and self.leg(receipt_id, index).registration_status != "confirmed"
+                        and now >= self.leg(receipt_id, index).deferred_deadline
+                        for index in self._active_legs[receipt_id]),
+                "EX_DEFERRED_DEADLINE_REACHED", "unregistered matured allowance requires suffix recovery")
 
     # ------------------------------------------------------------- transfers
 
@@ -617,7 +661,8 @@ class Exchange:
         self.receipt(receipt_id)
         return tuple(self._legs[receipt_id])
 
-    def execute_transfer(self, match, transfer_id, escrow_id=None, now=None):
+    def execute_transfer(self, match, transfer_id, escrow_id=None, now=None, *,
+                         deferred_admission=None):
         """Append one leg, advancing the owner position by exactly one.
 
         Only the current head may be sold. Two attempts from the same head mean
@@ -645,9 +690,29 @@ class Exchange:
                     f"{report['intentId']}: {','.join(report['reasons'])}")
         match = self._check_match_binding(match, now)
         require(transfer_id not in self._transfer_ids(), "EX_TRANSFER_DUPLICATE_REFUSED", transfer_id)
-        self._check_trade_funds(match, escrow_id, now, "execute-transfer", transfer_id)
+        admission = None
+        if deferred_admission is None:
+            self._check_trade_funds(match, escrow_id, now, "execute-transfer", transfer_id)
+        else:
+            require(type(deferred_admission) is DeferredTradeAdmissionPort,
+                    "EX_DEFERRED_ADMISSION_REFUSED", "explicit trusted deferred port required")
+            require(escrow_id is None and len(legs) not in self._escrow_by_leg[receipt_id],
+                    "EX_DEFERRED_ADMISSION_REFUSED", "cash escrow and allowance cannot fund the same leg")
+            allowed, reference = self._check_nft0_currencies(receipt_id)
+            require(match.quote_asset in allowed, "EX_NFT0_CURRENCY_MISMATCH",
+                    "deferred principal must use the immutable selected NFT0 currency")
+            admission = deferred_admission.admit(match, receipt_id=receipt_id,
+                leg_index=len(legs), transfer_id=transfer_id,
+                registration_deadline=self._mint_declarations[receipt_id]["canonicalDeclaration"]["time"]["registrationDeadline"], now=now)
+            require(not any(old.deferred_obligation_id == admission.obligation_id
+                            for history in self._legs.values() for old in history),
+                    "EX_DEFERRED_ADMISSION_REFUSED", "one reserved obligation cannot fund two transfers")
+            # The original port validates separately funded normal ETH. Calling
+            # the prepaid cash gate here would charge included gas a second time.
         funding_status, rollback_status = "not-modelled", "none"
-        if self.funding_required or escrow_id is not None:
+        if admission is not None:
+            funding_status, rollback_status = "reserved-allowance", "available"
+        elif self.funding_required or escrow_id is not None:
             require(escrow_id is not None, "EX_SEGMENT_NOT_FUNDED",
                     "this leg has no escrow position, so no trade is formed")
             escrow = self.escrow(escrow_id)
@@ -667,7 +732,10 @@ class Exchange:
                        price=amount(match.price, "EX_TRANSFER_REFUSED"), quote_asset=match.quote_asset,
                        sell_intent_digest=match.sell_intent_digest, buy_intent_digest=match.buy_intent_digest,
                        sell_authorization_id=sell.authorization_id, buy_authorization_id=buy.authorization_id,
-                       executed_at=now, funding_status=funding_status, rollback_status=rollback_status)
+                       executed_at=now, funding_status=funding_status, rollback_status=rollback_status,
+                       deferred_obligation_id=admission.obligation_id if admission else None,
+                       deferred_terms_digest=admission.terms_digest if admission else None,
+                       deferred_deadline=admission.deadline if admission else None)
         legs.append(leg)
         self._active_legs[receipt_id].append(leg.leg_index)
         self._used_nonces.add((sell.signer, sell.nonce))
@@ -677,7 +745,8 @@ class Exchange:
             "buyer": leg.buyer, "price": str(leg.price), "quoteAsset": leg.quote_asset,
             "matchBasis": match.basis, "ownerIndex": len(legs), "holderIndex": self._holder_index[receipt_id],
             "registrationStatus": leg.registration_status, "fundingStatus": leg.funding_status,
-            "escrowId": escrow_id})
+            "escrowId": escrow_id, "deferredObligationId": leg.deferred_obligation_id,
+            "principalPaid": False})
         return leg
 
     def _check_nft0_currencies(self, receipt_id):
@@ -761,6 +830,25 @@ class Exchange:
         Every hop files its own request. Submitting a later leg is allowed while
         an earlier one is still open: the lag is real and stays visible.
         """
+        request = self.prepare_registration_request(receipt_id, leg_index, request_id, commitment_window, now)
+        receipt = self.receipt(receipt_id)
+        leg = self.leg(receipt_id, leg_index)
+        registrar = self.registrars[receipt.registration_path]
+        acknowledgement = registrar.submit(request)
+        self._requests[request_id] = request
+        self._requests_by_leg[receipt_id][leg_index] = request
+        if leg.registration_status == "not-submitted":
+            self._replace_leg(receipt_id, leg_index, registration_status="pending")
+        self._record(receipt_id, "registration-submitted", {
+            "requestId": request.request_id, "transferId": request.transfer_id,
+            "legIndex": leg_index, "adapter": request.adapter, "label": registrar.label,
+            "simulated": True, "commitmentDeadlineAt": request.commitment_deadline_at,
+            "attempt": request.attempt, "repeated": acknowledgement["repeated"],
+            "handover": acknowledgement["handover"]})
+        return request, acknowledgement
+
+    def prepare_registration_request(self, receipt_id, leg_index, request_id, commitment_window, now=None):
+        """Prepare exact original request without invoking a registrar or writer."""
         now = self._now(now)
         receipt = self.receipt(receipt_id)
         leg = self.leg(receipt_id, leg_index)
@@ -779,19 +867,30 @@ class Exchange:
             adapter=receipt.registration_path, asset=receipt.asset, submitted_at=now,
             commitment_deadline_at=now + commitment_window,
             attempt=1 if existing is None else existing.attempt + 1)
-        registrar = self.registrars[receipt.registration_path]
-        acknowledgement = registrar.submit(request)
-        self._requests[request_id] = request
-        self._requests_by_leg[receipt_id][leg_index] = request
+        return request
+
+    def record_prepared_registration_request(self, request):
+        """Record a pending original task correlation, never claim submission.
+
+        The original aggregate writer must persist this detached snapshot and
+        its native-task mapping companion together before any later effects.
+        """
+        require(type(request) is RegistrationRequest, "EX_REGISTRATION_REQUEST_REFUSED", "typed request required")
+        expected = self.prepare_registration_request(request.receipt_id, request.leg_index,
+            request.request_id, request.commitment_deadline_at - request.submitted_at,
+            request.submitted_at)
+        require(request == expected, "EX_REGISTRATION_CONFLICT", "original prepared request differs")
+        self._requests[request.request_id] = request
+        self._requests_by_leg[request.receipt_id][request.leg_index] = request
+        leg = self.leg(request.receipt_id, request.leg_index)
         if leg.registration_status == "not-submitted":
-            self._replace_leg(receipt_id, leg_index, registration_status="pending")
-        self._record(receipt_id, "registration-submitted", {
+            self._replace_leg(request.receipt_id, request.leg_index, registration_status="pending")
+        self._record(request.receipt_id, "registration-prepared", {
             "requestId": request.request_id, "transferId": request.transfer_id,
-            "legIndex": leg_index, "adapter": request.adapter, "label": registrar.label,
-            "simulated": True, "commitmentDeadlineAt": request.commitment_deadline_at,
-            "attempt": request.attempt, "repeated": acknowledgement["repeated"],
-            "handover": acknowledgement["handover"]})
-        return request, acknowledgement
+            "legIndex": request.leg_index, "adapter": request.adapter,
+            "commitmentDeadlineAt": request.commitment_deadline_at,
+            "submittedToRegistrar": False, "registrationVerified": False})
+        return request
 
     def registration_request(self, request_id):
         found = self._requests.get(identifier(request_id, "EX_REGISTRATION_REQUEST_REFUSED"))
@@ -830,6 +929,8 @@ class Exchange:
                     "legIndex": evidence.leg_index, "holderIndex": self._holder_index[evidence.receipt_id],
                     "appliedAt": previous["appliedAt"]}
         receipt_id = evidence.receipt_id
+        require(self.asset_lifecycle(receipt_id)["state"] == "ACTIVE",
+                "EX_ASSET_GENERATION_CLOSED", "pending or retired generation cannot change its registration cut")
         expected = self._next_registration_index(receipt_id)
         rollback = self._rollbacks[receipt_id]
         if ((rollback is not None and evidence.leg_index in rollback["affectedLegs"])
@@ -845,6 +946,9 @@ class Exchange:
                     "holderIndex": self._holder_index[receipt_id], **outcome}
         require(evidence.leg_index >= expected, "EX_REGISTRATION_ALREADY_CONFIRMED",
                 "a new result cannot rewrite the confirmed prefix")
+        leg = self.leg(receipt_id, evidence.leg_index)
+        if evidence.outcome != "rejected":
+            self._check_registration_time(receipt_id, evidence)
         if evidence.outcome == "rejected":
             disposition = "rejected"
             self._rejections[receipt_id].append(evidence)
@@ -857,8 +961,14 @@ class Exchange:
                               f"leg {evidence.leg_index} is already inside the confirmed prefix")
         else:
             disposition = "advanced"
-            self._confirm(receipt_id, evidence)
-            self._drain_deferred(receipt_id)
+            batch = self._validated_confirmation_batch(receipt_id, evidence)
+            for item in batch:
+                self._confirm(receipt_id, item)
+                if item is not evidence:
+                    self._deferred[receipt_id].pop(item.leg_index)
+                    self._record(receipt_id, "registration-result-drained", {
+                        "resultId": item.result_id, "legIndex": item.leg_index,
+                        "disposition": "advanced", "holderIndex": self._holder_index[receipt_id]})
         self._applied_results[evidence.result_id] = {
             "contentDigest": evidence.content_digest, "appliedAt": evidence.observed_at,
             "disposition": disposition}
@@ -873,25 +983,94 @@ class Exchange:
                 "deferredLegs": tuple(sorted(self._deferred[receipt_id])),
                 "appliedAt": evidence.observed_at}
 
+    def _check_registration_time(self, receipt_id, evidence):
+        """Consume the original mint's exact semantics, never receipt-arrival time.
+
+        The installed original verifier must authenticate the bound Oracle
+        record, effective-time query and finalized observation block together.
+        A caller's timestamp or a read-only Oracle projection is not authority.
+        """
+        receipt = self.receipt(receipt_id)
+        registrar = self.registrars[receipt.registration_path]
+        leg = self.leg(receipt_id, evidence.leg_index)
+        declaration = self._mint_declarations[receipt_id]
+        timing = declaration["canonicalDeclaration"]["time"]
+        code = "EX_REGISTRATION_TIME_REFUSED"
+        require(timing["unit"] == "unix-second" and timing["timezone"] == "UTC"
+                and timing["precision"] == "integer"
+                and timing["tradeComparison"] == "LT"
+                and timing["tradeStopAt"] == receipt.trade_stop_at
+                and timing["registrationAlsoMustNotExceedTradeStop"] is True
+                and timing["registrationComparison"] in ("LT", "LTE"),
+                code, "original mint time declaration required")
+        if evidence.effective_at is None:
+            require(evidence.simulated is True and getattr(registrar, "simulated", False) is True,
+                    code, "real registration requires original effective-time evidence")
+            effective_at = evidence.observed_at  # Explicit legacy simulator only.
+        else:
+            require(evidence.simulated is getattr(registrar, "simulated", False),
+                    code, "simulation provenance differs from installed registrar")
+            effective_at = evidence.effective_at
+            require(effective_at <= evidence.query_at <= evidence.observed_at,
+                    code, "effective holder must exist at the original observed query")
+            binding = {"receiptId": receipt_id, "transferId": leg.transfer_id,
+                       "legIndex": leg.leg_index, "asset": receipt.asset.key,
+                       "seller": leg.seller, "buyer": leg.buyer,
+                       "requestDigest": self.registration_request(evidence.request_id).content_digest,
+                       "resultDigest": evidence.content_digest,
+                       "source": evidence.source, "recordCommitment": evidence.record_commitment,
+                       "temporalProjection": evidence.temporal_projection,
+                       "observedAt": evidence.observed_at,
+                       "mintDeclarationDigest": declaration["declarationDigest"],
+                       "mintTime": deepcopy(timing)}
+            require(self._mint_book is not None and
+                    self._mint_book.verify("registration-effective-time", deepcopy(binding)) is True,
+                    code, "original authoritative registration time binding refused")
+        # Same comparison as MintSpecification.registration_time_eligible.
+        # Registration equality at tradeStop is allowed; new trade equality is not.
+        require(receipt.minted_at <= effective_at <= receipt.trade_stop_at,
+                code, "registration effective time outside original trading window")
+        deadline = timing["registrationDeadline"]
+        require(effective_at < deadline if timing["registrationComparison"] == "LT"
+                else effective_at <= deadline, code, "original registration deadline exceeded")
+        if leg.deferred_obligation_id is not None:
+            require(effective_at <= leg.deferred_deadline,
+                    "EX_DEFERRED_REGISTRATION_LATE", "registration missed agreed settlement deadline")
+        return effective_at
+
     def _confirm(self, receipt_id, evidence):
-        self._replace_leg(receipt_id, evidence.leg_index, registration_status="confirmed")
+        # Private effect-free mutation, only after the entire contiguous batch
+        # has passed original authority verification. No external callback here.
+        leg = self.leg(receipt_id, evidence.leg_index)
+        if leg.deferred_obligation_id is not None:
+            self._replace_leg(receipt_id, evidence.leg_index, registration_status="confirmed",
+                              funding_status="independent-debt", rollback_status="detached")
+        else:
+            self._replace_leg(receipt_id, evidence.leg_index, registration_status="confirmed")
         self._holder_index[receipt_id] = evidence.leg_index + 1
 
-    def _drain_deferred(self, receipt_id):
-        """Apply buffered results that the filled gap has now made contiguous."""
+    def _validated_confirmation_batch(self, receipt_id, evidence):
+        """No mutation until every contiguous buffered proof validates.
+
+        A verification outage must not leave holder advanced but the incoming
+        result absent from applied_results. Serialized access keeps this batch
+        within the original ordered owner; no native action occurs here.
+        """
+        batch = [evidence]
+        active = self.active_leg_indices(receipt_id)
+        require(evidence.leg_index in active, "EX_REGISTRATION_BINDING_REFUSED",
+                "registration is not on the current active chain")
         buffered = self._deferred[receipt_id]
-        while True:
-            nxt = self._next_registration_index(receipt_id)
-            rollback = self._rollbacks[receipt_id]
-            if rollback is not None and nxt in rollback["affectedLegs"]:
-                return
-            evidence = buffered.pop(nxt, None)
-            if evidence is None:
-                return
-            self._confirm(receipt_id, evidence)
-            self._record(receipt_id, "registration-result-drained", {
-                "resultId": evidence.result_id, "legIndex": evidence.leg_index,
-                "disposition": "advanced", "holderIndex": self._holder_index[receipt_id]})
+        rollback = self._rollbacks[receipt_id]
+        for nxt in active[active.index(evidence.leg_index) + 1:]:
+            if self.leg(receipt_id, nxt).registration_status == "confirmed":
+                continue
+            if nxt not in buffered or (rollback is not None and nxt in rollback["affectedLegs"]):
+                break
+            batch.append(buffered[nxt])
+        for item in batch:
+            self._check_registration_time(receipt_id, item)
+        return tuple(batch)
 
     def deferred_legs(self, receipt_id):
         self.receipt(receipt_id)
@@ -986,7 +1165,11 @@ class Exchange:
         if leg.registration_status != "confirmed":
             reasons.append("EX_SEGMENT_REGISTRATION_NOT_CONFIRMED")
         escrow_id = self._escrow_by_leg[receipt_id].get(leg_index)
-        if escrow_id is None:
+        if leg.deferred_obligation_id is not None:
+            # The cut is complete independently of A's payment. This method is
+            # the prepaid payment route and must never synthesize a cash release.
+            reasons.append("EX_DEFERRED_DEBT_SEPARATE_SETTLEMENT")
+        elif escrow_id is None:
             reasons.append("EX_SEGMENT_NOT_FUNDED")
         else:
             escrow = self._escrows[escrow_id]
@@ -996,7 +1179,10 @@ class Exchange:
                 reasons.append("EX_SEGMENT_REFUNDED")
         return {"receiptId": receipt_id, "legIndex": leg_index, "escrowId": escrow_id,
                 "ownerIndex": owner_index, "holderIndex": holder_index,
-                "eligible": reasons == [], "reasons": tuple(reasons), "observedAt": now}
+                "eligible": reasons == [], "reasons": tuple(reasons), "observedAt": now,
+                "deferredObligationId": leg.deferred_obligation_id,
+                "nftCutComplete": leg.registration_status == "confirmed"
+                    and leg.rollback_status == "detached"}
 
     def _check_release_authority(self, receipt_id, leg_index, authority):
         """Bind the evidence to this source, asset, segment and journal, or refuse."""
@@ -1261,7 +1447,11 @@ class Exchange:
                 "principal": str(leg.price), "quoteAsset": leg.quote_asset,
                 "principalAsset": leg.quote_asset, "principalUnit": "base-units",
                 "escrowId": escrow_id,
-                "escrowStatus": escrow.status if escrow else "not-funded",
+                "escrowStatus": escrow.status if escrow else
+                    ("deferred-separate-obligation" if leg.deferred_obligation_id else "not-funded"),
+                "deferredObligationId": leg.deferred_obligation_id,
+                "deferredTermsDigest": leg.deferred_terms_digest,
+                "deferredDeadline": leg.deferred_deadline,
                 "paymentStatus": escrow.payment_status if escrow else None,
                 "released": bool(escrow and escrow.status == "released"),
                 "refunded": bool(escrow and escrow.status == "refunded"),
@@ -1355,6 +1545,48 @@ class Exchange:
         require(authority.binding == expected, "EX_ROLLBACK_BINDING_REFUSED",
                 "the authority's interval binding does not match this interval")
 
+    def _cancel_prepared_deferred_rollback(self, receipt_id, leg_index):
+        """Pure projection only; the joint CAS must prove no native claim/effect.
+
+        Pending steps alone are NOT authority to cancel a durable command. This
+        method never saves or executes; JointDeferredTransition must authenticate
+        the exact same-owner absence before committing this detached projection.
+        """
+        state = self._rollbacks[receipt_id]
+        require(state is not None and state["state"] == "in-progress"
+                and state["affectedLegs"] and state["affectedLegs"][0] == leg_index
+                and state["steps"] and not state["conflicts"]
+                and all(step.status == "pending" and not step.detail for step in state["steps"]),
+                "EX_PREPARED_CANCEL_REFUSED", "only an untouched original plan can be staged for cancellation")
+        for index in state["affectedLegs"]:
+            leg = self.leg(receipt_id, index)
+            require(leg.registration_status != "confirmed"
+                    and leg.rollback_status == "in-progress"
+                    and leg.funding_status not in ("released", "refunded"),
+                    "EX_PREPARED_CANCEL_REFUSED", "settled or protected legs cannot cancel")
+            escrow_id = self._escrow_by_leg[receipt_id].get(index)
+            if leg.deferred_obligation_id is not None:
+                require(leg.funding_status == "reserved-allowance" and escrow_id is None,
+                        "EX_PREPARED_CANCEL_REFUSED", "deferred allowance cannot contain cash effects")
+            else:
+                escrow = self._escrows.get(escrow_id)
+                require(escrow is not None and escrow.status == "locked"
+                        and escrow.payment_intent is None and escrow.payment_status is None,
+                        "EX_PREPARED_CANCEL_REFUSED", "cash refund cannot have started")
+        mixed = state.get("mixedRecovery")
+        require(mixed is None or not mixed["confirmed"], "EX_PREPARED_CANCEL_REFUSED",
+                "confirmed mixed effects cannot cancel")
+        self._record(receipt_id, "prepared-deferred-rollback-cancelled", {
+            "originalPlan": {**deepcopy(state), "steps": [asdict(step) for step in state["steps"]]},
+            "authorityId": state["authorityId"], "openedAt": state["openedAt"],
+            "affectedLegs": list(state["affectedLegs"]),
+            "steps": [{"stepId": step.step_id, "kind": step.kind,
+                       "key": step.key, "legIndex": step.leg_index} for step in state["steps"]],
+            "reason": "authoritative registered cut; same-owner absence required at joint commit"})
+        for index in state["affectedLegs"]:
+            self._replace_leg(receipt_id, index, rollback_status="available")
+        self._rollbacks[receipt_id] = None
+
     def begin_rollback(self, receipt_id, refused_leg_index, authority, trigger="registrar-refusal",
                        now=None):
         """Open a rollback over the unresolved suffix and plan its steps.
@@ -1366,14 +1598,35 @@ class Exchange:
         interrupted rollback resumes without repeating a refund or a return.
         """
         now = self._now(now)
-        require(trigger in ("registrar-refusal", "deadline"), "EX_ROLLBACK_TRIGGER_REFUSED", trigger)
+        require(trigger in ("registrar-refusal", "deadline", "deferred-deadline", "retired-remint"), "EX_ROLLBACK_TRIGGER_REFUSED", trigger)
         require(self._rollbacks[receipt_id] is None, "EX_ROLLBACK_ALREADY_OPEN",
                 "a rollback is already open for this receipt")
         receipt_record = self.receipt(receipt_id)
-        if trigger == "registrar-refusal":
+        if trigger == "retired-remint":
+            lifecycle = self.asset_lifecycle(receipt_id)
+            require(lifecycle["state"] == "RETIRED", "EX_ROLLBACK_TRIGGER_REFUSED",
+                    "confirmed original remint required")
+            boundary = self.deadline_boundary(receipt_id)
+            interval = {"affectedLegs": tuple(i for i in self._active_legs[receipt_id]
+                                               if i >= boundary["boundaryIndex"]), **boundary}
+            require(interval["affectedLegs"], "EX_ROLLBACK_TRIGGER_REFUSED", "no unresolved suffix")
+            refused_leg_index = interval["affectedLegs"][0]
+            require(self._mint_book is not None and self._mint_book.verify(
+                "retired-recovery-authority", {"receiptId": receipt_id,
+                    "asset": list(receipt_record.asset.key), "lifecycle": deepcopy(lifecycle),
+                    "authority": authority, "interval": deepcopy(interval)}) is True,
+                "EX_ROLLBACK_AUTHORITY_REFUSED", "original retired suffix recovery authority required")
+        elif trigger == "registrar-refusal":
             leg = self.leg(receipt_id, refused_leg_index)
             require(leg.registration_status == "rejected", "EX_ROLLBACK_TRIGGER_REFUSED",
                     "a rollback needs a recorded registrar refusal for that leg")
+            interval = self.rollback_interval(receipt_id, refused_leg_index)
+        elif trigger == "deferred-deadline":
+            leg = self.leg(receipt_id, refused_leg_index)
+            require(leg.deferred_obligation_id is not None
+                    and leg.registration_status != "confirmed"
+                    and leg.rollback_status != "detached" and now >= leg.deferred_deadline,
+                    "EX_ROLLBACK_TRIGGER_REFUSED", "exact unregistered deferred deadline required")
             interval = self.rollback_interval(receipt_id, refused_leg_index)
         else:
             require(now >= receipt_record.trade_stop_at, "EX_ROLLBACK_TRIGGER_REFUSED",
@@ -1410,6 +1663,10 @@ class Exchange:
             "authorityId": authority.authority_id, "source": authority.source,
             "refusedLegIndex": refused_leg_index,
             "trigger": ("registrar refusal for that leg" if trigger == "registrar-refusal"
+                        else "unregistered deferred settlement deadline passed"
+                        if trigger == "deferred-deadline"
+                        else "original asset retired by confirmed authorized remint"
+                        if trigger == "retired-remint"
                         else "trading deadline passed with the holder behind the owner"),
             "triggerKind": trigger,
             "boundaryIndex": interval["boundaryIndex"],
@@ -1443,6 +1700,11 @@ class Exchange:
         now = self._now(now)
         state = self._rollbacks[receipt_id]
         require(state is not None, "EX_ROLLBACK_NOT_OPEN", receipt_id)
+        require("mixedRecovery" not in state
+                and not any(self.leg(receipt_id, i).deferred_obligation_id is not None
+                            for i in state["affectedLegs"]),
+                "EX_DEFERRED_JOINT_RECOVERY_REQUIRED",
+                "deferred refund, allowance release and asset return require original joint recovery")
         require(self.payments is not None and self.asset_control is not None,
                 "EX_ROLLBACK_ADAPTERS_REQUIRED",
                 "a rollback needs the payment adapter and the asset-return control")
@@ -1513,6 +1775,11 @@ class Exchange:
         return replace(step, status="blocked", detail=(("paymentStatus", record["status"]),))
 
     def _advance_return(self, receipt_id, receipt, state, step, now):
+        # Must precede even same-address NOOP and native lookup/dispatch. A
+        # pending/retired asset is never sent through the old return adapter.
+        if self.asset_lifecycle(receipt_id)["state"] != "ACTIVE":
+            return replace(step, status="blocked", detail=tuple(dict(step.detail,
+                reason="EX_RETIRED_ASSET_TERMINAL_REQUIRED").items()))
         destination = state["boundaryAccount"]
         current = self.owner_of(receipt_id)
         if current == destination:
@@ -1536,12 +1803,53 @@ class Exchange:
             return replace(step, status="blocked", detail=(("reason", "EX_GAS_BUDGET_EXHAUSTED"),
                                                            ("bearer", bearer)))
         known = self.asset_control.lookup(step.key)
-        record = known if known is not None and known["status"] in ("returned", "unknown") \
-            else self.asset_control.return_asset(step.key, current, destination, receipt.asset)
+        previous_unknown = "returnStatus" in dict(step.detail)
+        if known is None and previous_unknown:
+            # Missing lookup is not proof of failure and cannot authorize resend.
+            return replace(step, status="blocked", detail=(("returnStatus", "unknown"),
+                           ("reason", "EX_ASSET_RETURN_RECONCILIATION_REQUIRED")))
+        def bound(record):
+            return (type(record) is dict and record.get("key") == step.key
+                    and record.get("chainId") == receipt.asset.chain_id
+                    and record.get("contract") == receipt.asset.contract
+                    and record.get("tokenId") == receipt.asset.token_id
+                    and record.get("fromAccount") == current
+                    and record.get("toAccount") == destination
+                    and record.get("status") in ("returned", "unknown", "failed")
+                    and type(record.get("operations")) is int and record["operations"] == 1
+                    and record.get("walkedIntermediateWallets") is False
+                    and record.get("requiredIntermediateGas") is False
+                    and type(record.get("reference")) is str and bool(record["reference"]))
+        if known is not None and not bound(known):
+            return replace(step, status="blocked", detail=(("returnStatus", "unknown"),
+                           ("reason", "EX_ASSET_RETURN_BINDING_REFUSED")))
+        if known is not None and known["status"] == "failed":
+            retry_binding = {"receiptId": receipt_id, "boundaryIndex": state["boundaryIndex"],
+                "affectedLegs": tuple(state["affectedLegs"]), "originalRecord": deepcopy(known),
+                "requireTerminalNonexecutionAndNoFutureClaim": True}
+            if self._mint_book is None or self._mint_book.verify(
+                    "asset-return-retry-authority", deepcopy(retry_binding)) is not True:
+                return replace(step, status="blocked", detail=(("returnStatus", "unknown"),
+                               ("reason", "EX_ASSET_RETURN_RECONCILIATION_REQUIRED")))
+        if known is not None and known["status"] in ("returned", "unknown"):
+            record = known
+        else:
+            try:
+                record = self.asset_control.return_asset(step.key, current, destination, receipt.asset)
+            except Exception:
+                # A timeout/error does not establish that the native effect did
+                # not execute. Persist UNKNOWN and require original lookup.
+                return replace(step, status="blocked", detail=(("returnStatus", "unknown"),
+                               ("reason", "EX_ASSET_RETURN_OUTCOME_UNKNOWN")))
+        if not bound(record):
+            # Persist an unresolved outcome, not a retryable failed operation.
+            return replace(step, status="blocked", detail=(("returnStatus", "unknown"),
+                           ("reason", "EX_ASSET_RETURN_BINDING_REFUSED")))
         if record["status"] != "returned":
             self._record(receipt_id, "asset-return-attempt", {
                 "stepId": step.step_id, "status": record["status"], "secondReturnSent": False})
-            return replace(step, status="blocked", detail=(("returnStatus", record["status"]),))
+            return replace(step, status="blocked", detail=(("returnStatus", "unknown"),
+                           ("observedReturnStatus", record["status"])))
         # The chain head is now the boundary account. The legs above it stay in
         # history; they are marked returned rather than erased.
         for index in state["affectedLegs"]:
@@ -1556,6 +1864,57 @@ class Exchange:
             "boundaryIndex": state["boundaryIndex"]})
         return replace(step, status="done", detail=(("toAccount", destination),
                                                      ("operations", "1")))
+
+    def confirm_retired_asset_recovery(self, receipt_id, evidence, now=None):
+        """Reconcile old cash suffix only; no native return, mint or new history.
+
+        The original generation store must commit this projection in the same
+        aggregate generation as the original funds and lifecycle records.
+        """
+        from .retired_asset_recovery import request_for, verify_marker
+        now = self._now(now)
+        state = self._rollbacks.get(receipt_id)
+        code = "EX_RETIRED_ASSET_TERMINAL_REFUSED"
+        require(state is not None and "mixedRecovery" not in state, code,
+                "existing cash-only recovery required; mixed recovery uses its joint owner")
+        require(all(self.leg(receipt_id, i).deferred_obligation_id is None
+                    for i in state["affectedLegs"]), code, "deferred funding requires joint recovery")
+        require(all(step.status == "done" for step in state["steps"] if step.kind == "refund"),
+                code, "all original refunds must finish before retired asset terminal")
+        for step in state["steps"]:
+            if step.kind != "refund":
+                continue
+            escrow = self.escrow_for_leg(receipt_id, step.leg_index)
+            require(escrow is not None and escrow.status == "refunded"
+                    and escrow.payment_key == step.key == "refund:" + escrow.escrow_id
+                    and escrow.payment_status == "settled" and escrow.payment_intent == "refund"
+                    and escrow.payment_reference and escrow.refunded_at is not None,
+                    code, "exact original cash refund terminal required")
+        request = request_for(self, receipt_id, state)
+        require(self._mint_book is not None, code, "installed original terminal verifier required")
+        outcome = self._mint_book.verify("retired-asset-recovery-terminal",
+                    {"request": deepcopy(request), "raw": evidence, "now": now})
+        marker = verify_marker(request, evidence, outcome)
+        require(marker["status"] != "NOOP_BOUNDARY_CONFIRMED" or
+                self.owner_of(receipt_id) == state["boundaryAccount"], code,
+                "NOOP requires the original boundary account as well as original occurrence proof")
+        if "retiredAssetTerminal" in state:
+            require(state["retiredAssetTerminal"] == marker and state["state"] == "complete",
+                    code, "retired terminal replay conflicts")
+            return {"complete": True, "repeated": True, "dispatched": False}
+        require(state["state"] != "complete" and all(
+            self.leg(receipt_id, i).registration_status != "confirmed" and
+            self.leg(receipt_id, i).rollback_status in ("in-progress", "returned")
+            for i in state["affectedLegs"]), code, "protected prefix cannot be changed")
+        state["retiredAssetTerminal"] = marker
+        for index in state["affectedLegs"]:
+            self._replace_leg(receipt_id, index, rollback_status="returned")
+        self._returned_to[receipt_id] = (state["boundaryIndex"], state["boundaryAccount"])
+        state["steps"] = [replace(step, status="done") for step in state["steps"]]
+        state["state"] = "complete"
+        self._record(receipt_id, "retired-recovery-confirmed", {
+            "terminal": deepcopy(marker), "dispatched": False, "assetReturnExecuted": False})
+        return {"complete": True, "repeated": False, "dispatched": False}
 
     def asset_position_after_rollback(self, receipt_id):
         """Who holds the receipt once a rollback returned it, by record.

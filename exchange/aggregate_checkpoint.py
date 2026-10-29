@@ -171,6 +171,15 @@ class AggregateCheckpointStore:
                                              for name in immutable_components):
                 raise CheckpointComponentConflict("immutable checkpoint component differs")
             generation = actual + 1
+            if 'owned-facts' in captured:
+                from .mixed_asset_attempt import preserve, snapshot_markers
+                current_owned=captured['owned-facts']
+                if previous is None and snapshot_markers(current_owned):
+                    raise CheckpointRefused('asset claim cannot be backfilled on initialization')
+                if previous is not None:
+                    added=preserve(previous['components']['owned-facts'],current_owned,generation)
+                    if added and any(captured[k]!=previous['components'][k] for k in captured if k!='owned-facts'):
+                        raise CheckpointRefused('asset UNKNOWN claim cannot change other original components')
             if previous is None:
                 db.execute("INSERT INTO ex_aggregate_checkpoint VALUES(?,?,?,?)",
                            (scope, generation, payload, digest))

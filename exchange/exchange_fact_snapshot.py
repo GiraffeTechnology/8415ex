@@ -162,6 +162,8 @@ def _unpack(value):
                     or type(pair[1]) is not int or not 0 < pair[1] <= book["sequence"]
                     or intent.asset != receipt.asset or intent.quote_asset != book["quoteAsset"]):
                 raise ExchangeSnapshotRefused("priority signed terms or admission occurrence differs")
+    from .mixed_asset_attempt import markers
+    markers(domain)
     return DecodedExchangeFacts(receipts, wallet, domain, mint, books)
 
 
