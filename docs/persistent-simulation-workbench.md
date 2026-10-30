@@ -50,3 +50,12 @@ invented and no policy is changed to make a source appear fresh.
 Native Wallet/Oracle/held-capability integration still uses its own original
 contracts. Missing native sources do not prevent this existing simulation
 profile from starting, and a simulation success does not verify those sources.
+
+For a separately approved TLS reverse proxy, `--public-origin` accepts one
+explicit canonical HTTPS DNS origin. The TCP listener stays loopback. The proxy
+must preserve the actual browser Origin and send the exact configured Host;
+forwarded headers do not select an origin. Missing, duplicate or mismatched
+Host/Origin and invalid CSRF remain refused. Without this host-owned option the
+original loopback-only behavior remains. This setting grants no Wallet identity,
+native gateway, signer or provider authority. Applying a public proxy/origin is
+a separate host configuration action, not a side effect of installing code.

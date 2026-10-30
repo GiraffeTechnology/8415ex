@@ -15,6 +15,8 @@ import threading
 
 from exchange.demo_ui import MAX_RUNS
 from exchange.workbench import WorkbenchHandler, WorkbenchServer
+from exchange.simulation_origin import canonical_public_origin
+from urllib.parse import urlsplit
 
 
 MAX_RECORD = 2 * 1024 * 1024
@@ -181,6 +183,11 @@ class DurableRunView(OrderedDict):
 
 
 class PersistentSimulationHandler(WorkbenchHandler):
+    def host_ok(self):
+        if self.server.public_origin is None:
+            return super().host_ok()
+        return self.headers.get_all('Host', []) == [urlsplit(self.server.public_origin).netloc]
+
     def shell(self, content):
         html = super().shell(content)
         before = 'State exists in this process only. Shutting down discards these runs.'
@@ -195,6 +202,10 @@ class PersistentSimulationHandler(WorkbenchHandler):
             self.send_body(503, 'Local simulation history is unavailable; no successful recovery is asserted.')
 
     def do_POST(self):
+        if (self.server.public_origin is not None
+                and self.headers.get_all('Origin', []) != [self.server.public_origin]):
+            self.send_body(403, 'Configured HTTPS origin required.')
+            return
         try:
             return super().do_POST()
         except SimulationStateUnavailable:
@@ -203,7 +214,9 @@ class PersistentSimulationHandler(WorkbenchHandler):
 
 class PersistentSimulationWorkbench(WorkbenchServer):
     """Same local simulation and checked HTTP controls, with durable run history."""
-    def __init__(self, binding, *, history, port, commit, tree, reference_feed=None):
+    def __init__(self, binding, *, history, port, commit, tree, reference_feed=None,
+                 public_origin=None):
+        self.public_origin = canonical_public_origin(public_origin)
         if type(history) is not SQLiteSimulationHistory:
             raise SimulationStateUnavailable()
         self.history = history
@@ -211,6 +224,10 @@ class PersistentSimulationWorkbench(WorkbenchServer):
         super().__init__(binding, port=port, commit=commit, tree=tree, reference_feed=reference_feed)
         self.runs = cache
         self.RequestHandlerClass = PersistentSimulationHandler
+
+    @property
+    def origin(self):
+        return self.public_origin if self.public_origin is not None else super().origin
 
     def simulate(self, scenario_id):
         previous = OrderedDict(self.runs)

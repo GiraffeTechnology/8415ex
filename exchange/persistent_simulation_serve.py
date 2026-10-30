@@ -10,6 +10,7 @@ from exchange.persistent_simulation import SQLiteSimulationHistory, PersistentSi
 from exchange.reference_feed import CommodityReferenceFeed
 from exchange.views import REGISTRATION_PATHS
 from exchange.workbench import RuntimeBinding
+from exchange.simulation_origin import canonical_public_origin
 
 
 def configured_reference(path, expected_sha256):
@@ -30,7 +31,8 @@ def configured_reference(path, expected_sha256):
 
 
 def create_simulation_server(*, state_path, port, commit, tree, registration_path,
-                             reference_feed=None):
+                             reference_feed=None, public_origin=None):
+    public_origin = canonical_public_origin(public_origin)
     if registration_path not in REGISTRATION_PATHS:
         raise ValueError('existing registration scenario required')
     # This is the original explicit local business fixture, not a native
@@ -42,7 +44,8 @@ def create_simulation_server(*, state_path, port, commit, tree, registration_pat
     history = SQLiteSimulationHistory(state_path)
     try:
         return PersistentSimulationWorkbench(binding, history=history, port=port,
-                    commit=commit, tree=tree, reference_feed=reference_feed)
+                    commit=commit, tree=tree, reference_feed=reference_feed,
+                    public_origin=public_origin)
     except BaseException:
         history.close()
         raise
@@ -57,13 +60,14 @@ def main(argv=None):
     parser.add_argument('--registration-path', choices=REGISTRATION_PATHS, default='REG_DIRECT')
     parser.add_argument('--reference-config')
     parser.add_argument('--reference-config-sha256')
+    parser.add_argument('--public-origin', help='explicit canonical HTTPS origin; loopback listener unchanged')
     args = parser.parse_args(argv)
     feed = configured_reference(args.reference_config, args.reference_config_sha256)
     server = None
     try:
         server = create_simulation_server(state_path=Path(args.state), port=args.port,
             commit=args.commit, tree=args.tree, registration_path=args.registration_path,
-            reference_feed=feed)
+            reference_feed=feed, public_origin=args.public_origin)
         print(server.origin + '/receipt - LOCAL_SIMULATION, durable scenario history; native gateway NOT_CONFIGURED', flush=True)
         server.serve_forever()
     except KeyboardInterrupt:
