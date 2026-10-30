@@ -1,12 +1,25 @@
 # Durable existing simulation workbench
 
-`python -m exchange.persistent_simulation_serve` composes the already supported
+`python3 -B -m exchange.persistent_simulation_serve` composes the already supported
 loopback simulation workbench, original fixed scenario producers, a private
 SQLite history store and an optional original EIA reference feed. It is not a
 new mock protocol or a substitute for native providers.
 
 Supply an explicit private `--state` path, `--port`, and exact `--commit` and
 `--tree`. The directory must already be private and owned by the service user.
+
+From the exact source checkout, run:
+
+```sh
+simulation_state_dir="$(mktemp -d)"
+python3 -B -m exchange.persistent_simulation_serve \
+  --state "$simulation_state_dir/history.sqlite" --port 0 \
+  --commit "$(git rev-parse HEAD)" --tree "$(git rev-parse HEAD^{tree})"
+```
+
+Keep this explicit state directory for the next invocation to recover history;
+creating a different temporary directory starts a separate local history.
+
 New history files are created exclusively with mode 0600. An existing unrelated,
 unsafe or corrupt database is refused, never initialized over or silently reset.
 Scenario records commit before HTTP redirects report success. The most recent
