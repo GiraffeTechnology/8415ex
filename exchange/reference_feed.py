@@ -169,6 +169,7 @@ class CommodityReferenceFeed:
                 self._failed = result is None
                 if result is not None:
                     self._last = result
+                    self._resumed = False
                 self._events.append({"attemptedAt": self._attempt, "result": "unavailable" if self._failed else "read"})
                 self._events = self._events[-20:]
         return self.snapshot()

@@ -41,6 +41,8 @@ def resume_eia_reference(feed, reader, policy, raw, expected_sha256, *, now=None
     observation = data["observation"]
     if type(observation) is not dict:
         raise ValueError("original observation required")
+    if type(data["sourceResponseBase64"]) is not str:
+        raise ValueError("original source encoding required")
     source = base64.b64decode(data["sourceResponseBase64"], validate=True)
     parsed = parse_eia_wti_spot_table(source)
     fetched = _instant(observation["fetchedAt"])

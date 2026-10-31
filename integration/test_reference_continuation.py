@@ -82,6 +82,7 @@ class ReferenceContinuation(unittest.TestCase):
         self.assertEqual(current["events"][0], self.original["events"][0])
         self.assertEqual(current["fetchedAt"], "2026-10-17T00:00:20Z")
         self.assertEqual(current["price"], "1.10")
+        self.assertNotIn("resumedObservation", current)
 
     def test_tampered_missing_or_failed_source_is_refused_before_network(self):
         variants = []
@@ -121,3 +122,34 @@ class ReferenceContinuation(unittest.TestCase):
                                  hashlib.sha256(raw).hexdigest(), now=self.time)
         self.assertEqual(feed.snapshot()["events"], self.original["events"])
         self.assertEqual(len(self.calls), 1)
+
+    def test_cli_composition_uses_explicit_digest_and_preserves_cadence(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from exchange.persistent_simulation_serve import configured_reference
+        config = {"version": 1, "policy": self.policy,
+                  "reader": {"timeout_seconds": 5, "user_agent": "Synthetic continuation",
+                             "minimum_fetch_seconds": 10, "failure_backoff_seconds": 20}}
+        with TemporaryDirectory() as directory:
+            config_raw = json.dumps(config).encode()
+            resume_raw = json.dumps(self.data).encode()
+            config_file = Path(directory) / "source.json"
+            resume_file = Path(directory) / "resume.json"
+            config_file.write_bytes(config_raw)
+            resume_file.write_bytes(resume_raw)
+            feed = configured_reference(config_file, hashlib.sha256(config_raw).hexdigest(),
+                                        resume_path=resume_file,
+                                        resume_sha256=hashlib.sha256(resume_raw).hexdigest())
+            value = feed.snapshot()
+            self.assertEqual(value["fetchedAt"], self.original["fetchedAt"])
+            self.assertEqual(value["events"], self.original["events"])
+            self.assertTrue(value["resumedObservation"])
+            self.assertEqual(feed._policy["pollSeconds"], 20)
+            self.assertEqual(feed._read._minimum, 10)
+            with self.assertRaises(ValueError):
+                configured_reference(config_file, hashlib.sha256(config_raw).hexdigest(),
+                                     resume_path=resume_file, resume_sha256="0" * 64)
+            with self.assertRaises(ValueError):
+                configured_reference(None, None, resume_path=resume_file,
+                                     resume_sha256=hashlib.sha256(resume_raw).hexdigest())
+            feed.close()
