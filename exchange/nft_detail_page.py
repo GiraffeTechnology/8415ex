@@ -74,6 +74,16 @@ TERM_SECTION_LABELS = {
 }
 
 
+
+def language_menu(links, locale, label):
+    if locale not in LOCALES:
+        raise ValueError("supported language menu locale required")
+    return ('<details class="locale-menu"><summary aria-label="'
+            + escape(label, quote=True) + '">' + escape(locale.upper())
+            + '</summary><nav aria-label="' + escape(label, quote=True)
+            + '">' + links + '</nav></details>')
+
+
 def _render_business_terms(clauses, locale):
     e = lambda value: escape(str(value), quote=True)
     # Legacy readers retain their original flat view. No category is inferred
@@ -106,6 +116,7 @@ def _render_business_terms(clauses, locale):
 STYLE = """
 :root{color-scheme:dark;--bg:#0b1012;--surface:#121a1d;--raised:#1a2529;--line:#2a363a;--ink:#edf3ef;--muted:#91a3a3;--accent:#c4ee8b;--gold:#c4a574}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px Inter,system-ui,sans-serif;line-height:1.5}
+.locale-menu{position:relative;border:0;border-radius:0;padding:0;background:transparent}.locale-menu>summary{display:flex;align-items:center;min-height:44px;font-size:12px;list-style:none;cursor:pointer;color:var(--muted)}.locale-menu>summary::after{content:' ▾'}.locale-menu>summary::-webkit-details-marker{display:none}.locale-menu>nav{position:absolute;inset-inline-end:0;top:100%;z-index:10;display:grid;gap:0;min-width:140px;margin:0;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--raised)}.locale-menu>nav>a{display:flex;align-items:center;min-height:44px;padding:0 12px;text-decoration:none}.locale-menu>nav>a[aria-current=page]{color:var(--accent)}.detail-mode{font:11px 'IBM Plex Mono',monospace;color:var(--gold)}
 main{max-width:1440px;margin:auto;padding:40px;display:grid;gap:24px}a{color:var(--muted)}a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
 header{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}nav{display:flex;gap:12px;flex-wrap:wrap}h1{font-size:32px;margin:0}h2{font-size:16px;margin:0 0 10px}h3{font-size:14px;margin:0}p{margin:8px 0}
 section,article,details{border:1px solid var(--line);border-radius:12px;padding:20px;background:var(--surface);min-width:0}
@@ -120,9 +131,11 @@ DETAIL_STYLE = """
 @media(max-width:650px){.nft-detail h1{line-height:36px}.nft-detail .detail-quote>.position{font-size:24px;line-height:36px}.nft-detail .detail-selectors{grid-template-columns:1fr}.nft-detail .node{min-width:0;align-items:flex-start}.nft-detail .node>.position{min-width:24px}}
 """
 
-def render_detail(detail, locale="en", *, nft_key=None, choices=(), market_query=""):
+def render_detail(detail, locale="en", *, nft_key=None, choices=(), market_query="", evidence_kind=None):
     if locale not in LOCALES:
         raise ValueError("unsupported locale")
+    if evidence_kind not in (None, "LOCAL_SIMULATION"):
+        raise ValueError("explicit supported evidence kind required")
     t = LOCALES[locale]
     e = lambda value: escape(str(value), quote=True)
     quote_labels = QUOTE_LABELS[locale]
@@ -183,10 +196,12 @@ def render_detail(detail, locale="en", *, nft_key=None, choices=(), market_query
                         + '>NFT ' + str(index + 1) + ' · '
                         + e(gap_label(item, locale)[0]) + '</a>'
                         for index, item in enumerate(choices))
+    mode = ('<span class="detail-mode">LOCAL_SIMULATION / ' + e(locale) + '</span>'
+            if evidence_kind == "LOCAL_SIMULATION" else '')
     return ('<!doctype html><html lang="' + locale + '"><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1"><title>' + e(t[0])
             + '</title><style>' + STYLE + DETAIL_STYLE + '</style><body class="nft-detail"><main><header><a class="detail-back" href="' + e(market_back) + '">← ' + e(t[1])
-            + '</a><nav aria-label="' + e(t[17]) + '">' + langs + '</nav></header><h1>' + e(t[0])
+            + '</a>' + mode + language_menu(langs, locale, t[17]) + '</header><h1>' + e(t[0])
             + '</h1><p class="gap ' + gap_class + '">' + e(gap) + '</p><section class="detail-quote"><h2>' + e(t[2]) + '</h2>' + name_html + quote_html
             + '<p class="muted">' + e(quote_labels[3]) + '</p></section><section><h2>' + e(t[4]) + '</h2><div class="markers">' + markers
             + '</div><ol class="timeline">' + ''.join(nodes) + '</ol><p class="rule">' + e(t[15])

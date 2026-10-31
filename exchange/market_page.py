@@ -1,7 +1,7 @@
 """Commodity market surface over original NFT and reference observations."""
 from html import escape
 from urllib.parse import urlencode
-from .nft_detail_page import LOCALES, STYLE
+from .nft_detail_page import LOCALES, STYLE, language_menu
 from .gap_projection import gap_label
 from .reference_provenance_page import render_reference_fields
 from .market_reference_refresh import REFERENCE_SCRIPT
@@ -43,7 +43,7 @@ STATES = {
     "ja": ("鮮度範囲内", "古いデータ", "利用不可", "不明", "シミュレーション", "元の注文"),
 }
 MARKET_STYLE = """
-.market-top{display:flex;align-items:center;gap:36px;flex-wrap:wrap;padding:20px 0}.market-top>a{min-height:44px;display:inline-flex;align-items:center;text-decoration:none}.market-top>a[aria-current=page]{color:var(--accent)}.market-top nav{margin-left:auto}.wallet-entry{background:var(--raised);border-radius:6px;padding:0 16px}.market-top a:focus-visible,.hero a:focus-visible{outline:2px solid var(--accent);outline-offset:4px}.hero-start{display:inline-flex;align-items:center;min-height:44px;padding:0 24px;border-radius:6px;background:var(--accent);color:var(--bg);text-decoration:none}.market-top b{font-size:25px}.notice{padding:12px 20px;background:#20312a;color:var(--muted)}
+.market-top{display:flex;align-items:center;gap:36px;flex-wrap:wrap;padding:20px 0}.market-top>a{min-height:44px;display:inline-flex;align-items:center;text-decoration:none}.market-top>a[aria-current=page]{color:var(--accent)}.market-top nav{margin-left:auto}.market-top .locale-menu{margin-left:auto}.wallet-entry{background:var(--raised);border-radius:6px;padding:0 16px}.market-top a:focus-visible,.hero a:focus-visible{outline:2px solid var(--accent);outline-offset:4px}.hero-start{display:inline-flex;align-items:center;min-height:44px;padding:0 24px;border-radius:6px;background:var(--accent);color:var(--bg);text-decoration:none}.market-top b{font-size:25px}.notice{padding:12px 20px;background:#20312a;color:var(--muted)}
 .hero{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center}.hero h1{font-size:42px;line-height:1.3}.hero-photo{width:370px;max-width:100%;height:192px;object-fit:cover;border-radius:8px}
 .nft-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}.nft-card{display:grid;gap:12px;text-decoration:none;color:var(--ink);padding:20px;border:1px solid var(--line);border-radius:12px;background:var(--surface);min-width:0;overflow-wrap:anywhere}
 .product-photo{width:100%;height:148px;object-fit:cover;border-radius:8px}.nft-card:hover{border-color:var(--accent)}.badge{padding:5px 10px;border:1px solid var(--line);border-radius:5px;display:inline-block}.badge.open{color:var(--accent);border-color:var(--accent);background:#20312a}.quote{font:28px 'IBM Plex Mono',monospace}.search{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.search input{background:var(--raised);color:var(--ink);border:1px solid var(--line);padding:12px;max-width:100%}button{background:var(--raised);color:var(--ink);padding:12px;border:1px solid var(--line);border-radius:6px}button:disabled{opacity:.55}dl{display:grid;grid-template-columns:max-content 1fr;gap:8px;overflow-wrap:anywhere}dd{margin:0;min-width:0}.source-fields{font-size:12px}.market-tools{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
@@ -81,7 +81,9 @@ def render_reference_panel(reference, locale="en"):
             + e(REFRESH_FAILURE[locale]) + '</p></section>')
 
 
-def render_market(entries, reference, locale="en", query="", *, empty_catalogue=False):
+def render_market(entries, reference, locale="en", query="", *, empty_catalogue=False, evidence_kind=None):
+    if evidence_kind not in (None, "LOCAL_SIMULATION"):
+        raise ValueError("explicit supported evidence kind required")
     if type(empty_catalogue) is not bool:
         raise ValueError("explicit catalogue mode required")
     if empty_catalogue and entries:
@@ -113,8 +115,8 @@ def render_market(entries, reference, locale="en", query="", *, empty_catalogue=
     languages = ''.join('<a href="/market?' + e(urlencode({"lang": key, "q": query})) + '" lang="' + key + '">' + key + '</a>' for key in LOCALES)
     return ('<!doctype html><html lang="' + locale + '"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             '<title>8415EX · ' + e(t[0]) + '</title><style>' + STYLE + MARKET_STYLE + '</style><body><main><header class="market-top">'
-            '<img src="/assets/cube.svg" width="20" height="20" alt=""><b>8415EX</b><span class="badge">' + e(EMPTY_MODE[locale] if empty_catalogue else "DEMO") + '</span><a href="#nfts" aria-current="page">' + e(t[0])
-            + '</a><a href="#nfts">' + e(t[1]) + '</a><span>' + e(t[2]) + '</span><span>' + e(t[3]) + '</span><nav aria-label="Language">' + languages + '</nav><a class="wallet-entry" href="https://8415wallet.com" rel="noopener noreferrer">8415Wallet &#8599;</a></header>'
+            '<img src="/assets/cube.svg" width="20" height="20" alt=""><b>8415EX</b><span class="badge">' + e(EMPTY_MODE[locale] if empty_catalogue else evidence_kind or "DEMO") + '</span><a href="#nfts" aria-current="page">' + e(t[0])
+            + '</a><a href="#nfts">' + e(t[1]) + '</a><span>' + e(t[2]) + '</span><span>' + e(t[3]) + '</span>' + language_menu(languages, locale, common[17]) + '<a class="wallet-entry" href="https://8415wallet.com" rel="noopener noreferrer">8415Wallet &#8599;</a></header>'
             '<p class="notice">' + e(t[7]) + '</p>' + reference_panel + '<section class="hero"><div><h1>' + e(t[5])
             + '</h1><p class="muted">' + e(t[6]) + '</p><a class="hero-start" href="#nfts">' + e(t[1]) + '</a></div><figure><img class="hero-photo" src="/assets/soy.png" alt="'
             + e(t[9]) + '"><figcaption class="muted">' + e(t[9]) + '</figcaption></figure></section><div class="market-tools"><h2 id="nfts">' + e(t[1])

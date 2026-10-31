@@ -261,8 +261,9 @@ class WorkbenchHandler(DemoHandler):
             # identity-excluding detail projection, never raw mint documents.
             body = render_detail(binding.public_detail(), locale=locale,
                                  nft_key=self.server.default_nft_key,
-                                 choices=self.server.nft_directory.choices())
-            return body.replace('<main>', '<main>' + self.native_navigation(locale), 1)
+                                 choices=self.server.nft_directory.choices(),
+                                 evidence_kind=getattr(self.server, "evidence_kind", None))
+            return body.replace('</main>', self.native_navigation(locale) + '</main>', 1)
         if locale != "en":
             raise ValueError("this native view has no verified localized renderer")
         body = views.page(binding.exchange, binding.receipt_id, name,
@@ -360,9 +361,10 @@ class WorkbenchHandler(DemoHandler):
                     return
                 rows = self.server.nft_directory.catalogue()
                 if req.path in ("/", "/market"):
-                    body = render_market(rows, reference, locale, search)
-                    send_market_response(self, body.replace('<main>',
-                        '<main>' + self.native_navigation(locale), 1))
+                    body = render_market(rows, reference, locale, search,
+                                         evidence_kind=getattr(self.server, "evidence_kind", None))
+                    send_market_response(self, body.replace('</main>',
+                        self.native_navigation(locale) + '</main>', 1))
                 else:
                     self.send_body(200, json.dumps({"nfts": rows, "reference": reference}, sort_keys=True),
                                    "application/json; charset=utf-8")
@@ -414,9 +416,10 @@ class WorkbenchHandler(DemoHandler):
                     if len(search) > 64 or any(ord(char) < 32 for char in search):
                         raise ValueError("bounded market search required")
                     body = render_detail(detail, locale, nft_key=key,
-                                         choices=directory.choices(), market_query=search)
-                    self.send_body(200, body.replace('<main>',
-                        '<main>' + self.native_navigation(locale), 1))
+                                         choices=directory.choices(), market_query=search,
+                                         evidence_kind=getattr(self.server, "evidence_kind", None))
+                    self.send_body(200, body.replace('</main>',
+                        self.native_navigation(locale) + '</main>', 1))
                 else:
                     value = {"nfts": directory.choices()} if req.path == "/api/nfts" else detail
                     self.send_body(200, json.dumps(value, sort_keys=True),

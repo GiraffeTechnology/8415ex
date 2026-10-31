@@ -183,6 +183,11 @@ class DurableRunView(OrderedDict):
 
 
 class PersistentSimulationHandler(WorkbenchHandler):
+    def send_body(self, status, body, mime="text/html; charset=utf-8", **headers):
+        # Runtime composition, never a caller-supplied assertion of authority.
+        headers["X_EX_Runtime_Mode"] = "LOCAL_SIMULATION"
+        return super().send_body(status, body, mime, **headers)
+
     def host_ok(self):
         if self.server.public_origin is None:
             return super().host_ok()
@@ -216,6 +221,7 @@ class PersistentSimulationWorkbench(WorkbenchServer):
     """Same local simulation and checked HTTP controls, with durable run history."""
     def __init__(self, binding, *, history, port, commit, tree, reference_feed=None,
                  public_origin=None):
+        self.evidence_kind = "LOCAL_SIMULATION"
         self.public_origin = canonical_public_origin(public_origin)
         if type(history) is not SQLiteSimulationHistory:
             raise SimulationStateUnavailable()
