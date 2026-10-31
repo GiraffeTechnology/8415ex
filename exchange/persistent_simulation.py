@@ -183,10 +183,11 @@ class DurableRunView(OrderedDict):
 
 
 class PersistentSimulationHandler(WorkbenchHandler):
-    def send_body(self, status, body, mime="text/html; charset=utf-8", **headers):
-        # Runtime composition, never a caller-supplied assertion of authority.
-        headers["X_EX_Runtime_Mode"] = "LOCAL_SIMULATION"
-        return super().send_body(status, body, mime, **headers)
+    def end_headers(self):
+        # All response paths, including the market-specific CSP sender, share
+        # this composition marker. Request fields cannot promote authority.
+        self.send_header("X-EX-Runtime-Mode", "LOCAL_SIMULATION")
+        return super().end_headers()
 
     def host_ok(self):
         if self.server.public_origin is None:
