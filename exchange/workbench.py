@@ -16,7 +16,7 @@ from urllib.parse import parse_qs, urlsplit
 from . import views
 from .nft_detail import receipt_detail
 from .nft_detail_page import render_detail, LOCALES
-from .nft_directory import NftDirectory
+from .nft_directory import NftDirectory, OrderBookUnavailable
 from .reference_feed import CommodityReferenceFeed
 from .market_page import render_market, render_reference_panel, ASSETS
 from .market_reference_refresh import send_market_response
@@ -368,6 +368,34 @@ class WorkbenchHandler(DemoHandler):
                 else:
                     self.send_body(200, json.dumps({"nfts": rows, "reference": reference}, sort_keys=True),
                                    "application/json; charset=utf-8")
+                return
+            if req.path == "/api/order-book":
+                if req.fragment or len(req.query) > 768:
+                    raise ValueError("bounded selected order book query required")
+                query = parse_qs(req.query, strict_parsing=True, keep_blank_values=True,
+                                 max_num_fields=3)
+                if (set(query) - {"nft", "currency", "limit"}
+                        or not {"nft", "currency"} <= set(query)
+                        or any(len(values) != 1 for values in query.values())):
+                    raise ValueError("exact selected NFT and original currency required")
+                key, currency = query["nft"][0], query["currency"][0]
+                level_limit = query.get("limit", ["20"])[0]
+                if (re.fullmatch(r"[0-9a-f]{64}", key) is None
+                        or not currency or len(currency) > 256
+                        or any(ord(char) < 32 for char in currency)
+                        or re.fullmatch(r"(?:[1-9]|[1-9][0-9]|100)", level_limit) is None):
+                    raise ValueError("bounded selected order book fields required")
+                try:
+                    value = self.server.nft_directory.order_book(
+                        key, currency, limit=int(level_limit))
+                except KeyError:
+                    self.send_body(404, "Unknown NFT.")
+                    return
+                except OrderBookUnavailable:
+                    self.send_body(503, "Original order book is unavailable.")
+                    return
+                self.send_body(200, json.dumps(value, sort_keys=True),
+                               "application/json; charset=utf-8")
                 return
             if req.path == "/evidence":
                 if len(req.query) > 1024:
