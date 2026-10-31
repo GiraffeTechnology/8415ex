@@ -336,12 +336,16 @@ class WorkbenchHandler(DemoHandler):
                 self.end_headers()
                 self.wfile.write(raw)
                 return
-            if req.path in ("/market", "/api/catalogue"):
+            if req.path in ("/", "/market", "/api/catalogue"):
+                # The public entry opens the existing dynamic market, while
+                # /receipt remains the explicit native receipt observation.
+                if req.fragment:
+                    raise ValueError("market entry fragment refused")
                 query = parse_qs(req.query, strict_parsing=True, keep_blank_values=True, max_num_fields=3)
                 if set(query) - {"lang", "q", "reference"} or any(len(value) != 1 for value in query.values()):
                     raise ValueError("one market locale and search only")
                 fragment = query.get("reference", [None])[0]
-                if fragment is not None and (req.path != "/market" or fragment != "1"):
+                if fragment is not None and (req.path not in ("/", "/market") or fragment != "1"):
                     raise ValueError("one read-only reference fragment required")
                 locale = query.get("lang", ["en"])[0]
                 search = query.get("q", [""])[0]
@@ -349,11 +353,11 @@ class WorkbenchHandler(DemoHandler):
                     raise ValueError("bounded market search required")
                 feed = self.server.reference_feed
                 reference = feed.snapshot() if feed is not None else {"status": "not-connected", "price": None}
-                if req.path == "/market" and fragment is not None:
+                if req.path in ("/", "/market") and fragment is not None:
                     self.send_body(200, render_reference_panel(reference, locale))
                     return
                 rows = self.server.nft_directory.catalogue()
-                if req.path == "/market":
+                if req.path in ("/", "/market"):
                     body = render_market(rows, reference, locale, search)
                     send_market_response(self, body.replace('<main>',
                         '<main>' + self.native_navigation(locale), 1))
@@ -416,7 +420,7 @@ class WorkbenchHandler(DemoHandler):
                     self.send_body(200, json.dumps(value, sort_keys=True),
                                    "application/json; charset=utf-8")
                 return
-            if req.path in ("/", "/receipt"):
+            if req.path == "/receipt":
                 if req.fragment or len(req.query) > 64:
                     raise ValueError("bounded receipt locale required")
                 query = parse_qs(req.query, strict_parsing=True,
