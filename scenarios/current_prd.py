@@ -10,12 +10,13 @@ import json
 import pathlib
 import sys
 
-VERSION = "1.4"
-CURRENT_COMPLETE_VERSION = "1.4"
-CURRENT_PUBLICATION = (97728, "b3989a91f1d3f7a1de6812fa05777d0dfdf84a4eee4a7909bdda77d1196032ce")
+VERSION = "1.5"
+CURRENT_COMPLETE_VERSION = "1.5"
+CURRENT_PUBLICATION = (114065, "e5124bb30d408ae6ce8bcaba7c1ba6d14eda2a461c25e0c9c7202410278856c6")
 PINNED = {
     "prd": CURRENT_PUBLICATION,
-    "executionPlan": (94921, "77678d33c7a06b1c2b8bcd2f25a540273e3b7e5b7852589e89ae2f76b5efdb39"),
+    "executionPlan": (113973, "9bb578a2f5f6d664441025b77ecb36ef100fcee84ba043055f54481a860d180d"),
+    "deferredModule": (11512, "17a8f0407907c135b9d71cc0eb8d3e5f5c4559f1e9845792e408f11091ff9b45"),
 }
 RETIRED_IDS = frozenset({
     "physical-collection", "late-receipt-wait", "post-registration-payment",
@@ -47,7 +48,8 @@ def load(root=None):
     if lock.get("schema") != "8415ex-prd-lock/1" or lock.get("version") != VERSION:
         raise ValueError("current published PRD version pin is missing or stale")
     payloads = {}
-    for key, expected_path in (("prd", "PRD.md"), ("executionPlan", "config/execution-plan.json")):
+    for key, expected_path in (("prd", "PRD.md"), ("executionPlan", "config/execution-plan.json"),
+                               ("deferredModule", "docs/cross-chain-deferred-settlement.md")):
         item = lock[key]
         if item.get("path") != expected_path:
             raise ValueError("unexpected product-contract path")
@@ -61,7 +63,7 @@ def load(root=None):
     if plan.get("schema") != "8415ex-execution-plan/1" or plan.get("version") != VERSION:
         raise ValueError("execution plan is from a different PRD version")
     for key, expected in (
-        ("cases", {"T-%02d" % n for n in range(1, 85)}),
+        ("cases", {"T-%02d" % n for n in range(1, 97)}),
         ("decisions", {"D-%02d" % n for n in range(1, 17)}),
         ("demonstrations", set(LEGACY_DEMOS)), ("stages", set(range(6))),
     ):
@@ -71,7 +73,7 @@ def load(root=None):
     if plan["sections"] != list(range(1, 22)):
         raise ValueError("the full 21-section contract is required")
     declared = [entry["id"] for entry in plan["requirements"]]
-    if len(declared) != 111 or len(declared) != len(set(declared)):
+    if len(declared) != 123 or len(declared) != len(set(declared)):
         raise ValueError("incomplete or duplicated requirement ledger")
     if any(not set(case["requirementIds"]) <= set(declared) for case in plan["cases"]):
         raise ValueError("case refers to undeclared requirement")
@@ -120,7 +122,7 @@ def require_current_scenario(scenario_id, revision=None):
     load()
     if scenario_id in LEGACY_DEMOS and revision != CURRENT_COMPLETE_VERSION:
         raise ValueError("PRD_MIGRATION_REQUIRED: " + scenario_id
-                         + " requires migration against the complete current v1.4 contract; "
+                         + " requires migration against the complete current v1.5 contract; "
                          "requirements metadata alone cannot migrate an executable scenario. "
                          "No legacy collection/burn/payment/grace step was executed.")
 
@@ -131,7 +133,7 @@ def blocked(command, root=None):
             "publishedBaselineVersion": VERSION, "completeCurrentContractLoaded": True,
             "command": command, "status": "PRD_MIGRATION_REQUIRED", "executed": False,
             "allPassed": False, "productStatus": "OPEN",
-            "reason": "This legacy path has not been accepted against the complete current v1.4 contract. "
+            "reason": "This legacy path has not been accepted against the complete current v1.5 contract. "
                       "Requirements are not executed scenarios; never inherit old PASS.",
             "retiredRequirements": plan["retiredRequirements"],
             "independentWorkMayContinue": True}
@@ -153,4 +155,3 @@ def main(argv=None):
 
 if __name__ == "__main__":
     sys.exit(main())
-

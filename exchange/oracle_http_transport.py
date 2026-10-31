@@ -69,14 +69,17 @@ class OracleHTTPTransport:
         self._scheme, self._host, self._port = url.scheme, host, port
         self._prefix, self._timeout = prefix, timeout_ms / 1000
 
-    def __call__(self, method, path):
-        _require(method == "GET" and type(method) is str and type(path) is str,
-                 "ORACLE_HTTP_READ_ONLY")
+    def validate_path(self, path):
         match = self.ROUTE.fullmatch(path)
         _require(match is not None and int(match[1]) < 2 ** 256
                  and (match[3] is None or int(match[3]) < 2 ** 64)
                  and (match[2] != "entry/version" or match[3] != "0"),
                  "ORACLE_HTTP_ROUTE_REFUSED")
+
+    def __call__(self, method, path):
+        _require(method == "GET" and type(method) is str and type(path) is str,
+                 "ORACLE_HTTP_READ_ONLY")
+        self.validate_path(path)
         deadline = time.monotonic() + self._timeout
         connection = response = None
 

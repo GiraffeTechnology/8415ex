@@ -131,9 +131,12 @@ class RollbackIsolation(unittest.TestCase):
                     with self.assertRaises(DomainError):
                         operation()
                 self.assertEqual((ex._legs, ex._escrows, ex._used_nonces), before)
-                _, result = F.confirm(ex, requests[0], "late-ab")
+                evidence, result = F.confirm(ex, requests[0], "late-ab")
                 self.assertEqual(result["disposition"], "late-conflict")
-                ex._drain_deferred(R)
+                # Registration now validates the complete contiguous batch before
+                # mutation; replay through the public entry must not drain a
+                # frozen suffix or duplicate its conflict evidence.
+                self.assertEqual(ex.apply_registration_result(evidence)["disposition"], "idempotent")
                 self.assertEqual(ex.holder_index(R), 0)
                 self.assertEqual(ex.deferred_legs(R), (2,))
                 self.assertEqual(len(ex.rollback_report(R)["conflicts"]), 1)

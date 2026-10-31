@@ -181,8 +181,10 @@ class NoSecondApprovalLayer(unittest.TestCase):
 
         from exchange.ledger import Exchange
         parameters = set(inspect.signature(Exchange.execute_transfer).parameters)
-        self.assertEqual(parameters, {"self", "match", "transfer_id", "escrow_id", "now"},
-                         "escrow_id funds the leg; it is not an approval token")
+        self.assertEqual(parameters, {"self", "match", "transfer_id", "escrow_id", "now", "deferred_admission"},
+                         "escrow and optional deferred funding ports are not platform approval tokens")
+        self.assertIsNone(inspect.signature(Exchange.execute_transfer).parameters["deferred_admission"].default)
+        self.assertEqual(inspect.signature(Exchange.execute_transfer).parameters["deferred_admission"].kind, inspect.Parameter.KEYWORD_ONLY)
         for forbidden in ("approval", "platform_approval", "operator_approval", "override",
                           "operator_sign_off", "manual_confirm"):
             self.assertNotIn(forbidden, parameters)

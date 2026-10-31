@@ -112,6 +112,40 @@ class ReadsMoveNothing(unittest.TestCase):
         self.assertGreater(after["paymentMovements"], before["paymentMovements"])
         self.assertGreater(after["recordedEvents"], before["recordedEvents"])
 
+    def test_public_order_book_uses_the_receipts_original_currency(self):
+        original = Exchange.order_book_view
+        calls = []
+
+        def observe(exchange, receipt_id, currency, **options):
+            calls.append((currency, exchange.receipt(receipt_id).allowed_price_currencies))
+            return original(exchange, receipt_id, currency, **options)
+
+        Exchange.order_book_view = observe
+        try:
+            measured = operations.read_only_moves_nothing()
+        finally:
+            Exchange.order_book_view = original
+        self.assertTrue(calls)
+        self.assertTrue(all(currency == allowed[0] for currency, allowed in calls))
+        self.assertIn("order_book_view", [entry["method"] for entry in measured["reads"]])
+        self.assertEqual(measured["notCalled"], [])
+        self.assertEqual(measured["movedSomething"], [])
+
+    def test_public_order_book_movement_is_detected(self):
+        original = Exchange.order_book_view
+
+        def leaky(exchange, receipt_id, currency, **options):
+            exchange.payments.movements += 1
+            return original(exchange, receipt_id, currency, **options)
+
+        Exchange.order_book_view = leaky
+        try:
+            measured = operations.read_only_moves_nothing()
+        finally:
+            Exchange.order_book_view = original
+        self.assertIn("order_book_view", measured["movedSomething"])
+        self.assertFalse(measured["allReadsMovedNothing"])
+
     def test_every_additional_read_is_a_real_method(self):
         for name in operations.ADDITIONAL_READS:
             with self.subTest(method=name):

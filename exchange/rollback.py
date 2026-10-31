@@ -124,7 +124,8 @@ class SimulatedAssetControl:
         outcome = self._outcomes.pop(key, "returned")
         require(outcome in ("returned", "failed", "unknown"), "EX_ASSET_CONTROL_REFUSED", outcome)
         record = {"key": key, "fromAccount": from_account, "toAccount": to_account,
-                  "chainId": asset.chain_id, "tokenId": asset.token_id, "status": outcome,
+                  "chainId": asset.chain_id, "contract": asset.contract,
+                  "tokenId": asset.token_id, "status": outcome,
                   "reference": f"sim-return:{key}", "observedAt": self._clock(),
                   "operations": 1, "walkedIntermediateWallets": False,
                   "requiredIntermediateGas": False, "simulated": True}

@@ -2,6 +2,15 @@
 
 WORDS = {
     "en": {
+        "yes": "Yes", "no": "No",
+        'version': 'Registration version',
+        'effectiveAt': 'Effective instant',
+        'asOf': 'Query instant',
+        'finalAsOf': 'Historical finality',
+        'withinCutoff': 'Within registration cutoff',
+        'registeredHolderIsBuyer': 'Registered holder matches buyer',
+        'errorCode': 'Oracle read error',
+
         "receipt": "Receipt",
         "source": "Source",
         "format": "Mint-declared voucher format",
@@ -26,6 +35,15 @@ WORDS = {
         "intermediaryExplanation": "Simulated intermediary; forwarding does not authorize EX to verify originals or change holder."
     },
     "zh-Hans": {
+        "yes": "是", "no": "否",
+        'version': '登记版本',
+        'effectiveAt': '生效时点',
+        'asOf': '查询时点',
+        'finalAsOf': '历史最终性',
+        'withinCutoff': '登记截止内',
+        'registeredHolderIsBuyer': '登记 holder 与买方一致',
+        'errorCode': 'Oracle 读取错误',
+
         "receipt": "仓单",
         "source": "来源",
         "format": "铸造时声明的凭证格式",
@@ -50,6 +68,15 @@ WORDS = {
         "intermediaryExplanation": "模拟中介；转发不授权 EX 核验原件或改变 holder。"
     },
     "zh-Hant": {
+        "yes": "是", "no": "否",
+        'version': '登記版本',
+        'effectiveAt': '生效時點',
+        'asOf': '查詢時點',
+        'finalAsOf': '歷史最終性',
+        'withinCutoff': '登記截止內',
+        'registeredHolderIsBuyer': '登記 holder 與買方一致',
+        'errorCode': 'Oracle 讀取錯誤',
+
         "receipt": "倉單",
         "source": "來源",
         "format": "鑄造時聲明的憑證格式",
@@ -74,6 +101,15 @@ WORDS = {
         "intermediaryExplanation": "模擬中介；轉發不授權 EX 核驗原件或改變 holder。"
     },
     "fr": {
+        "yes": "Oui", "no": "Non",
+        'version': 'Version d’enregistrement',
+        'effectiveAt': 'Instant effectif',
+        'asOf': 'Instant interrogé',
+        'finalAsOf': 'Finalité historique',
+        'withinCutoff': 'Avant la limite d’enregistrement',
+        'registeredHolderIsBuyer': 'Holder enregistré correspondant à l’acheteur',
+        'errorCode': 'Erreur de lecture Oracle',
+
         "receipt": "Récépissé",
         "source": "Source",
         "format": "Format du justificatif déclaré à la création",
@@ -98,6 +134,15 @@ WORDS = {
         "intermediaryExplanation": "Intermédiaire simulé ; transmettre n’autorise pas EX à vérifier les originaux ni à changer le holder."
     },
     "es": {
+        "yes": "Sí", "no": "No",
+        'version': 'Versión del registro',
+        'effectiveAt': 'Instante efectivo',
+        'asOf': 'Instante consultado',
+        'finalAsOf': 'Finalidad histórica',
+        'withinCutoff': 'Dentro del plazo de registro',
+        'registeredHolderIsBuyer': 'Holder registrado coincide con comprador',
+        'errorCode': 'Error de lectura Oracle',
+
         "receipt": "Resguardo",
         "source": "Fuente",
         "format": "Formato del comprobante declarado al acuñar",
@@ -122,6 +167,15 @@ WORDS = {
         "intermediaryExplanation": "Intermediario simulado; reenviar no autoriza a EX a verificar originales ni cambiar el holder."
     },
     "ja": {
+        "yes": "はい", "no": "いいえ",
+        'version': '登録バージョン',
+        'effectiveAt': '発効時点',
+        'asOf': '照会時点',
+        'finalAsOf': '履歴の確定性',
+        'withinCutoff': '登録期限内',
+        'registeredHolderIsBuyer': '登録 holder と買主の一致',
+        'errorCode': 'Oracle 読み取りエラー',
+
         "receipt": "倉荷証券",
         "source": "取得元",
         "format": "発行時に宣言された証憑形式",

@@ -107,7 +107,10 @@ def build(source_zip, commit, tree):
                 "commit": commit, "tree": tree, "realAcceptance": "NOT_RUN",
                 "files": {p: {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
                           for p, data in sorted(source.items())}}
-    return pack(dict(source, **{MANIFEST: canonical(manifest), "__main__.py": BOOTSTRAP}))
+    data = pack(dict(source, **{MANIFEST: canonical(manifest), "__main__.py": BOOTSTRAP}))
+    # Generated metadata also consumes the same member and byte budgets.
+    verify(data, hashlib.sha256(data).hexdigest())
+    return data
 
 def verify(data, expected_sha256):
     if (not isinstance(expected_sha256, str)

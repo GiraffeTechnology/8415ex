@@ -43,6 +43,21 @@ CONTRACTS = {
 }
 
 
+# Versioned record tag keeps original prepaid /1 bytes byte-identical. Only
+# exactly the legacy fields may decode as legacy; missing deferred fields or a
+# new funding state on the old tag is refused by Transfer, never defaulted.
+LEGACY_TRANSFER_FIELDS = CONTRACTS["transfer"][1]
+DEFERRED_TRANSFER_FIELDS = LEGACY_TRANSFER_FIELDS + (
+    "deferred_obligation_id", "deferred_terms_digest", "deferred_deadline")
+CONTRACTS["deferred-transfer-v2"] = (Transfer, DEFERRED_TRANSFER_FIELDS)
+LEGACY_REGISTRATION_FIELDS = CONTRACTS["registration-evidence"][1]
+TIMED_REGISTRATION_FIELDS = LEGACY_REGISTRATION_FIELDS + (
+    "effective_at", "query_at", "observation_block", "observation_block_hash",
+    "temporal_evidence_reference")
+CONTRACTS["timed-registration-evidence-v2"] = (RegistrationEvidence, TIMED_REGISTRATION_FIELDS)
+
+
+
 @dataclass(frozen=True)
 class DecodedOperationalFacts:
     value: object
@@ -60,8 +75,10 @@ def _exact(value, names):
 
 
 def _contract():
-    for cls, names in CONTRACTS.values():
-        if tuple(f.name for f in fields(cls)) != names:
+    for tag, (cls, names) in CONTRACTS.items():
+        expected = (DEFERRED_TRANSFER_FIELDS if tag == "transfer" else
+                    TIMED_REGISTRATION_FIELDS if tag == "registration-evidence" else names)
+        if tuple(f.name for f in fields(cls)) != expected:
             raise OperationalFactsRefused("domain field drift requires an explicit codec revision")
 
 
@@ -97,6 +114,13 @@ def _encode(value, depth, count):
         return {"kind": "map", "items": items}
     for name, (cls, names) in CONTRACTS.items():
         if type(value) is cls:
+            if cls is Transfer:
+                name = "transfer" if value.deferred_obligation_id is None else "deferred-transfer-v2"
+                names = CONTRACTS[name][1]
+            if cls is RegistrationEvidence:
+                name = ("registration-evidence" if value.effective_at is None
+                        else "timed-registration-evidence-v2")
+                names = CONTRACTS[name][1]
             return {"kind": name, "fields": {
                 key: _encode(getattr(value, key), depth + 1, count) for key in names}}
     raise OperationalFactsRefused("unsupported operational value type")
@@ -138,6 +162,10 @@ def _decode(value, depth, count):
     cls, names = CONTRACTS[kind]
     _exact(value["fields"], names)
     kwargs = {key: _decode(value["fields"][key], depth + 1, count) for key in names}
+    if kind == "deferred-transfer-v2" and kwargs["deferred_obligation_id"] is None:
+        raise OperationalFactsRefused("explicit deferred record requires an obligation")
+    if kind == "timed-registration-evidence-v2" and kwargs["effective_at"] is None:
+        raise OperationalFactsRefused("explicit timed evidence requires its original projection")
     return cls(**kwargs)
 
 
@@ -187,3 +215,4 @@ def decode_operational_facts(raw):
         if isinstance(error, OperationalFactsRefused):
             raise
         raise OperationalFactsRefused("invalid operational encoding") from error
+

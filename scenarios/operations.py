@@ -127,12 +127,13 @@ OPERATIONS = (
 #: that the list was complete, so a new read would have been exempt from the one
 #: rule in the section that can actually be demonstrated.
 READS = (
-    "active_leg_indices", "asset_position_after_rollback", "authorization", "authorization_state",
+    "prepare_registration_request",
+    "active_leg_indices", "asset_lifecycle", "asset_position_after_rollback", "authorization", "authorization_state",
     "bill_of_lading_view", "historical_rollbacks",
     "deadline_boundary", "deferred_legs", "escrow", "escrow_for_leg",
     "evaluate_deadline", "exit_eligibility", "exit_report", "holder_index",
     "holder_of", "intent", "leg", "legs", "overdue_requests", "owner_index",
-    "owner_of", "receipt", "receipt_timeline", "receipt_view", "reconciliation",
+    "owner_of", "order_book_view", "receipt", "receipt_timeline", "receipt_view", "reconciliation",
     "recorded_legs", "redemption_readiness", "registration_request",
     "rollback_boundary", "rollback_interval", "rollback_report",
     "segment_release_state", "validate_intent",
@@ -143,8 +144,9 @@ READS = (
 #: whole class, which is what makes a new method a finding rather than a silent
 #: exemption.
 CHANGES = (
+    "record_prepared_registration_request",
     "advance_exit", "advance_rollback", "apply_registration_result",
-    "begin_rollback", "connect_wallet", "disconnect_wallet", "enter_order", "execute_transfer",
+    "begin_rollback", "confirm_retired_asset_recovery", "connect_wallet", "disconnect_wallet", "enter_order", "execute_transfer",
     "lock_escrow", "match_intents", "mint", "record_gas",
     "record_late_registration_conflict", "register_authorization",
     "release_segment", "request_redemption", "resume_payments", "resume_trading",
@@ -288,6 +290,7 @@ def _call_read(exchange, name, receipt_id):
     owner = exchange.owner_of(receipt_id)
     arguments = {
         "active_leg_indices": (receipt_id,),
+        "asset_lifecycle": (receipt_id,),
         "asset_position_after_rollback": (receipt_id,),
         "bill_of_lading_view": (receipt_id,),
         "historical_rollbacks": (receipt_id,),
@@ -308,6 +311,8 @@ def _call_read(exchange, name, receipt_id):
         "overdue_requests": (receipt_id,),
         "owner_index": (receipt_id,),
         "owner_of": (receipt_id,),
+        "order_book_view": (receipt_id, exchange.receipt(receipt_id).allowed_price_currencies[0]),
+        "prepare_registration_request": (receipt_id, 0, "req-leg-0", 86400),
         "receipt": (receipt_id,),
         "receipt_timeline": (receipt_id,),
         "receipt_view": (receipt_id,),

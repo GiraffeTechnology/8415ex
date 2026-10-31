@@ -59,3 +59,22 @@ class NftDetailPage(unittest.TestCase):
         self.assertNotIn("<p>Signed</p>", page)
         self.assertEqual(detail["signatureStatusByPosition"], [])
         self.assertEqual(detail["ordinaryTransfer"]["executionEligibility"], "not-evaluated")
+
+    def test_missing_terms_keep_all_required_slots_without_fabricating_clauses(self):
+        from exchange.nft_detail_page import TERM_SECTION_LABELS
+        for status in ("not-provided", "unavailable"):
+            detail = receipt_detail(OriginalReadOnlyDomain(), "one")
+            detail["terms"] = {"status": status, "clauses": []}
+            for locale in LOCALES:
+                with self.subTest(status=status, locale=locale):
+                    page = render_detail(detail, locale)
+                    for label in TERM_SECTION_LABELS[locale][:-1]:
+                        self.assertIn(label, page)
+                    self.assertEqual(page.count('data-terms-status="' + status + '"'), 8)
+                    self.assertIn('class="position unknown"', page)
+                    self.assertNotIn('provided-verified-projection', page)
+                    self.assertNotIn('class="terms-section"', page)
+                    self.assertNotIn('class="terms-navigation"', page)
+                    self.assertIn('class="missing-terms"', page)
+                    self.assertNotIn('class="gap yes">openGapOF=YES', page)
+                    self.assertEqual(detail["terms"]["clauses"], [])
