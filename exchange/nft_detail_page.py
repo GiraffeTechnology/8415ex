@@ -115,6 +115,11 @@ section,article,details{border:1px solid var(--line);border-radius:12px;padding:
 """
 
 
+DETAIL_STYLE = """
+.nft-detail h1{line-height:48px}.nft-detail .detail-back{font-size:13px;line-height:20px;text-decoration:none;display:inline-flex;align-items:center;min-height:44px}.nft-detail .detail-return{display:flex;align-items:center;min-height:54px;padding:16px;background:var(--raised);border:1px solid var(--line);border-radius:12px;color:var(--ink);text-decoration:none}.nft-detail .detail-quote>.position{font-size:32px;line-height:48px}.nft-detail .detail-name{font-size:20px;line-height:30px;font-weight:700}.nft-detail .marker>span:first-child{font-size:12px;color:var(--muted)}.nft-detail .detail-selectors{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.nft-detail .detail-selectors a{display:flex;align-items:center;min-height:44px;padding:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;text-decoration:none;font:12px 'IBM Plex Mono',monospace;overflow-wrap:anywhere}.nft-detail .detail-selectors a[aria-current=page]{border-color:var(--accent);color:var(--accent)}.nft-detail .timeline{margin:0;list-style:none;padding-left:0}.nft-detail .gap.yes{color:#ea927f;border-color:#ea927f}.nft-detail .gap.no{color:#c4ee8b;border-color:#c4ee8b}
+@media(max-width:650px){.nft-detail h1{line-height:36px}.nft-detail .detail-quote>.position{font-size:24px;line-height:36px}.nft-detail .detail-selectors{grid-template-columns:1fr}.nft-detail .node{min-width:0;align-items:flex-start}.nft-detail .node>.position{min-width:24px}}
+"""
+
 def render_detail(detail, locale="en", *, nft_key=None, choices=(), market_query=""):
     if locale not in LOCALES:
         raise ValueError("unsupported locale")
@@ -123,6 +128,7 @@ def render_detail(detail, locale="en", *, nft_key=None, choices=(), market_query
     quote_labels = QUOTE_LABELS[locale]
     card = detail.get("marketCard") or {}
     quote = card.get("quote") if detail.get("sourceStatus") == "verified-original-reader" else None
+    name_html = '<p class="detail-name">' + e(card["name"]) + '</p>' if card.get("name") else ''
     quote_html = ('<p class="position">' + e(quote["amountBaseUnits"]) + ' ' + e(quote["currency"])
                   + '</p><p class="muted">' + e(quote_labels[0]) + '</p><p>'
                   + e(quote_labels[1] if quote["source"] == "simulated" else quote_labels[2]) + '</p>') if quote else '<p class="missing">' + e(t[3]) + '</p>'
@@ -172,10 +178,10 @@ def render_detail(detail, locale="en", *, nft_key=None, choices=(), market_query
                         for index, item in enumerate(choices))
     return ('<!doctype html><html lang="' + locale + '"><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1"><title>' + e(t[0])
-            + '</title><style>' + STYLE + '</style><body><main><header><a href="' + e(market_back) + '">← ' + e(t[1])
-            + '</a><nav aria-label="' + e(t[17]) + '">' + langs + '</nav></header><nav aria-label="NFT">' + selectors + '</nav><h1>' + e(t[0])
-            + '</h1><p class="gap ' + gap_class + '">' + e(gap) + '</p><section><h2>' + e(t[2]) + '</h2>' + quote_html
+            + '</title><style>' + STYLE + DETAIL_STYLE + '</style><body class="nft-detail"><main><header><a class="detail-back" href="' + e(market_back) + '">← ' + e(t[1])
+            + '</a><nav aria-label="' + e(t[17]) + '">' + langs + '</nav></header><h1>' + e(t[0])
+            + '</h1><p class="gap ' + gap_class + '">' + e(gap) + '</p><section class="detail-quote"><h2>' + e(t[2]) + '</h2>' + name_html + quote_html
             + '<p class="muted">' + e(quote_labels[3]) + '</p></section><section><h2>' + e(t[4]) + '</h2><div class="markers">' + markers
             + '</div><ol class="timeline">' + ''.join(nodes) + '</ol><p class="rule">' + e(t[15])
-            + '</p></section>' + render_register(detail, locale) + render_settlement(detail, locale) + '<section><h2>' + e(t[12]) + '</h2>' + terms + '<p class="muted">' + e(t[14])
-            + '</p></section><a href="' + e(market_back) + '">← ' + e(t[1]) + '</a></main></body></html>')
+            + '</p></section><nav class="detail-selectors" aria-label="NFT">' + selectors + '</nav>' + render_register(detail, locale) + render_settlement(detail, locale) + '<section><h2>' + e(t[12]) + '</h2>' + terms + '<p class="muted">' + e(t[14])
+            + '</p></section><a class="detail-return" href="' + e(market_back) + '">← ' + e(t[1]) + '</a></main></body></html>')
