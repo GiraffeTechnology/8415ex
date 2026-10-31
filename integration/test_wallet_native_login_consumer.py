@@ -83,3 +83,16 @@ class NativeWalletLoginConsumer(unittest.TestCase):
             with self.assertRaisesRegex(WalletAPIRefused, "^EX_WALLET_MESSAGE_SIGNER_REQUIRED$"):
                 client.login_native(None)
             self.assertEqual(state["calls"], [])
+
+    def test_unrecognized_challenge_fields_stop_before_native_signer(self):
+        with original_protocol() as (client, state):
+            original_request = client._request
+            def request(path, body=None):
+                value = original_request(path, body)
+                if path == "challenge":
+                    value["unrecognized"] = "must-not-reach-native-signer"
+                return value
+            client._request = request
+            with self.assertRaisesRegex(WalletAPIRefused, "^EX_WALLET_CHALLENGE_REFUSED$"):
+                client.login_native(lambda challenge: self.fail("unrecognized challenge reached custody"))
+            self.assertNotIn("proof", state)

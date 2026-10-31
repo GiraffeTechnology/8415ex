@@ -255,6 +255,11 @@ class WalletAPIClient:
             raise WalletAPIRefused("EX_WALLET_MESSAGE_SIGNER_REQUIRED")
 
         def sign(challenge, message):
+            fields = {"origin", "tenant", "account", "chainId", "nonce",
+                      "issuedAt", "expiresAt", "id", "method", "message"}
+            if (set(challenge) != fields
+                    or re.fullmatch(r"[A-Za-z0-9]{8,64}", challenge["nonce"]) is None):
+                raise WalletAPIRefused("EX_WALLET_CHALLENGE_REFUSED")
             try:
                 proof = sign_login_challenge(challenge)
             except Exception as error:
