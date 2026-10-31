@@ -53,7 +53,17 @@ def mount_collateral_selection(server, *, allow_empty_catalogue=False):
             except ValueError:
                 self.send_body(400, WORDS.get(locale, WORDS["en"])[13])
                 return
-            self.send_body(200, body)
+            payload = body.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Content-Security-Policy",
+                "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; "
+                "form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+            self.end_headers()
+            self.wfile.write(payload)
 
         def do_POST(self):
             request = urlsplit(self.path)

@@ -7,7 +7,7 @@ from .reference_provenance_page import render_reference_fields, LABELS
 from .market_reference_refresh import REFERENCE_SCRIPT
 
 ASSETS = {name: ("image/png" if name.endswith(".png") else "image/svg+xml") for name in
-          ("soy.png", "ore.png", "copper.png", "cube.svg", "search.svg", "sparkline.svg", "sparkline-stale.svg")}
+          ("soy.png", "ore.png", "copper.png", "cube.svg", "search.svg", "sparkline.svg", "sparkline-stale.svg", "collateral-swap-crypto.svg", "collateral-swap-receipt.svg", "collateral-arrow.svg")}
 PHOTOS = {"soy": "soy.png", "iron-ore": "ore.png", "copper": "copper.png"}
 BASE_UNITS = {"en": "base units / NFT", "zh-Hans": "最小单位 / NFT", "zh-Hant": "最小單位 / NFT",
               "fr": "unités minimales / NFT", "es": "unidades mínimas / NFT", "ja": "最小単位 / NFT"}
