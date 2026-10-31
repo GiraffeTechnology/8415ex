@@ -1053,3 +1053,43 @@ labelled as such; callers should pass {path, format} declarations instead.
 Reuse imports are parsed as Python syntax without execution. Missing declared
 attributes, undeclared bare imports and unresolved runtime names prevent a
 complete map; comments and strings are not imports.
+
+
+## Persistent local simulation workbench
+
+The optional entry point runs the existing in-process business fixtures with
+private, durable simulation history. It does not configure a native gateway,
+custody, proxy, certificate or production authority. Use only an existing
+approved environment and its independently established inputs.
+
+```sh
+python3 -B -m exchange.persistent_simulation_serve \
+  --state /absolute/private/history.sqlite \
+  --port LOCAL_LOOPBACK_PORT \
+  --commit SOURCE_COMMIT --tree SOURCE_TREE \
+  --registration-path REG_DIRECT \
+  --public-origin https://exchange.example \
+  --reference-config EXISTING_REFERENCE_FILE \
+  --reference-config-sha256 EXACT_CONFIG_SHA256 \
+  --reference-resume EXISTING_CONTINUATION_FILE \
+  --reference-resume-sha256 EXACT_CONTINUATION_SHA256
+```
+
+Replace the uppercase arguments with the exact approved deployment values; this
+example is not an instruction to create replacement state or a public listener.
+The state parent must already be private and owned by the service identity.
+Existing unrelated databases, unsafe files and unknown history are refused.
+
+The public origin is optional; without it the existing loopback Host binding
+remains. With it, the TCP listener remains loopback and exact Host/Origin plus
+the original CSRF checks apply. The registration path selects an existing local
+scenario only. All responses retain LOCAL_SIMULATION; persisted records preserve
+their original source identity and real-evidence NOT_RUN fields.
+
+The reference configuration and digest are supplied together, or both omitted.
+The continuation file and digest are also optional together and require that
+original configuration. Construction verifies the bounded cached response and
+observation without fetching a new source value. Restoring an observation does
+not refresh its timestamps, erase failures or shorten the original cadence and
+backoff. Actual source reads, provider acceptance and native execution remain
+separate evidence.

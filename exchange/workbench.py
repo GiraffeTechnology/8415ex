@@ -16,9 +16,9 @@ from urllib.parse import parse_qs, urlsplit
 from . import views
 from .nft_detail import receipt_detail
 from .nft_detail_page import render_detail, LOCALES
-from .nft_directory import NftDirectory
+from .nft_directory import NftDirectory, OrderBookUnavailable
 from .reference_feed import CommodityReferenceFeed
-from .market_page import render_market, render_reference_panel, ASSETS
+from .market_page import render_market, render_reference_panel, render_terminal, ASSETS
 from .market_reference_refresh import send_market_response
 from .demo_ui import DemoHandler, DemoServer, MAX_BODY
 from .errors import DomainError
@@ -261,8 +261,9 @@ class WorkbenchHandler(DemoHandler):
             # identity-excluding detail projection, never raw mint documents.
             body = render_detail(binding.public_detail(), locale=locale,
                                  nft_key=self.server.default_nft_key,
-                                 choices=self.server.nft_directory.choices())
-            return body.replace('<main>', '<main>' + self.native_navigation(locale), 1)
+                                 choices=self.server.nft_directory.choices(),
+                                 evidence_kind=getattr(self.server, "evidence_kind", None))
+            return body.replace('</main>', self.native_navigation(locale) + '</main>', 1)
         if locale != "en":
             raise ValueError("this native view has no verified localized renderer")
         body = views.page(binding.exchange, binding.receipt_id, name,
@@ -336,30 +337,117 @@ class WorkbenchHandler(DemoHandler):
                 self.end_headers()
                 self.wfile.write(raw)
                 return
-            if req.path in ("/market", "/api/catalogue"):
+            if req.path in ("/", "/market", "/api/catalogue"):
+                # The public entry opens the existing dynamic market, while
+                # /receipt remains the explicit native receipt observation.
+                if req.fragment:
+                    raise ValueError("market entry fragment refused")
                 query = parse_qs(req.query, strict_parsing=True, keep_blank_values=True, max_num_fields=3)
                 if set(query) - {"lang", "q", "reference"} or any(len(value) != 1 for value in query.values()):
                     raise ValueError("one market locale and search only")
                 fragment = query.get("reference", [None])[0]
-                if fragment is not None and (req.path != "/market" or fragment != "1"):
+                if fragment is not None and (req.path not in ("/", "/market") or fragment != "1"):
                     raise ValueError("one read-only reference fragment required")
                 locale = query.get("lang", ["en"])[0]
+                if locale not in LOCALES:
+                    raise ValueError("supported market locale required")
                 search = query.get("q", [""])[0]
                 if len(search) > 64 or any(ord(char) < 32 for char in search):
                     raise ValueError("bounded market search required")
                 feed = self.server.reference_feed
                 reference = feed.snapshot() if feed is not None else {"status": "not-connected", "price": None}
-                if req.path == "/market" and fragment is not None:
+                if req.path in ("/", "/market") and fragment is not None:
                     self.send_body(200, render_reference_panel(reference, locale))
                     return
                 rows = self.server.nft_directory.catalogue()
-                if req.path == "/market":
-                    body = render_market(rows, reference, locale, search)
-                    send_market_response(self, body.replace('<main>',
-                        '<main>' + self.native_navigation(locale), 1))
+                if req.path in ("/", "/market"):
+                    body = render_market(rows, reference, locale, search,
+                                         evidence_kind=getattr(self.server, "evidence_kind", None),
+                                         collateral_available=getattr(self.server, "_collateral_selection_mounted", False))
+                    navigation = self.native_navigation(locale)
+                    # The mounted selector also supplies a legacy footer link.
+                    # Keep its one product-header link, without duplicating it.
+                    if getattr(self.server, "_collateral_selection_mounted", False):
+                        navigation = re.sub(r'<nav><a href="/collateral\?lang='
+                            + re.escape(locale) + r'">[^<]*</a></nav>', '', navigation, count=1)
+                    send_market_response(self, body.replace('</main>',
+                        navigation + '</main>', 1))
                 else:
                     self.send_body(200, json.dumps({"nfts": rows, "reference": reference}, sort_keys=True),
                                    "application/json; charset=utf-8")
+                return
+            if req.path == "/terminal":
+                if req.fragment or len(req.query) > 1024:
+                    raise ValueError("bounded terminal observation required")
+                query = parse_qs(req.query, strict_parsing=True, keep_blank_values=True,
+                                 max_num_fields=5)
+                if (set(query) - {"lang", "nft", "currency", "q", "side"}
+                        or any(len(values) != 1 for values in query.values())):
+                    raise ValueError("one terminal selection required")
+                locale = query.get("lang", ["en"])[0]
+                search = query.get("q", [""])[0]
+                side = query.get("side", ["buy"])[0]
+                key = query.get("nft", [self.server.default_nft_key])[0]
+                requested_currency = query.get("currency", [None])[0]
+                if (locale not in LOCALES or side not in ("buy", "sell")
+                        or len(search) > 64 or any(ord(char) < 32 for char in search)
+                        or (requested_currency is not None and (not requested_currency
+                            or len(requested_currency) > 256
+                            or any(ord(char) < 32 for char in requested_currency)))):
+                    raise ValueError("supported terminal context required")
+                if re.fullmatch(r"[0-9a-f]{64}", key) is None:
+                    self.send_body(404, "Unknown NFT.")
+                    return
+                directory = self.server.nft_directory
+                try:
+                    try:
+                        currencies = directory.currency_choices(key)
+                    except OrderBookUnavailable:
+                        currencies = None
+                    if requested_currency is not None and (currencies is None or requested_currency not in currencies):
+                        raise ValueError("original NFT currency required")
+                    currency = requested_currency if requested_currency is not None else (currencies[0] if currencies else None)
+                    try:
+                        book = directory.order_book(key, currency) if currency is not None else None
+                    except OrderBookUnavailable:
+                        book = None
+                    detail = directory.detail(key)
+                except KeyError:
+                    self.send_body(404, "Unknown NFT.")
+                    return
+                body = render_terminal(detail, directory.choices(), currencies, book,
+                    locale, nft_key=key, currency=currency, market_query=search,
+                    side=side, evidence_kind=getattr(self.server, "evidence_kind", None),
+                    collateral_available=getattr(self.server, "_collateral_selection_mounted", False))
+                send_market_response(self, body.replace("</main>", self.native_navigation(locale) + "</main>", 1))
+                return
+            if req.path == "/api/order-book":
+                if req.fragment or len(req.query) > 768:
+                    raise ValueError("bounded selected order book query required")
+                query = parse_qs(req.query, strict_parsing=True, keep_blank_values=True,
+                                 max_num_fields=3)
+                if (set(query) - {"nft", "currency", "limit"}
+                        or not {"nft", "currency"} <= set(query)
+                        or any(len(values) != 1 for values in query.values())):
+                    raise ValueError("exact selected NFT and original currency required")
+                key, currency = query["nft"][0], query["currency"][0]
+                level_limit = query.get("limit", ["20"])[0]
+                if (re.fullmatch(r"[0-9a-f]{64}", key) is None
+                        or not currency or len(currency) > 256
+                        or any(ord(char) < 32 for char in currency)
+                        or re.fullmatch(r"(?:[1-9]|[1-9][0-9]|100)", level_limit) is None):
+                    raise ValueError("bounded selected order book fields required")
+                try:
+                    value = self.server.nft_directory.order_book(
+                        key, currency, limit=int(level_limit))
+                except KeyError:
+                    self.send_body(404, "Unknown NFT.")
+                    return
+                except OrderBookUnavailable:
+                    self.send_body(503, "Original order book is unavailable.")
+                    return
+                self.send_body(200, json.dumps(value, sort_keys=True),
+                               "application/json; charset=utf-8")
                 return
             if req.path == "/evidence":
                 if len(req.query) > 1024:
@@ -408,15 +496,16 @@ class WorkbenchHandler(DemoHandler):
                     if len(search) > 64 or any(ord(char) < 32 for char in search):
                         raise ValueError("bounded market search required")
                     body = render_detail(detail, locale, nft_key=key,
-                                         choices=directory.choices(), market_query=search)
-                    self.send_body(200, body.replace('<main>',
-                        '<main>' + self.native_navigation(locale), 1))
+                                         choices=directory.choices(), market_query=search,
+                                         evidence_kind=getattr(self.server, "evidence_kind", None))
+                    self.send_body(200, body.replace('</main>',
+                        self.native_navigation(locale) + '</main>', 1))
                 else:
                     value = {"nfts": directory.choices()} if req.path == "/api/nfts" else detail
                     self.send_body(200, json.dumps(value, sort_keys=True),
                                    "application/json; charset=utf-8")
                 return
-            if req.path in ("/", "/receipt"):
+            if req.path == "/receipt":
                 if req.fragment or len(req.query) > 64:
                     raise ValueError("bounded receipt locale required")
                 query = parse_qs(req.query, strict_parsing=True,

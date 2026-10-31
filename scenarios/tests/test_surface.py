@@ -202,6 +202,17 @@ class CountingModuleFunctions(unittest.TestCase):
 class FailingClosed(unittest.TestCase):
     """The negative controls. Each one is a way this could report a false pass."""
 
+    def test_missing_public_book_call_is_a_finding_without_an_exemption(self):
+        label = "exchange.ledger.Exchange.order_book_view"
+        self.assertNotIn(label, surface.NOT_EXERCISED_LOCALLY)
+        def touches_nothing(recorder):
+            recorder.expect("no public book entered", ("T-09",), 1, 1)
+        measured = surface.coverage(
+            ((Scenario("SURFACE-NO-BOOK", "book not entered", ("T-09",),
+                       "REG_DIRECT", touches_nothing),),), run_all)
+        self.assertIn(label, measured["notAccountedFor"])
+        self.assertFalse(measured["everyMethodAccountedFor"])
+
     def test_an_unexercised_method_that_nothing_accounts_for_is_a_finding(self):
         def touches_nothing(recorder):
             recorder.expect("a contract that enters no domain method", ("T-01",), 1, 1)

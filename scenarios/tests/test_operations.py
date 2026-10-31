@@ -130,6 +130,20 @@ class ReadsMoveNothing(unittest.TestCase):
         self.assertEqual(self.check["readCount"], len(operations.READS))
         self.assertGreater(self.check["readCount"], 25)
 
+    def test_public_order_book_is_a_read_and_detects_side_effects(self):
+        self.assertIn("order_book_view", operations.READS)
+        original = Exchange.order_book_view
+        def leaky(exchange, *args, **kwargs):
+            exchange.payments.movements += 1
+            return original(exchange, *args, **kwargs)
+        Exchange.order_book_view = leaky
+        try:
+            measured = operations.read_only_moves_nothing()
+        finally:
+            Exchange.order_book_view = original
+        self.assertIn("order_book_view", measured["movedSomething"])
+        self.assertFalse(measured["allReadsMovedNothing"])
+
     def test_a_read_that_moved_something_would_be_named(self):
         """The negative control for the rule itself, not just the counters.
 

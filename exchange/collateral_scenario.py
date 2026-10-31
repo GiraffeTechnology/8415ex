@@ -3,6 +3,22 @@ from html import escape
 from urllib.parse import urlencode
 
 from .nft_directory import NftDirectory
+from .nft_detail_page import STYLE
+
+DIRECTION_STYLE = """
+.collateral-directions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;margin:28px 0}
+.collateral-direction{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:28px;min-width:0}
+.collateral-direction.selected{border-color:var(--accent)}.collateral-direction h2{font-size:26px;overflow-wrap:anywhere}
+.collateral-direction .direction-icon{display:flex;justify-content:flex-end}.collateral-direction .direction-icon img{width:24px;height:24px}
+.collateral-direction .direction-flow{display:grid;grid-template-columns:minmax(0,1fr) 26px minmax(0,1fr);gap:20px;align-items:center;margin:20px 0}
+.collateral-direction .direction-flow img{width:26px;height:26px}.collateral-direction select{width:100%;min-width:0;min-height:44px;background:var(--raised);color:var(--ink);border:1px solid var(--line);padding:12px;font:inherit}
+.collateral-direction label{display:block;margin:12px 0;color:var(--muted);overflow-wrap:anywhere}
+.collateral-direction button{width:100%;min-height:44px;margin-top:20px;background:var(--raised);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:12px;font:inherit}
+.collateral-direction.selected button{background:var(--accent);color:var(--bg)}
+.collateral-direction :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:850px){.collateral-directions{grid-template-columns:1fr}.collateral-direction{padding:20px}.collateral-direction h2{font-size:22px}.collateral-direction .direction-flow{gap:12px}}
+"""
+
 
 
 WORDS = {
@@ -61,9 +77,9 @@ def collateral_selection(directory, *, kind="", asset="", target=""):
         "executionInvoked": False, "ordinarySpotEligibilityEvaluated": False}
 
 
-def render_collateral(directory, locale="en", *, kind="", asset="", target=""):
-    if locale not in WORDS:
-        raise ValueError("supported locale required")
+def render_collateral(directory, locale="en", *, kind="", asset="", target="", evidence_kind=None):
+    if locale not in WORDS or evidence_kind not in (None, "LOCAL_SIMULATION"):
+        raise ValueError("supported locale and evidence kind required")
     selection = collateral_selection(directory, kind=kind, asset=asset, target=target)
     w = WORDS[locale]
     keys = tuple(directory._bindings)
@@ -73,11 +89,24 @@ def render_collateral(directory, locale="en", *, kind="", asset="", target=""):
         return '<option value="' + escape(value, quote=True) + '"' + (
             ' selected' if value == chosen else '') + '>' + escape(text) + '</option>'
 
-    types = ''.join(option(value, label, kind) for value, label in
-                    (("", w[6]), ("crypto", w[2]), ("warehouse-nft", w[3])))
-    assets = option("", w[6], asset) + ''.join(option(value, value, asset) for value in ("BTC", "ETH"))
-    assets += ''.join(option(key, labels[key], asset) for key in keys)
     targets = option("", w[6], target) + ''.join(option(key, labels[key], target) for key in keys)
+    def direction(category, heading, candidates, icon):
+        chosen = kind == category
+        options = option("", w[6], asset if chosen else "") + ''.join(
+            option(value, labels.get(value, value), asset if chosen else "") for value in candidates)
+        return ('<form class="collateral-direction' + (' selected' if chosen else '') +
+            '" data-direction="' + category + '" method="get" action="/collateral">'
+            '<input type="hidden" name="lang" value="' + locale + '">'
+            '<input type="hidden" name="kind" value="' + category + '">'
+            '<div class="direction-icon"><img src="/assets/' + icon + '" alt=""></div>'
+            '<h2>' + escape(heading) + '</h2><div class="direction-flow"><span>' +
+            escape(w[2] if category == "crypto" else w[3]) +
+            '</span><img src="/assets/collateral-arrow.svg" alt=""><span>' + escape(w[5]) +
+            '</span></div><label>' + escape(w[4]) + '<select name="asset">' + options +
+            '</select></label><label>' + escape(w[5]) + '<select name="target">' + targets +
+            '</select></label><button type="submit">' + escape(w[7]) + '</button></form>')
+    directions = (direction("crypto", w[2], ("BTC", "ETH"), "collateral-swap-crypto.svg")
+                  + direction("warehouse-nft", w[3], keys, "collateral-swap-receipt.svg"))
     query = {"kind": kind, "asset": asset, "target": target}
     languages = ''.join('<a lang="' + code + '" href="/collateral?' + escape(
         urlencode({"lang": code, **query}), quote=True) + '">' + code + '</a>' for code in WORDS)
@@ -85,13 +114,10 @@ def render_collateral(directory, locale="en", *, kind="", asset="", target=""):
     summary = w[8] if selected is None else (w[2] if selected["kind"] == "crypto" else w[3]) + ': ' + labels.get(asset, asset)
     return ('<!doctype html><html lang="' + locale + '"><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1"><title>' + escape(w[0])
-        + '</title><body><main><nav><a href="/market?lang=' + locale + '">' + escape(w[12])
-        + '</a> ' + languages + '</nav><h1>' + escape(w[0]) + '</h1><p>DEMO</p>'
-        + '<form method="get" action="/collateral"><input type="hidden" name="lang" value="'
-        + locale + '"><p><label>' + escape(w[1]) + ' <select name="kind">' + types + '</select></label></p>'
-        + '<p><label>' + escape(w[4]) + ' <select name="asset">' + assets + '</select></label></p>'
-        + '<p><label>' + escape(w[5]) + ' <select name="target">' + targets + '</select></label></p>'
-        + '<button type="submit">' + escape(w[7]) + '</button></form><section data-collateral-selection="1"><h2>'
+        + '</title><style>' + STYLE + DIRECTION_STYLE + '</style><body><main><nav><a href="/market?lang=' + locale + '">' + escape(w[12])
+        + '</a> ' + languages + '</nav><h1>' + escape(w[0]) + '</h1><p>' + escape(evidence_kind or 'DEMO') + '</p>'
+        + '<div class="collateral-directions" data-node-id="11:717">' + directions
+        + '</div><section data-collateral-selection="1"><h2>'
         + escape(summary) + '</h2><p>' + escape(w[9]) + '</p><p>' + escape(w[10]) + '</p><p>'
         + escape(w[11]) + '</p>' + ('<p>' + escape(w[14]) + '</p>' if not keys else '')
         + '</section></main></body></html>')

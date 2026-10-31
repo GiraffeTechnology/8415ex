@@ -207,7 +207,7 @@ PYTHON_DISPLAY_TABLES = {
     "exchange/evidence_page.py": ("_TEXT", "LANGUAGES", "UNVERIFIED"),
     "exchange/gap_projection.py": ("GAP_LABELS",),
     "exchange/gas_disclosure_locales.py": ("WORDS", "TRANSPORT", "AVAILABILITY", "BUDGET_OBSERVATION"),
-    "exchange/market_page.py": ("BASE_UNITS", "WORDS", "STATES", "EMPTY_MODE"),
+    "exchange/market_page.py": ("BASE_UNITS", "WORDS", "STATES", "EMPTY_MODE", "PROVENANCE_SUMMARY"),
     "exchange/nft_detail_page.py": ("LOCALES", "QUOTE_LABELS", "SIGNATURE_OBSERVATION_LABELS", "TERM_SECTION_LABELS"),
     "exchange/command_observation_page.py": ("TEXT", "STATUS_TEXT"),
     "exchange/checkpointed_operation_page.py": ("TEXT",),

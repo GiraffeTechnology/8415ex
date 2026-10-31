@@ -288,8 +288,12 @@ def exit_exchange(registration_path="REG_DIRECT", clock=None, voucher_outcomes=N
                         gas_budgets=kwargs.get("gas_budgets"),
                         voucher_desk=SimulatedVoucherDesk(clock, registration_path,
                                                           outcomes=voucher_outcomes))
-    receipt_record = receipt(registration_path=registration_path)
-    exchange.mint(receipt_record, specification=mint_specification(receipt_record))
+    declared = kwargs.get("model_specification")
+    receipt_record = (declared.receipt if declared is not None else
+        receipt(registration_path=registration_path, allowed_currencies=kwargs.get("allowed_currencies", (QUOTE_ASSET,))))
+    if receipt_record.registration_path != registration_path:
+        raise ValueError("model registrar path differs from declaration")
+    exchange.mint(receipt_record, specification=declared or mint_specification(receipt_record))
     exchange.connect_wallet(A, "session-a")
     return exchange, clock
 

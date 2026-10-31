@@ -374,6 +374,29 @@ class LocalizedUIClassification(unittest.TestCase):
             subprocess.run(("git", "-C", root, "add", "--", "."), check=True)
             return observations.secret_scan(root, private_markers=markers)
 
+    def test_reference_disclosure_labels_are_ui_data_only_in_the_exact_table(self):
+        labels = {locale: chr(0x4E2D) for locale in observations.DISPLAY_LOCALES}
+        source = "PROVENANCE_SUMMARY = " + repr(labels) + "\n"
+        path = "exchange/market_page.py"
+        self.assertTrue(self._scan({path: source})["clean"])
+        for changed in (source + "# " + chr(0x4E2D),
+                        source.replace("PROVENANCE_SUMMARY", "OTHER_LABELS"),
+                        "PROVENANCE_SUMMARY = " + repr({"en": chr(0x4E2D)})):
+            with self.subTest(changed=changed):
+                scan = self._scan({path: changed})
+                self.assertFalse(scan["clean"])
+                self.assertIn("non-english", {item["kind"] for item in scan["findings"]})
+
+    def test_reference_disclosure_ui_labels_keep_all_secret_and_private_checks(self):
+        path = "exchange/market_page.py"
+        for label, _ in observations.SECRET_PATTERNS + observations.PRIVATE_CONTENT_PATTERNS:
+            with self.subTest(pattern=label):
+                values = {locale: chr(0x4E2D) + " " + _sample(label)
+                          for locale in observations.DISPLAY_LOCALES}
+                scan = self._scan({path: "PROVENANCE_SUMMARY = " + repr(values)})
+                self.assertFalse(scan["clean"])
+                self.assertIn(label, {item["pattern"] for item in scan["findings"]})
+
     def test_localized_values_are_fully_scanned_product_data(self):
         scan = self._scan({"ui/commodity-market/locales.js": self._locale_source()})
         self.assertTrue(scan["clean"], scan["findings"])
