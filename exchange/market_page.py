@@ -15,24 +15,30 @@ WORDS = {
     "en": ("Market", "Spot trading", "Two-way collateral", "Receipt registration", "Commodity references",
            "Documented goods. Orderly trading.", "Whole receipts, source-bound observations and separate settlement currencies.",
            "Reference prices and NFT orders are separate. EX provides no conversion.", "Original details not provided", "Illustration only",
-           "View NFT details", "Execution route not connected", "Search", "No matching NFT records", "All NFTs", "Not connected"),
+           "View NFT details", "Execution route not connected", "Search", "No matching NFT records", "All NFTs", "Not connected",
+           "Order book", "Settlement currency", "Whole receipt", "Price / whole NFT (base units)", "Priority", "No currently eligible orders", "Order book unavailable", "Original price history not provided", "Receipt details", "Refresh observation", "Buy receipt", "Sell receipt", "Limit price", "Source observation, not an execution result", "Choose receipt", "Whole-receipt order", "Immutable currencies not provided", "Only original settlement currencies are shown. No conversion."),
     "zh-Hans": ("市场", "现货交易", "双向质押", "仓单登记", "商品参考行情", "有据商品，有序交易。",
                 "整张仓单、绑定来源的观察与独立结算币种。", "参考价与 NFT 订单分开。EX 不提供兑换。", "原始资料未提供", "仅为示意图",
-                "查看 NFT 详情", "执行路由未接通", "搜索", "没有匹配的 NFT 记录", "全部 NFT", "未连接"),
+                "查看 NFT 详情", "执行路由未接通", "搜索", "没有匹配的 NFT 记录", "全部 NFT", "未连接",
+           "订单簿", "结算币种", "整张仓单", "每张 NFT 价格（最小单位）", "优先序", "当前无符合条件的订单", "订单簿不可用", "原始价格历史未提供", "仓单详情", "刷新观察", "买入仓单", "卖出仓单", "限价", "来源观察，不是执行结果", "选择仓单", "整张仓单订单", "不可变币种集合未提供", "只展示原始结算币种，不提供兑换。"),
     "zh-Hant": ("市場", "現貨交易", "雙向質押", "倉單登記", "商品參考行情", "有據商品，有序交易。",
                 "整張倉單、綁定來源的觀察與獨立結算幣種。", "參考價與 NFT 訂單分開。EX 不提供兌換。", "原始資料未提供", "僅為示意圖",
-                "查看 NFT 詳情", "執行路由未接通", "搜尋", "沒有匹配的 NFT 記錄", "全部 NFT", "未連接"),
+                "查看 NFT 詳情", "執行路由未接通", "搜尋", "沒有匹配的 NFT 記錄", "全部 NFT", "未連接",
+           "訂單簿", "結算幣種", "整張倉單", "每張 NFT 價格（最小單位）", "優先序", "目前無符合條件的訂單", "訂單簿不可用", "原始價格歷史未提供", "倉單詳情", "重新整理觀察", "買入倉單", "賣出倉單", "限價", "來源觀察，不是執行結果", "選擇倉單", "整張倉單訂單", "不可變幣種集合未提供", "只顯示原始結算幣種，不提供兌換。"),
     "fr": ("Marché", "Négoce au comptant", "Garanties bidirectionnelles", "Enregistrement", "Références de matières premières",
            "Des biens documentés. Des échanges ordonnés.", "Récépissés entiers, observations liées à leur source et devises de règlement distinctes.",
            "Les références et les ordres NFT sont distincts. EX ne convertit pas les devises.", "Données originales non fournies", "Illustration uniquement",
-           "Voir les détails NFT", "Circuit d’exécution non connecté", "Rechercher", "Aucun NFT correspondant", "Tous les NFT", "Non connecté"),
+           "Voir les détails NFT", "Circuit d’exécution non connecté", "Rechercher", "Aucun NFT correspondant", "Tous les NFT", "Non connecté",
+           "Carnet d’ordres", "Devise de règlement", "Récépissé entier", "Prix / NFT entier (unités minimales)", "Priorité", "Aucun ordre actuellement admissible", "Carnet d’ordres indisponible", "Historique de prix original non fourni", "Détails du récépissé", "Actualiser l’observation", "Acheter le récépissé", "Vendre le récépissé", "Prix limite", "Observation de source, pas un résultat d’exécution", "Choisir un récépissé", "Ordre sur récépissé entier", "Devises immuables non fournies", "Seules les devises de règlement originales sont affichées. Aucune conversion."),
     "es": ("Mercado", "Negociación al contado", "Garantías bidireccionales", "Registro", "Referencias de materias primas",
            "Bienes documentados. Negociación ordenada.", "Recibos completos, observaciones vinculadas a su fuente y monedas de liquidación separadas.",
            "Las referencias y las órdenes NFT son independientes. EX no convierte monedas.", "Datos originales no proporcionados", "Solo ilustración",
-           "Ver detalles NFT", "Ruta de ejecución sin conectar", "Buscar", "No hay NFT coincidentes", "Todos los NFT", "Sin conectar"),
+           "Ver detalles NFT", "Ruta de ejecución sin conectar", "Buscar", "No hay NFT coincidentes", "Todos los NFT", "Sin conectar",
+           "Libro de órdenes", "Moneda de liquidación", "Recibo completo", "Precio / NFT completo (unidades mínimas)", "Prioridad", "No hay órdenes actualmente admisibles", "Libro de órdenes no disponible", "Historial de precios original no proporcionado", "Detalles del recibo", "Actualizar observación", "Comprar recibo", "Vender recibo", "Precio límite", "Observación de origen, no resultado de ejecución", "Elegir recibo", "Orden de recibo completo", "Monedas inmutables no proporcionadas", "Solo se muestran las monedas de liquidación originales. Sin conversión."),
     "ja": ("市場", "現物取引", "双方向担保", "倉荷証券登録", "商品参考相場", "記録された商品。秩序ある取引。",
            "倉荷証券全体、出典に紐づく観測と個別の決済通貨。", "参考価格と NFT 注文は別です。EX は通貨を交換しません。", "元の情報は未提供", "説明用の画像です",
-           "NFT の詳細を見る", "実行経路は未接続", "検索", "一致する NFT 記録はありません", "すべての NFT", "未接続"),
+           "NFT の詳細を見る", "実行経路は未接続", "検索", "一致する NFT 記録はありません", "すべての NFT", "未接続",
+           "注文板", "決済通貨", "倉荷証券全体", "NFT 全体の価格（最小単位）", "優先順位", "現在、適格な注文はありません", "注文板は利用できません", "元の価格履歴は未提供", "倉荷証券の詳細", "観測を更新", "倉荷証券を購入", "倉荷証券を売却", "指値", "出典の観測であり実行結果ではありません", "倉荷証券を選択", "倉荷証券全体の注文", "不変の通貨集合は未提供", "元の決済通貨のみ表示します。両替は行いません。"),
 }
 STATES = {
     "en": ("Fresh", "Stale", "Unavailable", "Unknown", "SIMULATED", "Original order"),
@@ -135,16 +141,94 @@ def render_market(entries, reference, locale="en", query="", *, empty_catalogue=
                      + '<h2>' + e(name) + '</h2><p class="muted">' + e(card.get("spec", t[8])) + '</p><div class="quote">'
                      + price + '</div><p>' + quantity + ' · 1 NFT</p><p><span class="badge ' + gap_class
                      + '">' + e(gap) + '</span></p><span>' + e(t[10]) + ' →</span></a>')
+    terminal_href = "#nfts" if empty_catalogue else "/terminal?" + urlencode({"lang": locale, "q": query})
     reference_panel = render_reference_panel(reference, locale)
     languages = ''.join('<a href="/market?' + e(urlencode({"lang": key, "q": query})) + '" lang="' + key + '">' + key + '</a>' for key in LOCALES)
     return ('<!doctype html><html lang="' + locale + '"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             '<title>8415EX · ' + e(t[0]) + '</title><style>' + STYLE + MARKET_STYLE + '</style><body><main><header class="market-top">'
             '<img src="/assets/cube.svg" width="20" height="20" alt=""><b>8415EX</b><span class="badge">' + e(EMPTY_MODE[locale] if empty_catalogue else evidence_kind or "DEMO") + '</span><a href="#nfts" aria-current="page">' + e(t[0])
-            + '</a><a href="#nfts">' + e(t[1]) + '</a><span>' + e(t[2]) + '</span><span>' + e(t[3]) + '</span>' + language_menu(languages, locale, common[17]) + '<a class="wallet-entry" href="https://8415wallet.com" rel="noopener noreferrer">8415Wallet &#8599;</a></header>'
+            + '</a><a href="' + e(terminal_href) + '">' + e(t[1]) + '</a><span>' + e(t[2]) + '</span><span>' + e(t[3]) + '</span>' + language_menu(languages, locale, common[17]) + '<a class="wallet-entry" href="https://8415wallet.com" rel="noopener noreferrer">8415Wallet &#8599;</a></header>'
             '<p class="notice">' + e(t[7]) + '</p>' + reference_panel + '<section class="hero"><div><h1>' + e(t[5])
-            + '</h1><p class="muted">' + e(t[6]) + '</p><a class="hero-start" href="#nfts">' + e(t[1]) + '</a></div><figure><img class="hero-photo" src="/assets/soy.png" alt="'
+            + '</h1><p class="muted">' + e(t[6]) + '</p><a class="hero-start" href="' + e(terminal_href) + '">' + e(t[1]) + '</a></div><figure><img class="hero-photo" src="/assets/soy.png" alt="'
             + e(t[9]) + '"><figcaption class="muted">' + e(t[9]) + '</figcaption></figure></section><div class="market-tools"><h2 id="nfts">' + e(t[1])
             + '</h2><a href="/market?' + e(urlencode({"lang": locale})) + '">' + e(t[14]) + '</a><form class="search" method="get" action="/market">'
             '<input type="hidden" name="lang" value="' + locale + '"><img src="/assets/search.svg" width="18" height="18" alt=""><input name="q" maxlength="64" value="'
             + e(query) + '" aria-label="' + e(t[12]) + '"><button>' + e(t[12]) + '</button></form></div><div class="nft-grid">'
             + (''.join(cards) or '<p>' + e(t[13]) + '</p>') + '</div><footer class="muted">' + e(t[7]) + '</footer></main><script>' + REFERENCE_SCRIPT + '</script></body></html>')
+
+TERMINAL_STYLE = """
+.terminal-layout{display:grid;grid-template-columns:minmax(0,964px) minmax(300px,372px);gap:24px;align-items:start}
+.terminal-main{min-width:0}.terminal-upper{display:grid;grid-template-columns:264px minmax(0,1fr);gap:16px}
+.terminal-lower{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.16fr);gap:16px}
+.terminal-layout .quote{overflow-wrap:anywhere}.terminal-layout select,.terminal-layout input{box-sizing:border-box}
+.terminal-layout section{margin:0 0 16px;min-width:0}.terminal-ticket{position:sticky;top:16px}
+.terminal-chart{min-height:312px;display:grid;align-content:center;text-align:center;color:var(--muted)}
+.terminal-heading{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+.terminal-layout h1{font-size:22px}.terminal-layout h2{font-size:16px;margin:0 0 16px}
+.terminal-layout table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:12px}
+.terminal-layout th,.terminal-layout td{padding:10px 4px;text-align:left;overflow-wrap:anywhere}
+.terminal-layout th{color:var(--muted);font-weight:400}.terminal-layout tr{border-bottom:1px solid var(--line)}
+.terminal-layout .ask{color:#ea927f}.terminal-layout .bid{color:#a9d991}
+.terminal-layout label{display:block;font-size:12px;color:var(--muted);margin:12px 0}
+.terminal-layout select,.terminal-layout input{width:100%;max-width:100%;min-width:0;min-height:44px;background:var(--raised);color:var(--ink);border:1px solid var(--line);padding:10px;border-radius:6px;font:inherit}
+.terminal-layout button,.terminal-layout a.action{min-height:44px;display:inline-flex;align-items:center;padding:10px 16px;border:1px solid var(--line);border-radius:6px}
+.terminal-layout a{color:var(--muted);overflow-wrap:anywhere}.terminal-layout .active-side{background:var(--accent);color:var(--bg)}
+.terminal-side{display:flex;gap:8px;flex-wrap:wrap}.terminal-side a{flex:1;justify-content:center;text-decoration:none}
+.terminal-empty{padding:24px 0;color:var(--muted)}.terminal-scope{font-size:11px;color:var(--muted);line-height:1.6}
+.terminal-layout :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:1100px){.terminal-layout{grid-template-columns:minmax(0,1fr) 320px}.terminal-upper,.terminal-lower{grid-template-columns:1fr}}
+@media(max-width:850px){.terminal-layout{grid-template-columns:1fr}.terminal-ticket{position:static}.terminal-upper,.terminal-lower{grid-template-columns:1fr}}
+"""
+
+
+def render_terminal(detail, choices, currencies, book, locale="en", *, nft_key,
+                    currency=None, market_query="", side="buy", evidence_kind=None):
+    """Original selected observations only; this renderer never submits an order."""
+    if (locale not in LOCALES or side not in ("buy", "sell")
+            or evidence_kind not in (None, "LOCAL_SIMULATION")
+            or (currency is not None and (currencies is None or currency not in currencies))):
+        raise ValueError("supported terminal observation required")
+    t, common = WORDS[locale], LOCALES[locale]
+    e = lambda value: escape(str(value), quote=True)
+    def target(**changes):
+        values = {"lang": locale, "nft": nft_key, "q": market_query, "side": side}
+        if currency is not None:
+            values["currency"] = currency
+        values.update(changes)
+        return "/terminal?" + urlencode(values)
+    def hidden(name, value):
+        return '<input type="hidden" name="' + name + '" value="' + e(value) + '">'
+    context = hidden("lang", locale) + hidden("q", market_query) + hidden("side", side)
+    languages = ''.join('<a href="' + e(target(lang=lang)) + '" lang="' + lang + '">' + lang + '</a>' for lang in LOCALES)
+    back = "/market?" + urlencode({"lang": locale, "q": market_query}) + "#nft-" + nft_key
+    detail_href = "/nft?" + urlencode({"lang": locale, "nft": nft_key, "q": market_query})
+    card = detail.get("marketCard") or {}
+    name = card.get("name") or "NFT"
+    quote = card.get("quote")
+    price = (quote["amountBaseUnits"] if quote and quote["currency"] == currency else common[3])
+    options = ''.join('<option value="' + e(row["nftKey"]) + '"' +
+        (' selected' if row["nftKey"] == nft_key else '') + '>NFT ' + str(index + 1) + '</option>'
+        for index, row in enumerate(choices))
+    receipt_form = '<form method="get" action="/terminal">' + context + '<label>' + e(t[30]) + '<select name="nft">' + options + '</select></label><button>' + e(t[30]) + '</button></form>'
+    if currencies:
+        currency_options = ''.join('<option value="' + e(value) + '"' + (' selected' if value == currency else '') + '>' + e(value) + '</option>' for value in currencies)
+        currency_form = '<form method="get" action="/terminal">' + context + hidden("nft", nft_key) + '<label>' + e(t[17]) + '<select name="currency">' + currency_options + '</select></label><button>' + e(t[25]) + '</button></form>'
+    else:
+        currency_form = '<p class="missing">' + e(t[32]) + '</p>'
+    def levels(name, css, label):
+        if book is None:
+            return '<p class="terminal-empty">' + e(t[22]) + '</p>'
+        data = book[name]
+        if not data["rows"]:
+            return '<p class="terminal-empty">' + e(label) + ' · ' + e(t[21]) + '</p>'
+        rows = ''.join('<tr class="' + css + '"><td>' + e(row["priceBaseUnits"]) + '</td><td>1 NFT</td><td>' + e(row["priority"]) + '</td></tr>' for row in data["rows"])
+        return '<h3>' + e(label) + '</h3><table><thead><tr><th>' + e(t[19]) + '</th><th>' + e(t[18]) + '</th><th>' + e(t[20]) + '</th></tr></thead><tbody>' + rows + '</tbody></table>' + ('<p class="muted">' + str(len(data["rows"])) + ' / ' + str(data["total"]) + '</p>' if data["hasMore"] else '')
+    gap, gap_class = gap_label(detail, locale)
+    image = PHOTOS.get(card.get("commodityCode"))
+    photo = '<img class="product-photo" src="/assets/' + image + '" alt="' + e(t[9]) + '">' if image else ''
+    return ('<!doctype html><html lang="' + locale + '"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>8415EX · ' + e(t[1]) + '</title><style>' + STYLE + MARKET_STYLE + TERMINAL_STYLE + '</style><body><main>'
+        '<header class="market-top"><img src="/assets/cube.svg" width="20" height="20" alt=""><b>8415EX</b><span class="badge">' + e(evidence_kind or EMPTY_MODE[locale]) + '</span><a href="' + e(back) + '">' + e(t[0]) + '</a><a href="' + e(target()) + '" aria-current="page">' + e(t[1]) + '</a><span>' + e(t[2]) + '</span><span>' + e(t[3]) + '</span>' + language_menu(languages, locale, common[17]) + '<a class="wallet-entry" href="https://8415wallet.com" rel="noopener noreferrer">8415Wallet &#8599;</a></header>'
+        '<div class="terminal-heading"><h1>' + e(t[1]) + '</h1><a class="action" href="' + e(detail_href) + '">' + e(t[24]) + ' →</a></div><p class="notice">' + e(t[33]) + '</p>'
+        '<div class="terminal-layout"><div class="terminal-main"><div class="terminal-upper"><section class="terminal-product">' + photo + '<h2>' + e(name) + '</h2><p class="quote">' + e(price) + '</p><p class="muted">' + e(currency or common[3]) + ' · ' + e(t[19]) + '</p><span class="badge ' + gap_class + '">' + e(gap) + '</span><p><a href="' + e(detail_href) + '">' + e(t[24]) + ' →</a></p></section><section class="terminal-chart"><h2>' + e(t[23]) + '</h2><p>' + e(t[29]) + '</p></section></div>'
+        '<div class="terminal-lower"><section class="terminal-book"><div class="terminal-heading"><h2>' + e(t[16]) + '</h2><span class="badge">' + e(currency or common[3]) + '</span></div>' + levels("asks", "ask", t[27]) + levels("bids", "bid", t[26]) + '<p class="terminal-scope">' + e(t[29]) + '</p></section><section class="terminal-receipts"><h2>' + e(t[30]) + '</h2>' + receipt_form + '<a href="' + e(detail_href) + '">' + e(t[24]) + ' →</a></section></div></div>'
+        '<section class="terminal-ticket"><h2>' + e(t[31]) + '</h2><nav class="terminal-side"><a class="action ' + ('active-side' if side == "buy" else '') + '" href="' + e(target(side="buy")) + '">' + e(t[26]) + '</a><a class="action ' + ('active-side' if side == "sell" else '') + '" href="' + e(target(side="sell")) + '">' + e(t[27]) + '</a></nav>' + currency_form + '<p>1 NFT</p><label>' + e(t[28]) + '<input readonly value="' + e(price) + '"></label><p class="muted">ETH gas · ' + e(common[3]) + '</p><button disabled>' + e(t[11]) + '</button><p class="terminal-scope">' + e(t[29]) + '</p></section></div></main></body></html>')

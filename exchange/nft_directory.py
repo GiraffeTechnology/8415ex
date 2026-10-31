@@ -49,6 +49,20 @@ class NftDirectory:
         detail["nftKey"] = key
         return detail
 
+    def currency_choices(self, key):
+        """Read only the selected original NFT's immutable settlement set."""
+        binding = self._bindings[key]
+        try:
+            currencies = binding.exchange.receipt(binding.receipt_id).allowed_price_currencies
+        except Exception:
+            raise OrderBookUnavailable("original NFT currencies unavailable") from None
+        if (type(currencies) is not tuple or len(currencies) > 32
+                or any(type(value) is not str or not value or len(value) > 256
+                       or any(ord(char) < 32 for char in value) for value in currencies)
+                or len(set(currencies)) != len(currencies)):
+            raise OrderBookUnavailable("original NFT currencies unavailable")
+        return currencies
+
     def order_book(self, key, currency, *, limit=20):
         """Exact registered source; no detail reader or fallback NFT is used."""
         binding = self._bindings[key]

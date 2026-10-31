@@ -18,7 +18,7 @@ from .nft_detail import receipt_detail
 from .nft_detail_page import render_detail, LOCALES
 from .nft_directory import NftDirectory, OrderBookUnavailable
 from .reference_feed import CommodityReferenceFeed
-from .market_page import render_market, render_reference_panel, ASSETS
+from .market_page import render_market, render_reference_panel, render_terminal, ASSETS
 from .market_reference_refresh import send_market_response
 from .demo_ui import DemoHandler, DemoServer, MAX_BODY
 from .errors import DomainError
@@ -368,6 +368,50 @@ class WorkbenchHandler(DemoHandler):
                 else:
                     self.send_body(200, json.dumps({"nfts": rows, "reference": reference}, sort_keys=True),
                                    "application/json; charset=utf-8")
+                return
+            if req.path == "/terminal":
+                if req.fragment or len(req.query) > 1024:
+                    raise ValueError("bounded terminal observation required")
+                query = parse_qs(req.query, strict_parsing=True, keep_blank_values=True,
+                                 max_num_fields=5)
+                if (set(query) - {"lang", "nft", "currency", "q", "side"}
+                        or any(len(values) != 1 for values in query.values())):
+                    raise ValueError("one terminal selection required")
+                locale = query.get("lang", ["en"])[0]
+                search = query.get("q", [""])[0]
+                side = query.get("side", ["buy"])[0]
+                key = query.get("nft", [self.server.default_nft_key])[0]
+                requested_currency = query.get("currency", [None])[0]
+                if (locale not in LOCALES or side not in ("buy", "sell")
+                        or len(search) > 64 or any(ord(char) < 32 for char in search)
+                        or (requested_currency is not None and (not requested_currency
+                            or len(requested_currency) > 256
+                            or any(ord(char) < 32 for char in requested_currency)))):
+                    raise ValueError("supported terminal context required")
+                if re.fullmatch(r"[0-9a-f]{64}", key) is None:
+                    self.send_body(404, "Unknown NFT.")
+                    return
+                directory = self.server.nft_directory
+                try:
+                    try:
+                        currencies = directory.currency_choices(key)
+                    except OrderBookUnavailable:
+                        currencies = None
+                    if requested_currency is not None and (currencies is None or requested_currency not in currencies):
+                        raise ValueError("original NFT currency required")
+                    currency = requested_currency if requested_currency is not None else (currencies[0] if currencies else None)
+                    try:
+                        book = directory.order_book(key, currency) if currency is not None else None
+                    except OrderBookUnavailable:
+                        book = None
+                    detail = directory.detail(key)
+                except KeyError:
+                    self.send_body(404, "Unknown NFT.")
+                    return
+                body = render_terminal(detail, directory.choices(), currencies, book,
+                    locale, nft_key=key, currency=currency, market_query=search,
+                    side=side, evidence_kind=getattr(self.server, "evidence_kind", None))
+                send_market_response(self, body.replace("</main>", self.native_navigation(locale) + "</main>", 1))
                 return
             if req.path == "/api/order-book":
                 if req.fragment or len(req.query) > 768:
