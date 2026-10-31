@@ -364,8 +364,14 @@ class WorkbenchHandler(DemoHandler):
                     body = render_market(rows, reference, locale, search,
                                          evidence_kind=getattr(self.server, "evidence_kind", None),
                                          collateral_available=getattr(self.server, "_collateral_selection_mounted", False))
+                    navigation = self.native_navigation(locale)
+                    # The mounted selector also supplies a legacy footer link.
+                    # Keep its one product-header link, without duplicating it.
+                    if getattr(self.server, "_collateral_selection_mounted", False):
+                        navigation = re.sub(r'<nav><a href="/collateral\?lang='
+                            + re.escape(locale) + r'">[^<]*</a></nav>', '', navigation, count=1)
                     send_market_response(self, body.replace('</main>',
-                        self.native_navigation(locale) + '</main>', 1))
+                        navigation + '</main>', 1))
                 else:
                     self.send_body(200, json.dumps({"nfts": rows, "reference": reference}, sort_keys=True),
                                    "application/json; charset=utf-8")
