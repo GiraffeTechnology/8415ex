@@ -175,6 +175,24 @@ class EIAWTISpotReader:
                               "retainedSource": self._cached is not None}
                 raise SpotSourceUnavailable(code) from None
 
+
+    def resume_validated_response(self, raw, *, not_before):
+        """Seed the fixed parser cache, preserving the host's existing cadence.
+
+        A restored cache is not an HTTP response or a new successful read.
+        Conditional validators are omitted because none are inferred.
+        """
+        if type(raw) is not bytes or len(raw) > LIMIT:
+            raise ValueError("bounded original source response required")
+        if type(not_before) not in (int, float) or not math.isfinite(not_before):
+            raise ValueError("original source deadline required")
+        parsed = parse_eia_wti_spot_table(raw)
+        with self._lock:
+            if self._cached is not None or self._last is not None or self._next != 0:
+                raise ValueError("continuation is initial construction only")
+            self._cached = deepcopy(parsed)
+            self._next = self._monotonic() + max(0, not_before - self._wall())
+
     def transport_observation(self):
         """Non-secret diagnostics only; never source freshness or execution proof."""
         with self._lock:
