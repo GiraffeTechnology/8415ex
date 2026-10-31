@@ -105,5 +105,23 @@ class EIAWTISpotTableTests(unittest.TestCase):
                 parse_eia_wti_spot_table(raw)
 
 
+
+
+
+class EIALayoutBoundaryTests(unittest.TestCase):
+    def test_unmatched_outer_layout_closes_do_not_change_source_record(self):
+        raw = page([["2026 Oct-12 to Oct-16", "1.10", "2.20", "3.300", "", ""]])
+        record = parse_eia_wti_spot_table(b"</table>" + raw + b"</table>")
+        self.assertEqual((record["price"], record["sourceAsOf"], record["series"]),
+                         ("3.300", "2026-10-14", "PET.RWTC.D"))
+
+    def test_selected_table_nested_content_and_unclosed_cell_still_refused(self):
+        raw = page([["2026 Oct-12 to Oct-16", "1.10", "", "", "", ""]])
+        for malformed in (raw.replace(b"<td>1.10</td>", b"<td>1.10", 1),
+                          raw.replace(b"<td>1.10</td>", b"<td><table></table>1.10</td>", 1)):
+            with self.subTest(raw=malformed), self.assertRaises(ValueError):
+                parse_eia_wti_spot_table(malformed)
+
+
 if __name__ == "__main__":
     unittest.main()

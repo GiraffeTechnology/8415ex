@@ -113,6 +113,32 @@ class PriorityBook:
             self._nonces[key] = intent_id
             return self._sequence
 
+    def public_levels(self, *, limit=20):
+        """Read accepted, currently eligible prices in server price/time order.
+
+        Private order/party/session/nonce/digest identities never leave this
+        projection. This is a domain observation, not a provider or funds proof.
+        """
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise PriorityRefused("bounded public level count required")
+        with self._lock:
+            proposal = self.proposal()
+            def side(key):
+                ids = proposal[key]
+                rows = [{"priority": index + 1,
+                         "priceBaseUnits": str(self._entries[order_id][0].limit_price),
+                         "wholeNFTs": "1"}
+                        for index, order_id in enumerate(ids[:limit])]
+                return {"rows": rows, "total": len(ids), "hasMore": len(ids) > limit}
+            return {"schema": "8415ex-public-order-book/1",
+                    "currency": self.quote_asset,
+                    "priceUnit": "base-units-per-whole-nft",
+                    "observedAt": proposal["observedAt"],
+                    "asks": side("askPriority"), "bids": side("bidPriority"),
+                    "execution": "NOT_RUN", "funding": "NOT_RUN",
+                    "conversionPerformed": False,
+                    "meaning": "original domain price/time observation; no signing or execution"}
+
     def proposal(self):
         """Revalidate current orders and report priority, never move the head."""
         with self._lock:

@@ -84,6 +84,8 @@ class CommodityReferenceFeed:
         self._last, self._attempt = None, None
         self._failed = False
         self._events = []
+        self._resume_not_before = None
+        self._resumed = False
 
     def refresh(self):
         # Serialize fetches: an older slow response cannot replace a newer read.
@@ -167,6 +169,7 @@ class CommodityReferenceFeed:
                 self._failed = result is None
                 if result is not None:
                     self._last = result
+                    self._resumed = False
                 self._events.append({"attemptedAt": self._attempt, "result": "unavailable" if self._failed else "read"})
                 self._events = self._events[-20:]
         return self.snapshot()
@@ -177,6 +180,8 @@ class CommodityReferenceFeed:
             base = {"kind": "external-spot-reference", "sourceURL": self._policy["sourceURL"],
                     "lastAttemptAt": self._attempt, "events": deepcopy(self._events),
                     "executableOrder": False, "conversionPerformed": False}
+            if self._resumed:
+                base["resumedObservation"] = True
             if self._observe_transport is not None:
                 base["transportObservation"] = {
                     "value": deepcopy(self._transport),
@@ -208,12 +213,40 @@ class CommodityReferenceFeed:
                                         self._policy["sourceTimezone"] if self._source_zone is not None else "UTC"),
                         retainedValue=self._failed)
 
+
+    def resume_validated_observation(self, value, *, not_before, verify):
+        """Retain an original observation without recording another source read.
+
+        The trusted composition verifies its original response and timestamps.
+        This port neither fetches data nor updates the original fetchedAt/event.
+        """
+        value = deepcopy(value)
+        if type(value.get("failed", False)) is not bool:
+            raise ValueError("original failure state required")
+        if (not callable(verify) or verify(deepcopy(value)) is not True
+                or not isinstance(not_before, datetime) or not_before.tzinfo is not timezone.utc):
+            raise ValueError("verified original continuation required")
+        with self._lock:
+            if self._thread is not None or self._last is not None or self._attempt is not None:
+                raise ValueError("continuation is initial construction only")
+            self._last = value["last"]
+            self._attempt = value["attempt"]
+            self._events = value["events"]
+            self._transport = value["transport"]
+            self._failed = value.get("failed", False)
+            self._resume_not_before = not_before
+            self._resumed = True
+
     def start(self):
         with self._lock:
             if self._thread is not None and self._thread.is_alive():
                 return
             self._stop.clear()
             def run():
+                if self._resume_not_before is not None:
+                    delay = max(0, (self._resume_not_before - self._clock().astimezone(timezone.utc)).total_seconds())
+                    if self._stop.wait(delay):
+                        return
                 while not self._stop.is_set():
                     self.refresh()
                     self._stop.wait(self._policy["pollSeconds"])
