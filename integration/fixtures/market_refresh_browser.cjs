@@ -22,9 +22,12 @@ process.stdin.on("end", async () => {
       }
     }
     const error = {hidden: true};
-    const current = {replaceWith() { replaced++; }, querySelector() { return error; }};
+    const disclosure = {open: value.case === "disclosure-open"};
+    const nextDisclosure = {open: false};
+    const current = {replaceWith() { replaced++; }, querySelector(selector) { return selector === "details" ? disclosure : error; }};
     const next = {tagName: "SECTION", id: "commodity-reference", attributes: [],
-                  querySelectorAll() { return []; }};
+                  querySelectorAll() { return []; },
+                  querySelector(selector) { return selector === "details" ? nextDisclosure : null; }};
     const document = {hidden: false, getElementById() { return current; },
       importNode(node) { return node; }, addEventListener: listener};
     const window = {location: {href: "https://market.example/market?lang=en#nfts"},
@@ -78,6 +81,9 @@ process.stdin.on("end", async () => {
       assert.equal(aborted, 1, "second exit must cancel the restored page's active read");
       assert.equal(requests[1].options.signal.aborted, true);
       assert.equal(timers.size, 0, "exited pages must not schedule another poll");
+    } else if (value.case === "disclosure-open" || value.case === "disclosure-closed") {
+      assert.equal(replaced, 1);
+      assert.equal(nextDisclosure.open, disclosure.open, "refresh must retain user disclosure state");
     } else throw new Error("unknown test case");
     process.stdout.write(JSON.stringify({case: value.case, passed: true}));
   } catch (error) { console.error(error); process.exitCode = 1; }

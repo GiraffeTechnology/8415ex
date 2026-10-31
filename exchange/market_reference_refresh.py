@@ -52,7 +52,7 @@ REFERENCE_SCRIPT = r"""(() => {
       const next = parsed.body.firstElementChild;
       if (next.tagName !== "SECTION" || next.id !== "commodity-reference")
         throw new Error("reference panel differs");
-      const tags = new Set(["SECTION", "H2", "P", "DL", "DT", "DD"]);
+      const tags = new Set(["SECTION", "H2", "P", "DL", "DT", "DD", "DETAILS", "SUMMARY"]);
       const attrs = new Set(["id", "class", "data-reference-status",
         "data-browser-error", "data-unavailable", "hidden", "aria-live"]);
       for (const node of [next, ...next.querySelectorAll("*")]) {
@@ -60,7 +60,12 @@ REFERENCE_SCRIPT = r"""(() => {
             [...node.attributes].some(attribute => !attrs.has(attribute.name)))
           throw new Error("reference fragment content refused");
       }
-      if (!stopped && panel()) panel().replaceWith(document.importNode(next, true));
+      if (!stopped && panel()) {
+        const expanded = panel().querySelector("details")?.open === true;
+        const disclosure = next.querySelector?.("details");
+        if (disclosure) disclosure.open = expanded;
+        panel().replaceWith(document.importNode(next, true));
+      }
     } catch (_) {
       const previous = panel();
       if (!stopped && previous) {

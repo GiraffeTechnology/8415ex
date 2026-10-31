@@ -3,7 +3,7 @@ from html import escape
 from urllib.parse import urlencode
 from .nft_detail_page import LOCALES, STYLE, language_menu
 from .gap_projection import gap_label
-from .reference_provenance_page import render_reference_fields
+from .reference_provenance_page import render_reference_fields, LABELS
 from .market_reference_refresh import REFERENCE_SCRIPT
 
 ASSETS = {name: ("image/png" if name.endswith(".png") else "image/svg+xml") for name in
@@ -43,6 +43,14 @@ STATES = {
     "ja": ("鮮度範囲内", "古いデータ", "利用不可", "不明", "シミュレーション", "元の注文"),
 }
 MARKET_STYLE = """
+#commodity-reference{max-width:360px;display:grid;gap:10px;padding:20px;border-radius:10px;margin:24px 0}
+#commodity-reference h2{font-size:16px;line-height:24px;margin:0}
+#commodity-reference p{margin:0;overflow-wrap:anywhere}
+#commodity-reference .quote{font-size:28px;line-height:42px}
+.reference-instrument,.reference-source{font-size:11px;color:var(--muted);line-height:17px}
+.reference-provenance{min-width:0}.reference-provenance summary{min-height:44px;display:list-item;align-content:center;cursor:pointer;color:var(--muted);font-size:12px}
+.reference-provenance summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.reference-provenance .source-fields{display:block}.reference-provenance dt{margin-top:10px;color:var(--muted)}.reference-provenance dd{margin:3px 0 0;overflow-wrap:anywhere}
 .market-top{display:flex;align-items:center;gap:36px;flex-wrap:wrap;padding:20px 0}.market-top>a{min-height:44px;display:inline-flex;align-items:center;text-decoration:none}.market-top>a[aria-current=page]{color:var(--accent)}.market-top nav{margin-left:auto}.market-top .locale-menu{margin-left:auto}.wallet-entry{background:var(--raised);border-radius:6px;padding:0 16px}.market-top a:focus-visible,.hero a:focus-visible{outline:2px solid var(--accent);outline-offset:4px}.hero-start{display:inline-flex;align-items:center;min-height:44px;padding:0 24px;border-radius:6px;background:var(--accent);color:var(--bg);text-decoration:none}.market-top b{font-size:25px}.notice{padding:12px 20px;background:#20312a;color:var(--muted)}
 .hero{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center}.hero h1{font-size:42px;line-height:1.3}.hero-photo{width:370px;max-width:100%;height:192px;object-fit:cover;border-radius:8px}
 .nft-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}.nft-card{display:grid;gap:12px;text-decoration:none;color:var(--ink);padding:20px;border:1px solid var(--line);border-radius:12px;background:var(--surface);min-width:0;overflow-wrap:anywhere}
@@ -53,6 +61,12 @@ MARKET_STYLE = """
 
 EMPTY_MODE = {"en": "Read-only catalogue", "zh-Hans": "只读目录", "zh-Hant": "唯讀目錄",
               "fr": "Catalogue en lecture seule", "es": "Catálogo de solo lectura", "ja": "読み取り専用一覧"}
+
+
+PROVENANCE_SUMMARY = {
+    "en": "Source details", "zh-Hans": "来源详情", "zh-Hant": "來源詳情",
+    "fr": "Détails de la source", "es": "Detalles de origen", "ja": "出典の詳細",
+}
 
 
 REFRESH_FAILURE = {
@@ -73,11 +87,21 @@ def render_reference_panel(reference, locale="en"):
     status = reference.get("status", "not-connected")
     label = {"fresh": states[0], "stale": states[1], "unavailable": states[2],
              "unknown": states[3], "not-connected": t[15]}.get(status, states[3])
+    def text(key):
+        value = reference.get(key)
+        return value if type(value) is str and value else common[3]
+    labels = LABELS[locale]
     return ('<section id="commodity-reference" aria-live="polite"><h2>' + e(t[4])
-            + '</h2><p class="missing" data-reference-status>' + e(label)
+            + '</h2><p class="reference-instrument">' + e(text("spec"))
+            + ' · ' + e(text("currency")) + ' / ' + e(text("unit"))
+            + '</p><p class="missing" data-reference-status>' + e(label)
             + '</p><p class="quote">' + e(reference.get("price") if reference.get("price") is not None else common[3])
-            + '</p><dl class="source-fields">' + render_reference_fields(reference, locale)
-            + '</dl><p class="missing" data-browser-error hidden>'
+            + '</p><p class="reference-source">' + e(labels[0]) + ': ' + e(text("provider"))
+            + '</p><p class="reference-source">' + e(labels[9]) + ': ' + e(text("sourceAsOf"))
+            + '</p><p class="reference-source">' + e(labels[12]) + ': ' + e(text("fetchedAt"))
+            + '</p><details class="reference-provenance"><summary>' + e(PROVENANCE_SUMMARY[locale])
+            + '</summary><dl class="source-fields">' + render_reference_fields(reference, locale)
+            + '</dl></details><p class="missing" data-browser-error hidden>'
             + e(REFRESH_FAILURE[locale]) + '</p></section>')
 
 
