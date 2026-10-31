@@ -241,6 +241,33 @@ class WalletAPIClient:
     def login(self, sign_login_message):
         if not callable(sign_login_message):
             raise WalletAPIRefused("EX_WALLET_MESSAGE_SIGNER_REQUIRED")
+        return self._authenticate(lambda challenge, message:
+                                  sign_login_message(message, self._account, self._chain))
+
+    @_serialized
+    def login_native(self, sign_login_challenge):
+        """Use the original Wallet's login-purpose challenge signer.
+
+        The native Wallet retains custody and validates its complete challenge.
+        This consumer passes no key, arbitrary message, session or task grant.
+        """
+        if not callable(sign_login_challenge):
+            raise WalletAPIRefused("EX_WALLET_MESSAGE_SIGNER_REQUIRED")
+
+        def sign(challenge, message):
+            try:
+                proof = sign_login_challenge(challenge)
+            except Exception as error:
+                if str(error) in ("NATIVE_LOGIN_CANCELLED", "LOGIN_CANCELLED"):
+                    raise WalletAPIRefused("EX_WALLET_LOGIN_CANCELLED") from None
+                raise WalletAPIRefused("EX_WALLET_NATIVE_LOGIN_REFUSED") from None
+            if type(proof) is not dict or set(proof) != {"signature"}:
+                raise WalletAPIRefused("EX_WALLET_NATIVE_LOGIN_RESPONSE_REFUSED")
+            return proof["signature"]
+
+        return self._authenticate(sign)
+
+    def _authenticate(self, sign):
         self._reset()
         try:
             boot = self._request("bootstrap")
@@ -250,7 +277,7 @@ class WalletAPIClient:
             challenge = self._request("challenge", {"method": "wallet", "account": self._account, "chainId": self._chain})
             message = self._login_message(challenge)
             self._used_challenges.add(challenge["id"])
-            signature = sign_login_message(message, self._account, self._chain)
+            signature = sign(deepcopy(challenge), message)
             self._bound(challenge, challenge=True)
             if type(signature) is not str or not re.fullmatch(r"0x[0-9a-fA-F]{130}", signature):
                 raise WalletAPIRefused("EX_WALLET_LOGIN_SIGNATURE_REFUSED")
