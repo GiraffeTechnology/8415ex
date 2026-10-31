@@ -419,7 +419,14 @@ class WorkbenchHandler(DemoHandler):
                     locale, nft_key=key, currency=currency, market_query=search,
                     side=side, evidence_kind=getattr(self.server, "evidence_kind", None),
                     collateral_available=getattr(self.server, "_collateral_selection_mounted", False))
-                send_market_response(self, body.replace("</main>", self.native_navigation(locale) + "</main>", 1))
+                navigation = self.native_navigation(locale)
+                # The product header already retains the selected NFT/locale.
+                # Keep legacy entry points on native pages without repeating
+                # the mounted selector link below this terminal.
+                if getattr(self.server, "_collateral_selection_mounted", False):
+                    navigation = re.sub(r'<nav><a href="/collateral\?lang='
+                        + re.escape(locale) + r'">[^<]*</a></nav>', '', navigation, count=1)
+                send_market_response(self, body.replace("</main>", navigation + "</main>", 1))
                 return
             if req.path == "/api/order-book":
                 if req.fragment or len(req.query) > 768:
