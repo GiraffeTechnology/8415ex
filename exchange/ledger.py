@@ -433,7 +433,6 @@ class Exchange:
         """Read one receipt/currency book without admitting or matching orders."""
         receipt = self.receipt(receipt_id)
         require(type(quote_asset) is str
-                and re.fullmatch(r"[A-Z][A-Z0-9]{1,15}", quote_asset) is not None
                 and quote_asset in receipt.allowed_price_currencies,
                 "EX_PUBLIC_BOOK_CURRENCY_REFUSED", "original NFT currency required")
         require(type(limit) is int and 1 <= limit <= 100,
