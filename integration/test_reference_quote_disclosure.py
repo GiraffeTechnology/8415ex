@@ -46,7 +46,7 @@ class ReferenceQuoteDisclosure(unittest.TestCase):
 
     def test_browser_refresh_preserves_both_open_and_closed_user_disclosure_state(self):
         fixture = Path(__file__).parent / "fixtures" / "market_refresh_browser.cjs"
-        for case in ("disclosure-open", "disclosure-closed"):
+        for case in ("disclosure-open", "disclosure-closed", "disclosure-focus"):
             result = subprocess.run(["node", str(fixture)],
                 input=json.dumps({"script": REFERENCE_SCRIPT, "case": case}),
                 text=True, capture_output=True, timeout=10, check=True)

@@ -62,9 +62,12 @@ REFERENCE_SCRIPT = r"""(() => {
       }
       if (!stopped && panel()) {
         const expanded = panel().querySelector("details")?.open === true;
+        const restoreFocus = panel().querySelector("summary") === document.activeElement;
         const disclosure = next.querySelector?.("details");
         if (disclosure) disclosure.open = expanded;
-        panel().replaceWith(document.importNode(next, true));
+        const replacement = document.importNode(next, true);
+        panel().replaceWith(replacement);
+        if (restoreFocus) replacement.querySelector?.("summary")?.focus({preventScroll: true});
       }
     } catch (_) {
       const previous = panel();

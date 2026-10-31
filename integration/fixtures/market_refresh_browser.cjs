@@ -23,12 +23,15 @@ process.stdin.on("end", async () => {
     }
     const error = {hidden: true};
     const disclosure = {open: value.case === "disclosure-open"};
+    const summary = {};
+    let focused = false;
+    const nextSummary = {focus(options) { focused = options.preventScroll === true; }};
     const nextDisclosure = {open: false};
-    const current = {replaceWith() { replaced++; }, querySelector(selector) { return selector === "details" ? disclosure : error; }};
+    const current = {replaceWith() { replaced++; }, querySelector(selector) { return selector === "details" ? disclosure : selector === "summary" ? summary : error; }};
     const next = {tagName: "SECTION", id: "commodity-reference", attributes: [],
                   querySelectorAll() { return []; },
-                  querySelector(selector) { return selector === "details" ? nextDisclosure : null; }};
-    const document = {hidden: false, getElementById() { return current; },
+                  querySelector(selector) { return selector === "details" ? nextDisclosure : selector === "summary" ? nextSummary : null; }};
+    const document = {hidden: false, activeElement: value.case === "disclosure-focus" ? summary : null, getElementById() { return current; },
       importNode(node) { return node; }, addEventListener: listener};
     const window = {location: {href: "https://market.example/market?lang=en#nfts"},
                     addEventListener: listener};
@@ -84,6 +87,9 @@ process.stdin.on("end", async () => {
     } else if (value.case === "disclosure-open" || value.case === "disclosure-closed") {
       assert.equal(replaced, 1);
       assert.equal(nextDisclosure.open, disclosure.open, "refresh must retain user disclosure state");
+    } else if (value.case === "disclosure-focus") {
+      assert.equal(replaced, 1);
+      assert.equal(focused, true, "refresh restores only the previously focused summary without scrolling");
     } else throw new Error("unknown test case");
     process.stdout.write(JSON.stringify({case: value.case, passed: true}));
   } catch (error) { console.error(error); process.exitCode = 1; }
