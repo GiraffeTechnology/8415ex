@@ -362,7 +362,8 @@ class WorkbenchHandler(DemoHandler):
                 rows = self.server.nft_directory.catalogue()
                 if req.path in ("/", "/market"):
                     body = render_market(rows, reference, locale, search,
-                                         evidence_kind=getattr(self.server, "evidence_kind", None))
+                                         evidence_kind=getattr(self.server, "evidence_kind", None),
+                                         collateral_available=getattr(self.server, "_collateral_selection_mounted", False))
                     send_market_response(self, body.replace('</main>',
                         self.native_navigation(locale) + '</main>', 1))
                 else:
@@ -410,7 +411,8 @@ class WorkbenchHandler(DemoHandler):
                     return
                 body = render_terminal(detail, directory.choices(), currencies, book,
                     locale, nft_key=key, currency=currency, market_query=search,
-                    side=side, evidence_kind=getattr(self.server, "evidence_kind", None))
+                    side=side, evidence_kind=getattr(self.server, "evidence_kind", None),
+                    collateral_available=getattr(self.server, "_collateral_selection_mounted", False))
                 send_market_response(self, body.replace("</main>", self.native_navigation(locale) + "</main>", 1))
                 return
             if req.path == "/api/order-book":

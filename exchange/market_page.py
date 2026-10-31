@@ -111,11 +111,11 @@ def render_reference_panel(reference, locale="en"):
             + e(REFRESH_FAILURE[locale]) + '</p></section>')
 
 
-def render_market(entries, reference, locale="en", query="", *, empty_catalogue=False, evidence_kind=None):
+def render_market(entries, reference, locale="en", query="", *, empty_catalogue=False, evidence_kind=None, collateral_available=False):
     if evidence_kind not in (None, "LOCAL_SIMULATION"):
         raise ValueError("explicit supported evidence kind required")
-    if type(empty_catalogue) is not bool:
-        raise ValueError("explicit catalogue mode required")
+    if type(empty_catalogue) is not bool or type(collateral_available) is not bool:
+        raise ValueError("explicit catalogue and route modes required")
     if empty_catalogue and entries:
         raise ValueError("empty catalogue cannot contain receipt records")
     if locale not in LOCALES or len(query) > 64:
@@ -142,12 +142,14 @@ def render_market(entries, reference, locale="en", query="", *, empty_catalogue=
                      + price + '</div><p>' + quantity + ' · 1 NFT</p><p><span class="badge ' + gap_class
                      + '">' + e(gap) + '</span></p><span>' + e(t[10]) + ' →</span></a>')
     terminal_href = "#nfts" if empty_catalogue else "/terminal?" + urlencode({"lang": locale, "q": query})
+    collateral_link = ('<a class="collateral-entry" href="/collateral?' + e(urlencode({"lang": locale})) +
+                       '">' + e(t[2]) + '</a>') if collateral_available else '<span>' + e(t[2]) + '</span>'
     reference_panel = render_reference_panel(reference, locale)
     languages = ''.join('<a href="/market?' + e(urlencode({"lang": key, "q": query})) + '" lang="' + key + '">' + key + '</a>' for key in LOCALES)
     return ('<!doctype html><html lang="' + locale + '"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             '<title>8415EX · ' + e(t[0]) + '</title><style>' + STYLE + MARKET_STYLE + '</style><body><main><header class="market-top">'
             '<img src="/assets/cube.svg" width="20" height="20" alt=""><b>8415EX</b><span class="badge">' + e(EMPTY_MODE[locale] if empty_catalogue else evidence_kind or "DEMO") + '</span><a href="#nfts" aria-current="page">' + e(t[0])
-            + '</a><a href="' + e(terminal_href) + '">' + e(t[1]) + '</a><span>' + e(t[2]) + '</span><span>' + e(t[3]) + '</span>' + language_menu(languages, locale, common[17]) + '<a class="wallet-entry" href="https://8415wallet.com" rel="noopener noreferrer">8415Wallet &#8599;</a></header>'
+            + '</a><a href="' + e(terminal_href) + '">' + e(t[1]) + '</a>' + collateral_link + '<span>' + e(t[3]) + '</span>' + language_menu(languages, locale, common[17]) + '<a class="wallet-entry" href="https://8415wallet.com" rel="noopener noreferrer">8415Wallet &#8599;</a></header>'
             '<p class="notice">' + e(t[7]) + '</p>' + reference_panel + '<section class="hero"><div><h1>' + e(t[5])
             + '</h1><p class="muted">' + e(t[6]) + '</p><a class="hero-start" href="' + e(terminal_href) + '">' + e(t[1]) + '</a></div><figure><img class="hero-photo" src="/assets/soy.png" alt="'
             + e(t[9]) + '"><figcaption class="muted">' + e(t[9]) + '</figcaption></figure></section><div class="market-tools"><h2 id="nfts">' + e(t[1])
@@ -182,9 +184,9 @@ TERMINAL_STYLE = """
 
 
 def render_terminal(detail, choices, currencies, book, locale="en", *, nft_key,
-                    currency=None, market_query="", side="buy", evidence_kind=None):
+                    currency=None, market_query="", side="buy", evidence_kind=None, collateral_available=False):
     """Original selected observations only; this renderer never submits an order."""
-    if (locale not in LOCALES or side not in ("buy", "sell")
+    if (type(collateral_available) is not bool or locale not in LOCALES or side not in ("buy", "sell")
             or evidence_kind not in (None, "LOCAL_SIMULATION")
             or (currency is not None and (currencies is None or currency not in currencies))):
         raise ValueError("supported terminal observation required")
@@ -202,6 +204,9 @@ def render_terminal(detail, choices, currencies, book, locale="en", *, nft_key,
     languages = ''.join('<a href="' + e(target(lang=lang)) + '" lang="' + lang + '">' + lang + '</a>' for lang in LOCALES)
     back = "/market?" + urlencode({"lang": locale, "q": market_query}) + "#nft-" + nft_key
     detail_href = "/nft?" + urlencode({"lang": locale, "nft": nft_key, "q": market_query})
+    collateral_href = "/collateral?" + urlencode({"lang": locale, "target": nft_key})
+    collateral_link = ('<a class="collateral-entry" href="' + e(collateral_href) + '">' +
+                       e(t[2]) + '</a>') if collateral_available else '<span>' + e(t[2]) + '</span>'
     card = detail.get("marketCard") or {}
     name = card.get("name") or "NFT"
     quote = card.get("quote")
@@ -227,7 +232,7 @@ def render_terminal(detail, choices, currencies, book, locale="en", *, nft_key,
     image = PHOTOS.get(card.get("commodityCode"))
     photo = '<img class="product-photo" src="/assets/' + image + '" alt="' + e(t[9]) + '">' if image else ''
     return ('<!doctype html><html lang="' + locale + '"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>8415EX · ' + e(t[1]) + '</title><style>' + STYLE + MARKET_STYLE + TERMINAL_STYLE + '</style><body><main>'
-        '<header class="market-top"><img src="/assets/cube.svg" width="20" height="20" alt=""><b>8415EX</b><span class="badge">' + e(evidence_kind or EMPTY_MODE[locale]) + '</span><a href="' + e(back) + '">' + e(t[0]) + '</a><a href="' + e(target()) + '" aria-current="page">' + e(t[1]) + '</a><span>' + e(t[2]) + '</span><span>' + e(t[3]) + '</span>' + language_menu(languages, locale, common[17]) + '<a class="wallet-entry" href="https://8415wallet.com" rel="noopener noreferrer">8415Wallet &#8599;</a></header>'
+        '<header class="market-top"><img src="/assets/cube.svg" width="20" height="20" alt=""><b>8415EX</b><span class="badge">' + e(evidence_kind or EMPTY_MODE[locale]) + '</span><a href="' + e(back) + '">' + e(t[0]) + '</a><a href="' + e(target()) + '" aria-current="page">' + e(t[1]) + '</a>' + collateral_link + '<span>' + e(t[3]) + '</span>' + language_menu(languages, locale, common[17]) + '<a class="wallet-entry" href="https://8415wallet.com" rel="noopener noreferrer">8415Wallet &#8599;</a></header>'
         '<div class="terminal-heading"><h1>' + e(t[1]) + '</h1><a class="action" href="' + e(detail_href) + '">' + e(t[24]) + ' →</a></div><p class="notice">' + e(t[33]) + '</p>'
         '<div class="terminal-layout"><div class="terminal-main"><div class="terminal-upper"><section class="terminal-product">' + photo + '<h2>' + e(name) + '</h2><p class="quote">' + e(price) + '</p><p class="muted">' + e(currency or common[3]) + ' · ' + e(t[19]) + '</p><span class="badge ' + gap_class + '">' + e(gap) + '</span><p><a href="' + e(detail_href) + '">' + e(t[24]) + ' →</a></p></section><section class="terminal-chart"><h2>' + e(t[23]) + '</h2><p>' + e(t[29]) + '</p></section></div>'
         '<div class="terminal-lower"><section class="terminal-book"><div class="terminal-heading"><h2>' + e(t[16]) + '</h2><span class="badge">' + e(currency or common[3]) + '</span></div>' + levels("asks", "ask", t[27]) + levels("bids", "bid", t[26]) + '<p class="terminal-scope">' + e(t[29]) + '</p></section><section class="terminal-receipts"><h2>' + e(t[30]) + '</h2>' + receipt_form + '<a href="' + e(detail_href) + '">' + e(t[24]) + ' →</a></section></div></div>'
