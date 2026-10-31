@@ -1,6 +1,7 @@
 """Incremental market navigation contract; not full design acceptance."""
 from html.parser import HTMLParser
 import unittest
+from urllib.parse import parse_qs, urlsplit
 from exchange.market_page import render_market, WORDS
 
 class Links(HTMLParser):
@@ -29,7 +30,9 @@ class MarketFigmaNavigationTest(unittest.TestCase):
                 self.assertIn("noopener", wallet[0]["rel"])
                 starts = [a for a in parsed.links if a.get("class") == "hero-start"]
                 self.assertEqual(len(starts), 1)
-                self.assertEqual(starts[0]["href"], "#nfts")
+                target = urlsplit(starts[0]["href"])
+                self.assertEqual(target.path, "/terminal")
+                self.assertEqual(parse_qs(target.query), {"lang": [locale], "q": ['soy <script>"']})
                 self.assertIn("nfts", parsed.ids)
                 active = [a for a in parsed.links if a.get("aria-current") == "page"]
                 self.assertEqual(len(active), 1)
@@ -40,6 +43,17 @@ class MarketFigmaNavigationTest(unittest.TestCase):
                 self.assertNotIn('<button disabled>', html)
                 self.assertNotIn('method="post"', html)
                 self.assertNotIn('authenticated', html)
+
+    def test_explicit_empty_catalogue_has_no_invented_terminal_target(self):
+        for locale in WORDS:
+            with self.subTest(locale=locale):
+                parsed = Links()
+                parsed.feed(render_market([], {"status": "not-connected", "price": None},
+                                          locale, empty_catalogue=True))
+                starts = [a for a in parsed.links if a.get("class") == "hero-start"]
+                self.assertEqual([a["href"] for a in starts], ["#nfts"])
+                self.assertFalse(any(a.get("href", "").startswith("/terminal")
+                                     for a in parsed.links))
 
 if __name__ == "__main__":
     unittest.main()
