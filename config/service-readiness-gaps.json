@@ -89,7 +89,9 @@
       "area": "production acceptance",
       "implementation": [],
       "state": "NOT_RUN",
-      "remaining": "Exact served SHA, runtime/store binding, N06/X02/X03/X04 evidence, genuine UI restoration and applicable native-chain evidence by the authorized owner."
+      "remaining": "Exact served source identity, authoritative runtime/store binding, genuine UI and recovery evidence, and applicable EX native/test-chain acceptance from the EX PRD. Wallet-specific test identifiers require a concrete EX interface requirement mapping; they are not independent EX-wide readiness gates.",
+      "scope": "EX native production acceptance; not a universal prerequisite for labelled simulation."
     }
-  ]
+  ],
+  "meaning": "Source capability snapshot, not live installation, served-version, browser or complete product acceptance evidence. Labelled simulation and native production acceptance are evaluated separately."
 }
