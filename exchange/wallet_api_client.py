@@ -50,13 +50,8 @@ class WalletAPIClient:
 
     _FIELDS = {
         "prepare": {"policy"},
-        "prepare-operation-verification": {"taskDigest", "operationId", "childDigest", "expectedBudgetRevision"},
-        "confirm-operation-verification": {"challengeId", "requestDigest", "code"},
         "authorize": {"challengeId", "taskDigest", "executorDigest", "observationPolicyDigest", "code"},
         "status": {"taskDigest"}, "resume": {"taskDigest"},
-        "revoke": {"taskDigest", "expectedGrantPolicyVersion"},
-        "cancel-reservation": {"taskDigest", "operationId", "childDigest", "expectedBudgetRevision"},
-        "plan-reserve": {"taskDigest", "expectedBudgetRevision"},
         "reserve": {"taskDigest", "child", "expectedBudgetRevision"},
         "execute": {"taskDigest", "operationId", "childDigest", "expectedBudgetRevision"},
         "recover": {"taskDigest", "operationId", "childDigest", "expectedBudgetRevision"},

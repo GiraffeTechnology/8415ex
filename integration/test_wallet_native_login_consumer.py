@@ -96,3 +96,18 @@ class NativeWalletLoginConsumer(unittest.TestCase):
             with self.assertRaisesRegex(WalletAPIRefused, "^EX_WALLET_CHALLENGE_REFUSED$"):
                 client.login_native(lambda challenge: self.fail("unrecognized challenge reached custody"))
             self.assertNotIn("proof", state)
+
+    def test_login_consumer_does_not_enable_deferred_task_operations(self):
+        payloads = {
+            "prepare-operation-verification": {"taskDigest": "a", "operationId": "b", "childDigest": "c", "expectedBudgetRevision": 0},
+            "confirm-operation-verification": {"challengeId": "a", "requestDigest": "b", "code": "000000"},
+            "revoke": {"taskDigest": "a", "expectedGrantPolicyVersion": 0},
+            "cancel-reservation": {"taskDigest": "a", "operationId": "b", "childDigest": "c", "expectedBudgetRevision": 0},
+            "plan-reserve": {"taskDigest": "a", "expectedBudgetRevision": 0},
+        }
+        with original_protocol() as (client, state):
+            for action, payload in payloads.items():
+                with self.subTest(action=action):
+                    with self.assertRaisesRegex(WalletAPIRefused, "^EX_WALLET_TASK_FIELDS_REFUSED$"):
+                        client.task(action, payload)
+            self.assertEqual(state["calls"], [])
