@@ -5,6 +5,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from .collateral_scenario import WORDS, render_collateral
 from .nft_directory import NftDirectory
+from .persistent_simulation import PersistentSimulationWorkbench
 from .remint_review_workbench import RemintReviewWorkbenchServer
 
 
@@ -15,7 +16,10 @@ def mount_collateral_selection(server, *, allow_empty_catalogue=False):
     empty_directory_server = (allow_empty_catalogue
         and isinstance(server, HTTPServer)
         and type(directory) is NftDirectory and not directory._bindings)
-    if not isinstance(server, RemintReviewWorkbenchServer) and not empty_directory_server:
+    original_simulation = (type(server) is PersistentSimulationWorkbench
+                           and server.evidence_kind == "LOCAL_SIMULATION")
+    if (not isinstance(server, RemintReviewWorkbenchServer)
+            and not empty_directory_server and not original_simulation):
         raise ValueError("original workbench or explicitly selected empty catalogue required")
     if getattr(server, "_collateral_selection_mounted", False):
         return server
@@ -49,6 +53,7 @@ def mount_collateral_selection(server, *, allow_empty_catalogue=False):
                 if locale not in WORDS:
                     raise ValueError("supported locale required")
                 body = render_collateral(self.server.nft_directory, locale,
+                    evidence_kind=getattr(self.server, "evidence_kind", None),
                     **{key: query.get(key, [""])[0] for key in ("kind", "asset", "target")})
             except ValueError:
                 self.send_body(400, WORDS.get(locale, WORDS["en"])[13])

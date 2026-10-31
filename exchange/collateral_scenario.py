@@ -77,9 +77,9 @@ def collateral_selection(directory, *, kind="", asset="", target=""):
         "executionInvoked": False, "ordinarySpotEligibilityEvaluated": False}
 
 
-def render_collateral(directory, locale="en", *, kind="", asset="", target=""):
-    if locale not in WORDS:
-        raise ValueError("supported locale required")
+def render_collateral(directory, locale="en", *, kind="", asset="", target="", evidence_kind=None):
+    if locale not in WORDS or evidence_kind not in (None, "LOCAL_SIMULATION"):
+        raise ValueError("supported locale and evidence kind required")
     selection = collateral_selection(directory, kind=kind, asset=asset, target=target)
     w = WORDS[locale]
     keys = tuple(directory._bindings)
@@ -115,7 +115,7 @@ def render_collateral(directory, locale="en", *, kind="", asset="", target=""):
     return ('<!doctype html><html lang="' + locale + '"><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1"><title>' + escape(w[0])
         + '</title><style>' + STYLE + DIRECTION_STYLE + '</style><body><main><nav><a href="/market?lang=' + locale + '">' + escape(w[12])
-        + '</a> ' + languages + '</nav><h1>' + escape(w[0]) + '</h1><p>DEMO</p>'
+        + '</a> ' + languages + '</nav><h1>' + escape(w[0]) + '</h1><p>' + escape(evidence_kind or 'DEMO') + '</p>'
         + '<div class="collateral-directions" data-node-id="11:717">' + directions
         + '</div><section data-collateral-selection="1"><h2>'
         + escape(summary) + '</h2><p>' + escape(w[9]) + '</p><p>' + escape(w[10]) + '</p><p>'

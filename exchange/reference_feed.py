@@ -221,6 +221,8 @@ class CommodityReferenceFeed:
         This port neither fetches data nor updates the original fetchedAt/event.
         """
         value = deepcopy(value)
+        if type(value.get("failed", False)) is not bool:
+            raise ValueError("original failure state required")
         if (not callable(verify) or verify(deepcopy(value)) is not True
                 or not isinstance(not_before, datetime) or not_before.tzinfo is not timezone.utc):
             raise ValueError("verified original continuation required")
@@ -231,6 +233,7 @@ class CommodityReferenceFeed:
             self._attempt = value["attempt"]
             self._events = value["events"]
             self._transport = value["transport"]
+            self._failed = value.get("failed", False)
             self._resume_not_before = not_before
             self._resumed = True
 

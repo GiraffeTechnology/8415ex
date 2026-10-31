@@ -48,13 +48,16 @@ def resume_eia_reference(feed, reader, policy, raw, expected_sha256, *, now=None
     fetched = _instant(observation["fetchedAt"])
     attempt = _instant(observation["lastAttemptAt"])
     skew = timedelta(seconds=policy["maxClockSkewSeconds"])
-    if not attempt <= fetched <= captured <= clock.astimezone(timezone.utc) + skew:
+    failed = (observation.get("status") == "unavailable"
+              and observation.get("retainedValue") is True)
+    chronology = fetched <= attempt <= captured if failed else attempt <= fetched <= captured
+    if not chronology or captured > clock.astimezone(timezone.utc) + skew:
         raise ValueError("original observation chronology differs")
     if (observation.get("sourceURL") != SOURCE_URL or policy.get("sourceURL") != SOURCE_URL
             or any(observation.get(k) != v or policy.get(k) != v for k, v in SCOPE.items())
             or observation.get("kind") != "external-spot-reference"
-            or observation.get("status") not in ("fresh", "stale", "unknown")
-            or observation.get("retainedValue") is not False
+            or (not failed and (observation.get("status") not in ("fresh", "stale", "unknown")
+                                or observation.get("retainedValue") is not False))
             or observation.get("lastSuccessful") != observation["fetchedAt"]
             or observation.get("executableOrder") is not False
             or observation.get("conversionPerformed") is not False):
@@ -69,7 +72,12 @@ def resume_eia_reference(feed, reader, policy, raw, expected_sha256, *, now=None
     metadata = observation.get("transportObservation")
     transport = metadata.get("value") if type(metadata) is dict else None
     clean = _transport_observation(transport)
-    if (clean != transport or type(clean) is not dict or clean.get("status") not in ("read", "not-modified")
+    if clean != transport or type(clean) is not dict:
+        raise ValueError("original bounded transport required")
+    if failed:
+        if clean.get("status") != "unavailable" or clean.get("retainedSource") is not True:
+            raise ValueError("original retained failure transport required")
+    elif (clean.get("status") not in ("read", "not-modified")
             or clean.get("rawResponseSHA256") != parsed["rawResponseSHA256"]
             or (clean["status"] == "read" and clean.get("bytes") != len(source))):
         raise ValueError("original successful transport required")
@@ -82,10 +90,12 @@ def resume_eia_reference(feed, reader, policy, raw, expected_sha256, *, now=None
                 or event["result"] not in ("read", "unavailable")):
             raise ValueError("original event schema differs")
         at = _instant(event["attemptedAt"])
-        if (previous is not None and at < previous) or at > fetched:
+        if ((previous is not None and at < previous) or at > (attempt if failed else fetched)
+                or (event["result"] == "read" and at > fetched)):
             raise ValueError("original event chronology differs")
         previous = at
-    if events[-1] != {"attemptedAt": observation["lastAttemptAt"], "result": "read"}:
+    if events[-1] != {"attemptedAt": observation["lastAttemptAt"],
+                      "result": "unavailable" if failed else "read"}:
         raise ValueError("last successful event differs")
     # The previous reader finished before the feed's normal post-read sleep.
     # Use completion time, preserving at least both original intervals.
@@ -93,12 +103,21 @@ def resume_eia_reference(feed, reader, policy, raw, expected_sha256, *, now=None
     poll = policy["pollSeconds"]
     if (type(poll) is not int or poll <= 0 or not math.isfinite(minimum)):
         raise ValueError("original finite cadence required")
-    deadline = fetched + timedelta(seconds=max(poll, minimum))
+    if failed:
+        # Failure completion is not exposed in the observation. Capture is a
+        # verified upper bound; wait a full original interval from that bound.
+        # Never reset a failed source to its older successful deadline.
+        failure = reader._failure
+        if type(failure) not in (int, float) or not math.isfinite(failure) or failure <= 0:
+            raise ValueError("original finite failure backoff required")
+        deadline = captured + timedelta(seconds=max(poll, minimum, failure))
+    else:
+        deadline = fetched + timedelta(seconds=max(poll, minimum))
     last = {key: observation[key] for key in SCOPE}
     last.update({key: observation[key] for key in ("price", "sourceAsOf", "sourcePrecision", "fetchedAt")})
     last["sourceEvidence"] = deepcopy(evidence)
     validated = {"last": last, "attempt": observation["lastAttemptAt"],
-                 "events": deepcopy(events), "transport": deepcopy(clean)}
+                 "events": deepcopy(events), "transport": deepcopy(clean), "failed": failed}
     reader.resume_validated_response(source, not_before=deadline.timestamp())
     feed.resume_validated_observation(validated, not_before=deadline,
                                      verify=lambda value: value == validated)

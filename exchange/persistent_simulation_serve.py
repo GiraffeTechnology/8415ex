@@ -53,9 +53,11 @@ def create_simulation_server(*, state_path, port, commit, tree, registration_pat
         {'runId': 'native-local-fixture', 'scenario': 'read-only fixture'})
     history = SQLiteSimulationHistory(state_path)
     try:
-        return PersistentSimulationWorkbench(binding, history=history, port=port,
+        server = PersistentSimulationWorkbench(binding, history=history, port=port,
                     commit=commit, tree=tree, reference_feed=reference_feed,
                     public_origin=public_origin)
+        from exchange.collateral_workbench import mount_collateral_selection
+        return mount_collateral_selection(server)
     except BaseException:
         history.close()
         raise
