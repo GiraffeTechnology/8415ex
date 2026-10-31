@@ -722,3 +722,47 @@ class LinkedOperationLocalizedDataClassification(unittest.TestCase):
         scan = self._scan({self.name: self.source("WORDS", marker)}, markers=(marker,))
         self.assertIn("configured private fingerprint", {row["pattern"] for row in scan["findings"]})
         self.assertNotIn(marker, str(scan))
+
+
+class MarketProvenanceLocalizedDataClassification(unittest.TestCase):
+    """Only the complete literal disclosure table is display data."""
+    _scan = LocalizedUIClassification._scan
+
+    @staticmethod
+    def _source(value=None):
+        value = chr(0x4E2D) if value is None else value
+        return "PROVENANCE_SUMMARY = " + repr({
+            locale: value for locale in sorted(observations.DISPLAY_LOCALES)
+        }) + "\n"
+
+    def test_exact_six_locale_summary_keeps_full_scan_coverage(self):
+        scan = self._scan({"exchange/market_page.py": self._source()})
+        self.assertTrue(scan["clean"], scan["findings"])
+        self.assertEqual(scan["coverage"]["scanned"], 1)
+        self.assertEqual(scan["coverage"]["skipped"], [])
+        self.assertEqual(scan["coverage"]["notReadInFull"], [])
+
+    def test_wrong_name_file_dynamic_incomplete_and_prose_are_not_exempt(self):
+        for path, source in (
+            ("exchange/market_page.py", self._source().replace("'ja':", "'other':")),
+            ("exchange/market_page.py", "PROVENANCE_SUMMARY = make(" + repr(chr(0x4E2D)) + ")\n"),
+            ("exchange/market_page.py", self._source().replace("PROVENANCE_SUMMARY =", "OTHER =")),
+            ("docs/market_page.py", self._source()),
+            ("exchange/market_page.py", self._source() + "# " + chr(0x4E2D) + "\n"),
+        ):
+            with self.subTest(path=path, source=source):
+                scan = self._scan({path: source})
+                self.assertFalse(scan["clean"])
+                self.assertTrue(any(row["kind"] == "non-english" for row in scan["findings"]))
+
+    def test_every_security_pattern_still_reads_the_original_summary_literals(self):
+        for label, _ in observations.SECRET_PATTERNS + observations.PRIVATE_CONTENT_PATTERNS:
+            with self.subTest(pattern=label):
+                scan = self._scan({"exchange/market_page.py": self._source(_sample(label))})
+                self.assertFalse(scan["clean"])
+                self.assertIn(label, {row["pattern"] for row in scan["findings"]})
+        marker = "market-fingerprint-" + "p" * 12
+        scan = self._scan({"exchange/market_page.py": self._source(marker)}, markers=(marker,))
+        self.assertFalse(scan["clean"])
+        self.assertIn("configured private fingerprint", {row["pattern"] for row in scan["findings"]})
+        self.assertNotIn(marker, str(scan))
