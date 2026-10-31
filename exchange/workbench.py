@@ -348,6 +348,8 @@ class WorkbenchHandler(DemoHandler):
                 if fragment is not None and (req.path not in ("/", "/market") or fragment != "1"):
                     raise ValueError("one read-only reference fragment required")
                 locale = query.get("lang", ["en"])[0]
+                if locale not in LOCALES:
+                    raise ValueError("supported market locale required")
                 search = query.get("q", [""])[0]
                 if len(search) > 64 or any(ord(char) < 32 for char in search):
                     raise ValueError("bounded market search required")

@@ -13,6 +13,9 @@ class RootMarketEntry(unittest.TestCase):
     def setUp(self):
         self.binding, self.original = original()
         self.before = json.dumps(self.binding.public_detail(), sort_keys=True)
+        self.detail_calls = []
+        read_details = self.binding.read_details
+        self.binding.read_details = lambda rid: self.detail_calls.append(rid) or read_details(rid)
         self.server = WorkbenchServer(self.binding, port=0)
         self.worker = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.worker.start()
@@ -50,9 +53,12 @@ class RootMarketEntry(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertIn(LOCALES["fr"][0], detail)
         self.assertNotIn('class="market-top"', detail)
+        calls_before_invalid = list(self.detail_calls)
         for path in ("/?lang=en&lang=fr", "/?q=" + "x" * 65, "/?lang=missing",
                      "/?account=untrusted", "/?reference=2"):
             with self.subTest(path=path):
                 self.assertEqual(self.read(path)[0], 400)
+                self.assertEqual(self.detail_calls, calls_before_invalid)
         self.assertEqual(self.read("/", host="foreign.example")[0], 421)
+        self.assertEqual(self.detail_calls, calls_before_invalid)
         self.assertEqual(len(self.server.runs), 0)
