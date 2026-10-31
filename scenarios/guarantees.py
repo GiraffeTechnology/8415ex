@@ -338,6 +338,21 @@ def _matching(recorder):
         prices={"sellLimit": F.PRICE - 1, "buyLimit": F.PRICE},
         quoteAsset=F.QUOTE_ASSET, simulatedAdapters={"matching": "simulated server price-time priority fixture"})
     before = (sell.digest, buy.digest)
+    exchange.enter_order(sell.intent_id)
+    exchange.enter_order(buy.intent_id)
+    before_read = (exchange.owner_index(RECEIPT), exchange.holder_index(RECEIPT),
+                   len(exchange._escrows), len(exchange.receipt_timeline(RECEIPT)))
+    book = exchange.order_book_view(RECEIPT, F.QUOTE_ASSET)
+    recorder.expect("the public book reports original prices without order identities", ("T-09",),
+                    {"asks": [{"priority": 1, "priceBaseUnits": str(F.PRICE - 1), "wholeNFTs": "1"}],
+                     "bids": [{"priority": 1, "priceBaseUnits": str(F.PRICE), "wholeNFTs": "1"}],
+                     "execution": "NOT_RUN", "funding": "NOT_RUN"},
+                    {"asks": book["asks"]["rows"], "bids": book["bids"]["rows"],
+                     "execution": book["execution"], "funding": book["funding"]})
+    recorder.expect("reading the public book changes no position escrow or event", ("T-09",),
+                    before_read,
+                    (exchange.owner_index(RECEIPT), exchange.holder_index(RECEIPT),
+                     len(exchange._escrows), len(exchange.receipt_timeline(RECEIPT))))
     match = exchange.match_intents(sell.intent_id, buy.intent_id)
     recorder.step("independent orders admitted and matched", basis=dict(match.basis))
     recorder.expect("resting ask limit is used without changing either signature", ("T-09",),
