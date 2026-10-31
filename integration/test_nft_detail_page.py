@@ -73,5 +73,8 @@ class NftDetailPage(unittest.TestCase):
                     self.assertEqual(page.count('data-terms-status="' + status + '"'), 8)
                     self.assertIn('class="position unknown"', page)
                     self.assertNotIn('provided-verified-projection', page)
+                    self.assertNotIn('class="terms-section"', page)
+                    self.assertNotIn('class="terms-navigation"', page)
+                    self.assertIn('class="missing-terms"', page)
                     self.assertNotIn('class="gap yes">openGapOF=YES', page)
                     self.assertEqual(detail["terms"]["clauses"], [])
