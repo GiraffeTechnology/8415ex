@@ -429,6 +429,30 @@ class Exchange:
         except PriorityRefused as error:
             raise DomainError("EX_ORDER_REFUSED", str(error)) from None
 
+    def order_book_view(self, receipt_id, quote_asset, *, limit=20):
+        """Read one receipt/currency book without admitting or matching orders."""
+        receipt = self.receipt(receipt_id)
+        require(type(quote_asset) is str
+                and re.fullmatch(r"[A-Z][A-Z0-9]{1,15}", quote_asset) is not None
+                and quote_asset in receipt.allowed_price_currencies,
+                "EX_PUBLIC_BOOK_CURRENCY_REFUSED", "original NFT currency required")
+        require(type(limit) is int and 1 <= limit <= 100,
+                "EX_PUBLIC_BOOK_LIMIT_REFUSED", "bounded public level count required")
+        book = self._order_books.get((receipt_id, quote_asset))
+        if book is not None:
+            try:
+                return book.public_levels(limit=limit)
+            except PriorityRefused as error:
+                raise DomainError("EX_PUBLIC_BOOK_UNAVAILABLE", str(error)) from None
+        # Do not create a book, persisted admission, order or replacement store.
+        return {"schema": "8415ex-public-order-book/1", "currency": quote_asset,
+                "priceUnit": "base-units-per-whole-nft", "observedAt": self._now(None),
+                "asks": {"rows": [], "total": 0, "hasMore": False},
+                "bids": {"rows": [], "total": 0, "hasMore": False},
+                "execution": "NOT_RUN", "funding": "NOT_RUN",
+                "conversionPerformed": False,
+                "meaning": "original domain price/time observation; no signing or execution"}
+
     def match_intents(self, sell_intent_id, buy_intent_id, now=None):
         """Match the best executable pair, preserving limits and server FIFO.
 
