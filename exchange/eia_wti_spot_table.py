@@ -83,7 +83,10 @@ class _SpotTable(HTMLParser):
         if tag == "table":
             self.depth -= 1
             if self.depth < 0:
-                raise ValueError("table boundary differs")
+                # Legacy layout outside the uniquely selected series table may
+                # contain unmatched closing tags. It is not source data. The
+                # selected table's row/cell/nesting checks remain strict.
+                self.depth = 0
 
     def handle_data(self, data):
         if self.cell is not None:
